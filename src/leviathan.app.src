@@ -1,0 +1,13 @@
+{application, leviathan,
+ [
+  {description, "Container Network Orchestrator"},
+  {vsn, "0.1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  lager,
+                  dobby_clib
+                 ]},
+  {env, []}
+ ]}.
