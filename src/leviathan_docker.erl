@@ -16,7 +16,7 @@ inspect_pid(Cid)->
 	    Stripped;
 	_ -> 
 	    ?DEBUG("leviathan:inspect_pid(~p) BAD Container ID ~p!",[Cid,Cid]),
-	    ?DEBUG("exiting..."),
-	    exit(1)
+	    exit(1) % for running systems
+	    %%"00000" % for testing
     end.
     
