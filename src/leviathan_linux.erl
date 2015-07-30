@@ -11,14 +11,20 @@ remove_netns(Cid)->
     [leviathan_bash:rm_f_var_run_netns(leviathan_docker:inspect_pid(Cid))].
 
 
-new_peer(LevNumA,LevNumB)->
-    LevNameA = mk_peer_lev_name(LevNumA),
-    LevNameB = mk_peer_lev_name(LevNumB),
-    [leviathan_ip:link_add_type_veth_peer_name(LevNameA,LevNameB)].
+new_peer(Cid)->
+    LevNameOut = mk_peer_lev_name_out(Cid),
+    LevNameIn = mk_peer_lev_name_in(Cid),
+    [leviathan_ip:link_add_type_veth_peer_name(LevNameOut,LevNameIn)].
 
 
-mk_peer_lev_name(LevNum)->
-    "lev" ++ integer_to_list(LevNum).
+mk_peer_lev_name_in(Cid)->
+    mk_peer_lev_name_prefix(Cid) ++ ".in".
+
+mk_peer_lev_name_out(Cid)->
+    mk_peer_lev_name_prefix(Cid) ++ ".out".
+
+mk_peer_lev_name_prefix(Cid)->
+    "levPeer." ++ Cid.
 
 
 eval(CmdBundle)->
