@@ -19,4 +19,4 @@ ln_s_proc_ns_net_var_run_netns(Cpid)->
 %rm -f /var/run/netns/$pid
 %
 rm_f_var_run_netns(Cpid)->
-    "rm -f /var/run/netns/" ++ Cpid.
+    "rm -f /host/var/run/netns/" ++ Cpid.
