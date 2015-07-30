@@ -1,6 +1,6 @@
-{application, leviathan,
+{application, leviathan_lib,
  [
-  {description, "Container Network Orchestrator"},
+  {description, "Container Network Orchestrator Library"},
   {vsn, "0.1"},
   {registered, []},
   {applications, [

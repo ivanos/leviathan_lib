@@ -1,10 +1,21 @@
 .PHONY: test compile run deps
 
-compile: deps
+all: rebar compile
+
+compile: get-deps
 	./rebar compile
 
-deps:
+get-deps:
 	./rebar get-deps
+
+update-deps:
+	./rebar update-deps
+
+clean:
+	./rebar clean
+
+deep-clean:
+	rm -fr deps/*/ebin/*
 
 run: compile
 	erl -pa ebin -pa deps/*/ebin \
@@ -16,3 +27,7 @@ run: compile
 
 test:
 	./rebar eunit skip_deps=true
+
+rebar:
+	wget -c https://github.com/rebar/rebar/wiki/rebar
+	chmod +x rebar
