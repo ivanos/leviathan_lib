@@ -12,4 +12,11 @@ mkdir_p_var_run_netns()->
 %ln -s /proc/$pid/ns/net /var/run/netns/$pid
 %
 ln_s_proc_ns_net_var_run_netns(Cpid)->
-    "ln -s /proc/$" ++ Cpid ++ "/ns/net /var/run/netns/$" ++ Cpid.
+    "ln -s /host/proc/" ++ Cpid ++ "/ns/net /host/var/run/netns/" ++ Cpid.
+
+
+%
+%rm -f /var/run/netns/$pid
+%
+rm_f_var_run_netns(Cpid)->
+    "rm -f /var/run/netns/" ++ Cpid.

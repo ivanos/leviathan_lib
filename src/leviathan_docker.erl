@@ -8,7 +8,7 @@
 % example: docker inspect -f '{{.State.Pid}}' 63f36fc01b5f
 %
 inspect_pid(Cid)->
-    Cmd = "docker inspect -f '{{.State.Pid}}'" ++ Cid,
+    Cmd = "docker inspect -f '{{.State.Pid}}' " ++ Cid,
     Result = os:cmd(Cmd),
     Stripped = string:strip(Result,right,$\n),
     case string:to_integer(Stripped) of
