@@ -10,7 +10,8 @@
 inspect_pid
 (Cid)->
     Cmd = "docker inspect -f '{{.State.Pid}}' " ++ Cid,
-    Result = os:cmd(Cmd),
+    %%Result = os:cmd(Cmd),
+    Result = "justtesting",
     Stripped = string:strip(Result,right,$\n),
     case string:to_integer(Stripped) of
 	{_,[]}->
