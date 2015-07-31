@@ -119,4 +119,4 @@ publsh_cens({CenIds, ContainerIds, CenLinks}) ->
     ToPublish = [leviathan_dby:cen_ep(C) || C <-CenIds]
         ++ [leviathan_dby:cen_container_ep(C) || C <- sets:to_list(ContainerIds)]
         ++ [leviathan_dby:cen_to_container_link(L) || L <- CenLinks],
-    leviathan_dby:publish(<<"lucet_cn">>, ToPublish).
+    lucet_dby:publish(<<"lucet_cn">>, ToPublish).
