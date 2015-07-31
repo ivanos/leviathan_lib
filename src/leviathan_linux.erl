@@ -36,14 +36,26 @@ remove_netns(Cid)->
 % https://docs.docker.com/articles/networking/#how-docker-networks-a-container
 % 
 %
+%  Bus operations:
+%  By definition a bus as more than 2 containers connected 
 %  
-new_peer(Cid,PeerNum)->
+new_bus(CenId)->
+    [leviathan_brctl:addbr(CenId)].
+
+delete_bus(CenId)->
+    [leviathan_brctl:delbr(CenId)].
+
+%
+%
+%
+new_peer(CenId,Cid,PeerNum)->
     CPid = leviathan_docker:inspect_pid(Cid),
     LevNameOut = mk_peer_lev_name_out(Cid,PeerNum),
     LevNameIn = mk_peer_lev_name_in(Cid,PeerNum),
     [leviathan_ip:link_add_type_veth_peer_name(LevNameOut,LevNameIn),
     leviathan_ip:link_set_netns(LevNameIn,CPid),
-    leviathan_ip:netns_exec_ip_link_set_dev_name(CPid,LevNameIn,mk_lev_eth_name(PeerNum))].
+    leviathan_ip:netns_exec_ip_link_set_dev_name(CPid,LevNameIn,mk_lev_eth_name(PeerNum)),
+    leviathan_brctl:addif(CenId,LevNameOut)].
 
 
 delete_peer(Cid,PeerNum)->

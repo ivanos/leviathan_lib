@@ -18,6 +18,6 @@ inspect_pid
 	_ -> 
 	    ?DEBUG("leviathan:inspect_pid(~p) BAD Container ID ~p!",[Cid,Cid]),
 	    %%exit(1) % for running systems
-	    "00000" % for testing
+	    "cid:"++Cid % for testing
     end.
     
