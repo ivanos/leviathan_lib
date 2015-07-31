@@ -116,7 +116,7 @@ process_cen(_, _) ->
     throw(bad_json).
 
 publsh_cens({CenIds, ContainerIds, CenLinks}) ->
-    ToPublish = [leviathan_dby:cen_ep(C) || C <-CenIds]
-        ++ [leviathan_dby:cen_container_ep(C) || C <- sets:to_list(ContainerIds)]
-        ++ [leviathan_dby:cen_to_container_link(L) || L <- CenLinks],
+    ToPublish = [lucet_dby:cen_ep(C) || C <-CenIds]
+        ++ [lucet_dby:cen_container_ep(C) || C <- sets:to_list(ContainerIds)]
+        ++ [lucet_dby:cen_to_container_link(L) || L <- CenLinks],
     lucet_dby:publish(<<"lucet_cn">>, ToPublish).
