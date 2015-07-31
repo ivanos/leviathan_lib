@@ -23,14 +23,22 @@
 %
 %
 prepare_cen(CenId)->
+    %%=== CALL Lucet ===
     %%CenMap = lucet:get_cen(CenId),
+
+    %fake call
     CenMap = get_cen("cen1"),
     {ok,ContIds} = maps:find("contIDs",CenMap),
     lists:foreach(fun(ContId)->
 			  prepare_cont(ContId) end,ContIds).
 
 prepare_cont(ContId)->
+    %%=== CALL Lucet ===
+    %%lucent:get_cont(ContId)
+
+    %fake call
     ContMap = get_cont(ContId),
+
     {ok,Cens} = maps:find("cens",ContMap),
     Update = lists:foldl(fun(Cen,Acc)->
 				 {CenUpdateAcc,PeerNum} = Acc,
@@ -38,6 +46,11 @@ prepare_cont(ContId)->
 				 {CenUpdateAcc++[CenUpdate],PeerNum+1} end,
 			 {[],0},Cens),
     NewContMap = maps:update("cens",Update,ContMap),
+
+    %%=== CALL Lucet ===
+    %%lucet:set_cont(NewConMap),
+    
+    %fake call
     set_cont(NewContMap).
 
 prepare_cont(ContId,Cen,PeerNum)->
