@@ -7,7 +7,8 @@
 %
 % example: docker inspect -f '{{.State.Pid}}' 63f36fc01b5f
 %
-inspect_pid(Cid)->
+inspect_pid
+(Cid)->
     Cmd = "docker inspect -f '{{.State.Pid}}' " ++ Cid,
     Result = os:cmd(Cmd),
     Stripped = string:strip(Result,right,$\n),
@@ -16,7 +17,7 @@ inspect_pid(Cid)->
 	    Stripped;
 	_ -> 
 	    ?DEBUG("leviathan:inspect_pid(~p) BAD Container ID ~p!",[Cid,Cid]),
-	    exit(1) % for running systems
-	    %%"00000" % for testing
+	    %%exit(1) % for running systems
+	    "00000" % for testing
     end.
     

@@ -72,7 +72,7 @@ mk_peer_lev_name_prefix(Cid,PeerNum)->
 
 
 eval(CmdBundle)->
-    lists:map(fun(X)->		   
-		      os:cmd(X) end,CmdBundle).
+    %%lists:map(fun(X)->os:cmd(X) end,CmdBundle).
+    lists:map(fun(X)->io:format("~p~n",[X]) end,CmdBundle).
     
     

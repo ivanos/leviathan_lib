@@ -5,8 +5,8 @@
 -include("leviathan_logger.hrl").
 
 -define(CENMAP,#{"cenID" => "cen1","contIDs" => ["c1","c2","c3"]}).
--define(CONT1,#{"contID" => "c1","cens" => [#{"cenID"=>"cen1","peerId"=>"Eth0"},
-					    #{"cenID"=>"cen2","peerId"=>"Eth1"}]}).
+-define(CONT1,#{"contID" => "c1","cens" => [#{"cenID"=>"cen1","peerId"=>"eth0"},
+					    #{"cenID"=>"cen2","peerId"=>"eth1"}]}).
 
 -define(CONT2,#{"contID" => "c2","cens" => [#{"cenID"=>"cen1","peerId"=>unassigned},
 					    #{"cenID"=>"cen4","peerId"=>unassigned},
@@ -32,17 +32,24 @@ prepare_cen(CenId)->
 prepare_cont(ContId)->
     ContMap = get_cont(ContId),
     {ok,Cens} = maps:find("cens",ContMap),
-    lists:foldl(fun(Cen,Acc)->
-			prepare_cont(ContId,Cen,Acc), Acc+1 end,0,Cens).
+    Update = lists:foldl(fun(Cen,Acc)->
+				 {CenUpdateAcc,PeerNum} = Acc,
+				 CenUpdate = prepare_cont(ContId,Cen,PeerNum),
+				 {CenUpdateAcc++[CenUpdate],PeerNum+1} end,
+			 {[],0},Cens),
+    NewContMap = maps:update("cens",Update,ContMap),
+    set_cont(NewContMap).
 
 prepare_cont(ContId,Cen,PeerNum)->
     {ok,CenId} = maps:find("cenID",Cen),
     {ok,PeerID} = maps:find("peerId",Cen),
     case PeerID of
 	unassigned ->
-	    create_peer(ContId,PeerNum);
+	    create_peer(ContId,PeerNum),
+	    maps:update("peerId",leviathan_linux:mk_lev_eth_name(PeerNum),Cen);
 	_ ->
-	    ?DEBUG("Peer already created! ContId = ~p, Cen = ~p, PeerNum = ~p",[ContId,Cen,PeerNum])
+	    ?DEBUG("Peer already created! ContId = ~p, Cen = ~p, PeerNum = ~p",[ContId,Cen,PeerNum]),
+	    Cen
     end.
 
 
@@ -70,6 +77,10 @@ get_cont("c2") ->
     ?CONT2;
 get_cont("c3") ->
     ?CONT3.
+
+set_cont(NewContMap)->
+    io:format("NewContMap = ~p",[NewContMap]).
+    
 
 
 
