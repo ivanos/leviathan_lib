@@ -19,6 +19,9 @@
 
 import_cen_to_dobby(Filename) ->
     {ok, Binary} = file:read_file(Filename),
+    import_cen_binary_to_dobby(Binary).
+
+import_cen_binary_to_dobby(Binary) ->
     #{<<"cenList">> := Cens} = jiffy:decode(Binary, [return_maps]),
     ProcessedCens = process_cens(Cens),
     publsh_cens(ProcessedCens).
