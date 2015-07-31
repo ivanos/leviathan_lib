@@ -1,5 +1,7 @@
 .PHONY: test compile run deps
 
+cookie ?= dobby
+
 all: rebar compile
 
 compile: get-deps
@@ -19,10 +21,10 @@ deep-clean:
 
 run: compile
 	erl -pa ebin -pa deps/*/ebin \
-	-name lucet@127.0.0.1 \
-	-setcookie dobby \
+	-name leviathan_lib@127.0.0.1 \
+	-setcookie ${cookie} \
 	-config sys.config \
-	-eval "{ok, _} = application:ensure_all_started(leviathan)" \
+	-eval "{ok, _} = application:ensure_all_started(leviathan_lib)" \
 	-eval "leviathan_utils:connect_to_dobby()"
 
 test:

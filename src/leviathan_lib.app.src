@@ -7,6 +7,7 @@
                   kernel,
                   stdlib,
                   lager,
+                  jiffy,
                   dobby_clib
                  ]},
   {env, []}

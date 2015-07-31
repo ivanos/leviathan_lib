@@ -11,7 +11,8 @@
 %%%===================================================================
 
 connect_to_dobby() ->
-    DobbyNode = application:get_env(leviathan, dobby_node, ?DEFAULT_DOBBY_NODE),
+    DobbyNode = application:get_env(leviathan_lib, dobby_node,
+                                    ?DEFAULT_DOBBY_NODE),
     case net_adm:ping(DobbyNode) of
         pong ->
             ?INFO("Connected to dobby node: ~p", [DobbyNode]);
