@@ -72,7 +72,6 @@ new_bridge(BridgeNum)->
 
 eval(CmdBundle)->
     %%lists:map(fun(X)->os:cmd(X) end,CmdBundle).
-    lists:map(fun(X)->io:format("~p~n",[X]) end,CmdBundle),
-    ?INFO("~p",[lists:map(fun(X)->io_lib:format("~p~n",[X]) end,CmdBundle)]).
+    lists:map(fun(X)->io:format("~p~n",[X]) end,CmdBundle).
     
     
