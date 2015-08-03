@@ -20,6 +20,7 @@
 
 %% Container to CEN Map
 %% 5 Containers
+%% This will define which, if any, Linux network namespaces to construct
 
 -define(CONT1,#{"contID" => "c1","cens" => ["cen1","cen2"]}).  
 -define(CONT2,#{"contID" => "c2","cens" => ["cen1","cen2","cen3","cen4"]}).
@@ -30,10 +31,11 @@
 
 %% Wire Map
 %% Total of 8 wires
+%% This will define which, if any, Linux network veth peers to construct
+%% and what to name them
 
 %% 3 wires for cen1
 -define(WIRE1,[#{"endID"=>"c1.0i",
-		 "alias"=>"eth0"
 		 "dest"=>#{"type"=>"cont",
 			   "ID"=>"c1",
 			   "alias"=>"eth0"}},
@@ -71,18 +73,18 @@
 			   "ID"=>"c2",
 			   "alias"=>"eth2"}},
 	       #{"endID"=>"c4.0i",
-			   "dest"=>#{"type"=>"cont",
-				     "ID"=>"c4",
-				     "alias"=>"eth4"}}]).
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c4",
+			   "alias"=>"eth0"}}]).
 
 %% 3 wires for cen5
 -define(WIRE6,[#{"endID"=>"c2.3i",
 		 "dest"=>#{"type"=>"cont",
 			   "ID"=>"c2",
 			   "alias"=>"eth3"}},
-			 #{"endID"=>"c2.3o",
-			   "dest"=>#{"type"=>"cen",
-				     "ID"=>"cen5"}}]).
+	       #{"endID"=>"c2.3o",
+		 "dest"=>#{"type"=>"cen",
+			   "ID"=>"cen5"}}]).
 -define(WIRE7,[#{"endID"=>"c4.1i",
 		 "dest"=>#{"type"=>"cont",
 			   "ID"=>"c4",
@@ -91,9 +93,9 @@
 		 "dest"=>#{"type"=>"cen",
 			   "ID"=>"cen5"}}]).
 -define(WIRE8,[#{"endID"=>"c5.0i",
-			   "dest"=>#{"type"=>"cont",
-				     "ID"=>"c5",
-				     "alias"=>"eth0"}},
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c5",
+			   "alias"=>"eth0"}},
 	       #{"endID"=>"c5.1o",
 		 "dest"=>#{"type"=>"cen",
 			   "ID"=>"cen5"}}]).
