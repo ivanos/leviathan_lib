@@ -32,71 +32,71 @@
 %% Total of 8 wires
 
 %% 3 wires for cen1
--define(WIRE1,#{"wire"=>[#{"endID"=>"c1.0i",
-			   "alias"=>"eth0"
-			   "dest"=>#{"type"=>"cont",
-				     "ID"=>"c1",
-				     "alias"=>"eth0"}},
-			 #{"endID"=>"c1.0o",
-			   "dest"=>#{"type"=>"cen",
-				     "ID"=>"cen1"}}]}).
--define(WIRE2,#{"wire"=>[#{"endID"=>"c2.0i",
-			   "dest"=>#{"type"=>"cont",
-				     "ID"=>"c2",
-				     "alias"=>"eth0"}},
-			 #{"endID"=>"c2.0o",
-			   "dest"=>#{"type"=>"cen",
-				     "ID"=>"c1"}}]}).
--define(WIRE3,#{"wire"=>[#{"endID"=>"c3.0i",
-			   "dest"=>#{"type"=>"cont",
-				     "ID"=>"c3",
-				     "alias"=>"eth0"}},
-			 #{"endID"=>"c3.0o",
-			   "dest"=>#{"type"=>"cen",
-				     "ID"=>"cen1"}}]}).
+-define(WIRE1,[#{"endID"=>"c1.0i",
+		 "alias"=>"eth0"
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c1",
+			   "alias"=>"eth0"}},
+	       #{"endID"=>"c1.0o",
+		 "dest"=>#{"type"=>"cen",
+			   "ID"=>"cen1"}}]).
+-define(WIRE2,[#{"endID"=>"c2.0i",
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c2",
+			   "alias"=>"eth0"}},
+	       #{"endID"=>"c2.0o",
+		 "dest"=>#{"type"=>"cen",
+			   "ID"=>"c1"}}]).
+-define(WIRE3,[#{"endID"=>"c3.0i",
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c3",
+			   "alias"=>"eth0"}},
+	       #{"endID"=>"c3.0o",
+		 "dest"=>#{"type"=>"cen",
+			   "ID"=>"cen1"}}]).
 
 %% 1 wire for cen2
--define(WIRE4,#{"wire"=>[#{"endID"=>"c1.1i",
-			   "dest"=>#{"type"=>"cont",
-				     "ID"=>"c1",
-				     "alias"=>"eth1"}},
-			 #{"endID"=>"c2.1i",
-			   "dest"=>#{"type"=>"cont",
-				     "ID"=>"c2",
-				     "alias"=>"eth1"}}]}).
+-define(WIRE4,[#{"endID"=>"c1.1i",
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c1",
+			   "alias"=>"eth1"}},
+	       #{"endID"=>"c2.1i",
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c2",
+			   "alias"=>"eth1"}}]).
 
 %% 1 wire for cen4
--define(WIRE5,#{"wire"=>[#{"endID"=>"c2.2i",
-			   "dest"=>#{"type"=>"cont",
-				     "ID"=>"c2",
-				     "alias"=>"eth2"}},
-			 #{"endID"=>"c4.0i",
+-define(WIRE5,[#{"endID"=>"c2.2i",
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c2",
+			   "alias"=>"eth2"}},
+	       #{"endID"=>"c4.0i",
 			   "dest"=>#{"type"=>"cont",
 				     "ID"=>"c4",
-				     "alias"=>"eth4"}}]}).
+				     "alias"=>"eth4"}}]).
 
 %% 3 wires for cen5
--define(WIRE6,#{"wire"=>[#{"endID"=>"c2.3i",
-			   "dest"=>#{"type"=>"cont",
-				     "ID"=>"c2",
-				     "alias"=>"eth3"}},
+-define(WIRE6,[#{"endID"=>"c2.3i",
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c2",
+			   "alias"=>"eth3"}},
 			 #{"endID"=>"c2.3o",
 			   "dest"=>#{"type"=>"cen",
-				     "ID"=>"cen5"}}]}).
--define(WIRE7,#{"wire"=>[#{"endID"=>"c4.1i",
-			   "dest"=>#{"type"=>"cont",
-				     "ID"=>"c4",
-				     "alias"=>"eth1"}},
-			 #{"endID"=>"c4.1o",
-			   "dest"=>#{"type"=>"cen",
-				     "ID"=>"cen5"}}]}).
--define(WIRE8,#{"wire"=>[#{"endID"=>"c5.0i",
+				     "ID"=>"cen5"}}]).
+-define(WIRE7,[#{"endID"=>"c4.1i",
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c4",
+			   "alias"=>"eth1"}},
+	       #{"endID"=>"c4.1o",
+		 "dest"=>#{"type"=>"cen",
+			   "ID"=>"cen5"}}]).
+-define(WIRE8,[#{"endID"=>"c5.0i",
 			   "dest"=>#{"type"=>"cont",
 				     "ID"=>"c5",
 				     "alias"=>"eth0"}},
-			 #{"endID"=>"c5.1o",
-			   "dest"=>#{"type"=>"cen",
-				     "ID"=>"cen5"}}]}).
+	       #{"endID"=>"c5.1o",
+		 "dest"=>#{"type"=>"cen",
+			   "ID"=>"cen5"}}]).
 -define(WIREMAP,#{"wires"=>[?WIRE1,?WIRE2,?WIRE3,?WIRE4,?WIRE5,?WIRE6,?WIRE7,?WIRE8]}).
 
 
