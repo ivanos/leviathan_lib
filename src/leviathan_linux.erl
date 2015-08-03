@@ -2,6 +2,8 @@
 
 -compile(export_all).
 
+-include("leviathan_logger.hrl").
+
 %
 % Cid::string() is the runtime Container ID of a running Container as shown by
 % > docker ps
@@ -48,43 +50,29 @@ delete_bus(CenId)->
 %
 %
 %
-new_peer(CenId,Cid,PeerNum)->
+new_peer(EndId1,EndId2)->
+    [leviathan_ip:link_add_type_veth_peer_name(EndId1,EndId2)].
+%
+%
+peer2cont(Cid,EndId,Alias)->
     CPid = leviathan_docker:inspect_pid(Cid),
-    LevNameOut = mk_peer_lev_name_out(Cid,PeerNum),
-    LevNameIn = mk_peer_lev_name_in(Cid,PeerNum),
-    [leviathan_ip:link_add_type_veth_peer_name(LevNameOut,LevNameIn),
-    leviathan_ip:link_set_netns(LevNameIn,CPid),
-    leviathan_ip:netns_exec_ip_link_set_dev_name(CPid,LevNameIn,mk_lev_eth_name(PeerNum)),
-    leviathan_brctl:addif(CenId,LevNameOut)].
+    [leviathan_ip:link_set_netns(EndId,CPid),
+    leviathan_ip:netns_exec_ip_link_set_dev_name(CPid,EndId,Alias)].
+
+peer2cen(CenId,EndId)->
+    [leviathan_brctl:addif(CenId,EndId)].
 
 
-delete_peer(Cid,PeerNum)->
-    LevNameOut = mk_peer_lev_name_out(Cid,PeerNum),
-    [leviathan_ip:link_delete_type_veth_peer(LevNameOut)].
+delete_peer(EndId)->
+    [leviathan_ip:link_delete_type_veth_peer(EndId)].
     
 
 new_bridge(BridgeNum)->
-    [leviathan_brctl:addbr(mk_lev_bridge_name(BridgeNum))].
-    
-
-mk_lev_eth_name(PeerNum)->
-    "eth" ++ integer_to_list(PeerNum).
-
-mk_lev_bridge_name(BridgeNum)->
-    "levbr" ++ integer_to_list(BridgeNum).
-    
-mk_peer_lev_name_in(Cid,PeerNum)->
-    mk_peer_lev_name_prefix(Cid,PeerNum) ++ "i".
-
-mk_peer_lev_name_out(Cid,PeerNum)->
-    mk_peer_lev_name_prefix(Cid,PeerNum) ++ "o".
-
-mk_peer_lev_name_prefix(Cid,PeerNum)->
-    Cid ++ "." ++ integer_to_list(PeerNum).
-
+    [leviathan_brctl:addbr(BridgeNum)].
 
 eval(CmdBundle)->
     %%lists:map(fun(X)->os:cmd(X) end,CmdBundle).
-    lists:map(fun(X)->io:format("~p~n",[X]) end,CmdBundle).
+    lists:map(fun(X)->io:format("~p~n",[X]) end,CmdBundle),
+    ?INFO("~p",[lists:map(fun(X)->io_lib:format("~p~n",[X]) end,CmdBundle)]).
     
     

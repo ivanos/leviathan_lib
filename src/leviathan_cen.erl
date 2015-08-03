@@ -102,6 +102,8 @@
 			   "ID"=>"cen5"}}]).
 -define(WIREMAP,#{"wires"=>[?WIRE1,?WIRE2,?WIRE3,?WIRE4,?WIRE5,?WIRE6,?WIRE7,?WIRE8]}).
 
+-define(LEVMAP,#{"censmap"=>?CENSMAP,"contsmap"=>?CONTSMAP,"wiremap"=>?WIREMAP}).
+
 
 
 
@@ -131,36 +133,52 @@
 }">>).
 
 % functions for demos
-test_import() ->
-    import_cen_binary_to_dobby(?TESTDATA),
-    test_add_peer_id(<<"c1">>,<<"cen1">>,<<"eth0">>),
-    test_add_peer_id(<<"c1">>,<<"cen2">>,<<"eth1">>).
+%test_import() ->
+%    import_cen_binary_to_dobby(?TESTDATA),
+%    test_add_peer_id(<<"c1">>,<<"cen1">>,<<"eth0">>),
+%    test_add_peer_id(<<"c1">>,<<"cen2">>,<<"eth1">>).
 
--define(CENIDS, ["cen1","cen2","cen4","cen5"]).
+%-define(CENIDS, ["cen1","cen2","cen4","cen5"]).
 
-test_prepare_cens() ->
-    CensMaps = lists:map(
-        fun(CenId) ->
-            lucet_dby:get_cen(CenId)
-        end, ?CENIDS),
-    prepare_cens(CensMaps).
+%test_prepare_cens() ->
+%    CensMaps = lists:map(
+%        fun(CenId) ->
+%            lucet_dby:get_cen(CenId)
+%        end, ?CENIDS),
+%    prepare_cens(CensMaps).
+
+
+test_local_prepare_lev()->
+    prepare_lev(?LEVMAP).
 
 test_add_peer_id(Container, Cen, PeerId) ->
     ok = dby:publish(?PUBLISHER, {Container, Cen, [{<<"peerId">>, PeerId}]}, [persistent]).
 
 % exports
 
--spec import_cen_to_dobby(filename:filename_all()) -> ok | {error, Reason} when
-      Reason :: term().
-import_cen_to_dobby(Filename) ->
-    {ok, Binary} = file:read_file(Filename),
-    import_cen_binary_to_dobby(Binary).
+%-spec import_cen_to_dobby(filename:filename_all()) -> ok | {error, Reason} when
+%      Reason :: term().
+%import_cen_to_dobby(Filename) ->
+%    {ok, Binary} = file:read_file(Filename),
+%    import_cen_binary_to_dobby(Binary).
 
-import_cen_binary_to_dobby(Binary) ->
-    #{<<"cenList">> := Cens} = jiffy:decode(Binary, [return_maps]),
-    ProcessedCens = process_cens(Cens),
-    publsh_cens(ProcessedCens).
+%import_cen_binary_to_dobby(Binary) ->
+%    #{<<"cenList">> := Cens} = jiffy:decode(Binary, [return_maps]),
+%    ProcessedCens = process_cens(Cens),
+%    publsh_cens(ProcessedCens).
 
+
+
+%
+% Top Level Processor
+%
+prepare_lev(LevMap)->
+    #{ "censmap" := CensMap,
+       "contsmap" := ContsMap,
+       "wiremap" := WireMap } = LevMap,
+    prepare_cens(CensMap),
+    prepare_conts(ContsMap),
+    prepare_wires(WireMap).
 
 %
 %
@@ -174,141 +192,60 @@ prepare_cens_test()->
     prepare_cens(?CENSMAP).
 
 prepare_cens(CensMap)->
-    {ok,Cens} = maps:find("cens",CensMap),
+    #{ "cens" := Cens } = CensMap,
 
-    %%  2 passes are required sine the second pass assumes that
-    %%  all busses have already be created so that every container  
-    %%  must touched only once in the second pass
-    %%
-    %%  Pass 1: 
     %%     make any necessary Ethernet buses
     %%     if a Cen has more than 2 containers, we'll create a bus
     %%
     lists:foreach(fun(CenMap)->
-			  case get_cen_type(CenMap) of
-			      bus ->
-				  {ok,CenId} = maps:find("cenID",CenMap),
+			  #{"type" := CenType} = CenMap,
+			  case CenType of
+			      "bus" ->
+				  #{"cenID" := CenId} = CenMap,
 				  CmdBundle = leviathan_linux:new_bus(CenId),
 				  leviathan_linux:eval(CmdBundle);				      
 			      _ -> ok %% don't create a bus
 			  end
-		  end, Cens),
+		  end, Cens).
     
-    %%  Pass 2: 
-    %%     configure containers for each Cen
-    %%     and create any pipes for Cens with exactly 2 containers
-    lists:foreach(fun(CenMap)->prepare_cen(CenMap) end, Cens).
+prepare_conts(ContsMap)->
+    #{ "conts" := Conts } = ContsMap,
+    lists:foreach(fun(Cont)->
+			  #{"contID" := ContId } = Cont,
+			  CmdBundle = leviathan_linux:set_netns(ContId),
+			  leviathan_linux:eval(CmdBundle)
+		  end,Conts).
 
+prepare_wires(WireMap)->
+    #{ "wires" := Wires } = WireMap,
+    lists:foreach(fun(Wire)->prepare_wire(Wire) end,Wires).
 
+prepare_wire(Wire) when length(Wire) == 2 ->
+    [End1,End2] = Wire,
+    #{ "endID" := EndId1 } = End1, 
+    #{ "endID" := EndId2 } = End2,
+    CmdBundle = leviathan_linux:new_peer(EndId1,EndId2),
+    leviathan_linux:eval(CmdBundle),				      
+    lists:foreach(fun(WireEnd)->
+			 prepare_wire_end(WireEnd) end,Wire).
 
-
-get_cen_type(CenMap) ->
-    {ok,ContIds} = maps:find("contIDs",CenMap),
-    case length(ContIds) of
-	0 -> null;			       
-	1 -> null;
-	2 -> pipe;
-	_ -> bus
-    end.
-			      
-
-
-prepare_cen(CenMap)->
-    %% get container list
-    {ok,ContIds} = maps:find("contIDs",CenMap),
-
-    %% if there are only 2 containers in this Cen,
-    %%
-    case get_cen_type(CenMap) of
-	null -> ok; %% don't do anything
-	pipe -> ok; %% make a pipe
-	bus -> 
-	    %% iterate over containers and add to the bus
-	    lists:foreach(fun(ContId)->
-				  prepare_cont(ContId) end,ContIds)
-    end.
-
-
-prepare_cont(ContId)->
-
-    % fake call needs to be replace with rea
-    % maps navigation
-    ContMap = get_cont(ContId),
-    set_netns(ContId),
-
-    {ok,Cens} = maps:find("cens",ContMap),
-    Update = lists:foldl(fun(Cen,Acc)->
-				 {CenUpdateAcc,PeerNum} = Acc,
-				 CenUpdate = prepare_cont(ContId,Cen,PeerNum),
-				 {CenUpdateAcc++[CenUpdate],PeerNum+1} end,
-			 {[],0},Cens),
-    NewContMap = maps:update("cens",Update,ContMap),
-
-    %%=== CALL Lucet ===
-    %%lucet:set_cont(NewConMap),
-    
-    %fake call
-    set_cont(NewContMap).
-
-prepare_cont(ContId,Cen,PeerNum)->
-    {ok,CenId} = maps:find("cenID",Cen),
-    {ok,PeerID} = maps:find("peerId",Cen),
-    case PeerID of
-	unassigned ->
-	    create_peer(CenId,ContId,PeerNum),
-	    maps:update("peerId",leviathan_linux:mk_lev_eth_name(PeerNum),Cen);
-	_ ->
-	    ?DEBUG("Peer already created! ContId = ~p, Cen = ~p, PeerNum = ~p",[ContId,Cen,PeerNum]),
-	    Cen
+prepare_wire_end(WireEnd)->
+    #{ "endID" := EndId,
+       "dest" := Dest } = WireEnd,
+    #{ "type" := DestType } = Dest,
+    case DestType of
+	"cen" -> 
+	    #{ "ID" := CenId } = Dest,
+	    CmdBundle = leviathan_linux:peer2cen(CenId,EndId),
+	    leviathan_linux:eval(CmdBundle);				      
+	"cont" ->
+	    #{ "ID" := Cid } = Dest,
+	    #{ "alias" := Alias} = Dest,
+	    CmdBundle = leviathan_linux:peer2cont(Cid,EndId,Alias),
+	    leviathan_linux:eval(CmdBundle)
     end.
 
-set_netns(CenId)->
-    CmdBundle = leviathan_linux:set_netns(CenId),
-    leviathan_linux:eval(CmdBundle).
-
-create_peer(CenId,ContId,PeerNum)->
-    CmdBundle = leviathan_linux:new_peer(CenId,ContId,PeerNum),
-    leviathan_linux:eval(CmdBundle).
-
-    
-
-
-
-
-
-
-
-
-%% Fake calls to walking the contsmap
-
-get_cont("c1")->
-    ?CONT1;
-get_cont("c2") ->
-    ?CONT2;
-get_cont("c3") ->
-    ?CONT3;
-get_cont("c4")->
-    ?CONT4;
-get_cont("c5") ->
-    ?CONT5.
-
-
-set_cont(NewContMap)->ok.
-    %%io:format("NewContMap = ~p",[NewContMap]).
-    
-
-%% Internal functions
-
-process_cens(CensMap) ->
-    lists:foldl(fun process_cen/2, {[], sets:new(), []}, CensMap).
-
-process_cen(#{<<"cenID">> := CenId, <<"containerIDs">> := ContainerIds},
-            {CenIds, ContainerIdsSet, CenLinks}) ->
-    {[CenId | CenIds],
-     sets:union(ContainerIdsSet, sets:from_list(ContainerIds)),
-     [{CenId, C} || C <- ContainerIds] ++ CenLinks};
-process_cen(_, _) ->
-    throw(bad_json).
+	    
 
 publsh_cens({CenIds, ContainerIds, CenLinks}) ->
     ToPublish = [lucet_dby:cen_ep(C) || C <-CenIds]
