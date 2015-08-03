@@ -4,6 +4,7 @@
 
 -include("leviathan_logger.hrl").
 
+-define(PUBLISHER, atom_to_binary(?MODULE, utf8)).
 
 %% CEN to Container Map
 %  5 CENs
@@ -129,20 +130,28 @@
   }]
 }">>).
 
+% functions for demos
 test_import() ->
     import_cen_binary_to_dobby(?TESTDATA),
     test_add_peer_id(<<"c1">>,<<"cen1">>,<<"eth0">>),
     test_add_peer_id(<<"c1">>,<<"cen2">>,<<"eth1">>).
 
+-define(CENIDS, ["cen1","cen2","cen4","cen5"]).
+
 test_prepare_cens() ->
-    prepare_cens(?CENSLIST).
+    CensMaps = lists:map(
+        fun(CenId) ->
+            lucet_dby:get_cen(CenId)
+        end, ?CENIDS),
+    prepare_cens(CensMaps).
 
 test_add_peer_id(Container, Cen, PeerId) ->
-    ok = dby:publish(<<"leviathan_cen">>, {Container, Cen, [{<<"peerId">>, PeerId}]}, [persistent]).
+    ok = dby:publish(?PUBLISHER, {Container, Cen, [{<<"peerId">>, PeerId}]}, [persistent]).
+
+% exports
 
 -spec import_cen_to_dobby(filename:filename_all()) -> ok | {error, Reason} when
       Reason :: term().
-
 import_cen_to_dobby(Filename) ->
     {ok, Binary} = file:read_file(Filename),
     import_cen_binary_to_dobby(Binary).
