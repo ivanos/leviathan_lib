@@ -5,28 +5,104 @@
 -include("leviathan_logger.hrl").
 
 
--define(CENMAP1,#{"cenID" => "cen1","contIDs" => ["c1","c2","c3"]}).
--define(CENMAP2,#{"cenID" => "cen2","contIDs" => ["c1","c2"]}).
--define(CENMAP4,#{"cenID" => "cen4","contIDs" => ["c2","c4"]}).
--define(CENMAP5,#{"cenID" => "cen5","contIDs" => ["c2","c4","c5"]}).
+%% CEN to Container Map
+%  5 CENs
+%  This will define which, if any, bridges to construct
+%
+%
+
+-define(CENMAP1,#{"cenID" => "cen1", "type"=>"bus", "contIDs" => ["c1","c2","c3"]}).   %% 3 wires
+-define(CENMAP2,#{"cenID" => "cen2", "type"=>"wire", "contIDs" => ["c1","c2"]}).  %% 1 wire
+-define(CENMAP4,#{"cenID" => "cen4", "type"=>"wire", "contIDs" => ["c2","c4"]}). %% 1 wire
+-define(CENMAP5,#{"cenID" => "cen5", "type"=>"bus","contIDs" => ["c2","c4","c5"]}).  %% 3 wires
 -define(CENSMAP,#{"cens" => [?CENMAP1,?CENMAP2,?CENMAP4,?CENMAP5]}).
 
 
--define(CONT1,#{"contID" => "c1","cens" => [#{"cenID"=>"cen1","peerId"=>"eth0"},
-					    #{"cenID"=>"cen2","peerId"=>"eth1"}]}).
+%% Container to CEN Map
+%% 5 Containers
+%% This will define which, if any, Linux network namespaces to construct
 
--define(CONT2,#{"contID" => "c2","cens" => [#{"cenID"=>"cen1","peerId"=>unassigned},
-					    #{"cenID"=>"cen2","peerId"=>unassigned},
-					    #{"cenID"=>"cen4","peerId"=>unassigned},
-					    #{"cenID"=>"cen5","peerId"=>unassigned}]}).
-
--define(CONT3,#{"contID" => "c3","cens" => [#{"cenID"=>"cen1","peerId"=>unassigned}]}).
-
--define(CONT4,#{"contID" => "c4","cens" => [#{"cenID"=>"cen4","peerId"=>unassigned},
-					    #{"cenID"=>"cen5","peerId"=>unassigned}]}).
-
--define(CONT5,#{"contID" => "c5","cens" => [#{"cenID"=>"cen5","peerId"=>unassigned}]}).
+-define(CONT1,#{"contID" => "c1","cens" => ["cen1","cen2"]}).  
+-define(CONT2,#{"contID" => "c2","cens" => ["cen1","cen2","cen3","cen4"]}).
+-define(CONT3,#{"contID" => "c3","cens" => ["cen1"]}).
+-define(CONT4,#{"contID" => "c4","cens" => ["cen4","cen5"]}).
+-define(CONT5,#{"contID" => "c5","cens" => ["cen5"]}).
 -define(CONTSMAP,#{"conts"=>[?CONT1,?CONT2,?CONT3,?CONT4,?CONT5]}).
+
+%% Wire Map
+%% Total of 8 wires
+%% This will define which, if any, Linux network veth peers to construct
+%% and what to name them
+
+%% 3 wires for cen1
+-define(WIRE1,[#{"endID"=>"c1.0i",
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c1",
+			   "alias"=>"eth0"}},
+	       #{"endID"=>"c1.0o",
+		 "dest"=>#{"type"=>"cen",
+			   "ID"=>"cen1"}}]).
+-define(WIRE2,[#{"endID"=>"c2.0i",
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c2",
+			   "alias"=>"eth0"}},
+	       #{"endID"=>"c2.0o",
+		 "dest"=>#{"type"=>"cen",
+			   "ID"=>"c1"}}]).
+-define(WIRE3,[#{"endID"=>"c3.0i",
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c3",
+			   "alias"=>"eth0"}},
+	       #{"endID"=>"c3.0o",
+		 "dest"=>#{"type"=>"cen",
+			   "ID"=>"cen1"}}]).
+
+%% 1 wire for cen2
+-define(WIRE4,[#{"endID"=>"c1.1i",
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c1",
+			   "alias"=>"eth1"}},
+	       #{"endID"=>"c2.1i",
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c2",
+			   "alias"=>"eth1"}}]).
+
+%% 1 wire for cen4
+-define(WIRE5,[#{"endID"=>"c2.2i",
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c2",
+			   "alias"=>"eth2"}},
+	       #{"endID"=>"c4.0i",
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c4",
+			   "alias"=>"eth0"}}]).
+
+%% 3 wires for cen5
+-define(WIRE6,[#{"endID"=>"c2.3i",
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c2",
+			   "alias"=>"eth3"}},
+	       #{"endID"=>"c2.3o",
+		 "dest"=>#{"type"=>"cen",
+			   "ID"=>"cen5"}}]).
+-define(WIRE7,[#{"endID"=>"c4.1i",
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c4",
+			   "alias"=>"eth1"}},
+	       #{"endID"=>"c4.1o",
+		 "dest"=>#{"type"=>"cen",
+			   "ID"=>"cen5"}}]).
+-define(WIRE8,[#{"endID"=>"c5.0i",
+		 "dest"=>#{"type"=>"cont",
+			   "ID"=>"c5",
+			   "alias"=>"eth0"}},
+	       #{"endID"=>"c5.1o",
+		 "dest"=>#{"type"=>"cen",
+			   "ID"=>"cen5"}}]).
+-define(WIREMAP,#{"wires"=>[?WIRE1,?WIRE2,?WIRE3,?WIRE4,?WIRE5,?WIRE6,?WIRE7,?WIRE8]}).
+
+
+
 
 
 -define(CENSLIST, [<<"cen1">>,<<"cen2">>,<<"cen3">>,<<"cen4">>,<<"cen5">>]).
@@ -66,6 +142,7 @@ test_add_peer_id(Container, Cen, PeerId) ->
 
 -spec import_cen_to_dobby(filename:filename_all()) -> ok | {error, Reason} when
       Reason :: term().
+
 import_cen_to_dobby(Filename) ->
     {ok, Binary} = file:read_file(Filename),
     import_cen_binary_to_dobby(Binary).
@@ -84,18 +161,15 @@ import_cen_binary_to_dobby(Binary) ->
 %
 %
 
-prepare_cens(CenIds) ->
-    CensMaps = lists:map(
-                fun(CenId) ->
-                    lucet_dby:get_cen(CenId)
-                end, CenIds),
-    prepare_cens_maps(CensMaps).
+prepare_cens_test()->
+    prepare_cens(?CENSMAP).
 
-prepare_cens_maps(CenMaps) ->
+prepare_cens(CensMap)->
+    {ok,Cens} = maps:find("cens",CensMap),
 
-    %%  2 passes are required since the second pass assumes that
-    %%  all buses have already been created so that every container  
-    %%  must be touched only once in the second pass
+    %%  2 passes are required sine the second pass assumes that
+    %%  all busses have already be created so that every container  
+    %%  must touched only once in the second pass
     %%
     %%  Pass 1: 
     %%     make any necessary Ethernet buses
@@ -104,30 +178,35 @@ prepare_cens_maps(CenMaps) ->
     lists:foreach(fun(CenMap)->
 			  case get_cen_type(CenMap) of
 			      bus ->
-				  {ok,CenId} = maps:find(cenID, CenMap),
+				  {ok,CenId} = maps:find("cenID",CenMap),
 				  CmdBundle = leviathan_linux:new_bus(CenId),
 				  leviathan_linux:eval(CmdBundle);				      
 			      _ -> ok %% don't create a bus
 			  end
-		  end, CenMaps),
+		  end, Cens),
     
     %%  Pass 2: 
     %%     configure containers for each Cen
     %%     and create any pipes for Cens with exactly 2 containers
-    lists:foreach(fun(CenMap)->prepare_cen(CenMap) end, CenMaps).
+    lists:foreach(fun(CenMap)->prepare_cen(CenMap) end, Cens).
+
+
+
 
 get_cen_type(CenMap) ->
-    {ok,ContIds} = maps:find(contIDs,CenMap),
+    {ok,ContIds} = maps:find("contIDs",CenMap),
     case length(ContIds) of
 	0 -> null;			       
 	1 -> null;
 	2 -> pipe;
 	_ -> bus
     end.
+			      
+
 
 prepare_cen(CenMap)->
     %% get container list
-    {ok,ContIds} = maps:find(contIDs,CenMap),
+    {ok,ContIds} = maps:find("contIDs",CenMap),
 
     %% if there are only 2 containers in this Cen,
     %%
@@ -140,33 +219,35 @@ prepare_cen(CenMap)->
 				  prepare_cont(ContId) end,ContIds)
     end.
 
+
 prepare_cont(ContId)->
-    % XXX optimization - maybe get Container maps all at once; could that
-    % cause overwriting issues?
-    ContMap = lucet_dby:get_cont(ContId),
+
+    % fake call needs to be replace with rea
+    % maps navigation
+    ContMap = get_cont(ContId),
     set_netns(ContId),
 
-    {ok,Cens} = maps:find(cens,ContMap),
+    {ok,Cens} = maps:find("cens",ContMap),
     Update = lists:foldl(fun(Cen,Acc)->
 				 {CenUpdateAcc,PeerNum} = Acc,
 				 CenUpdate = prepare_cont(ContId,Cen,PeerNum),
 				 {CenUpdateAcc++[CenUpdate],PeerNum+1} end,
 			 {[],0},Cens),
-    NewContMap = maps:update(cens,Update,ContMap),
+    NewContMap = maps:update("cens",Update,ContMap),
 
-    %%=== CaLL Lucet ===
+    %%=== CALL Lucet ===
     %%lucet:set_cont(NewConMap),
     
     %fake call
     set_cont(NewContMap).
 
 prepare_cont(ContId,Cen,PeerNum)->
-    {ok,CenId} = maps:find(cenID,Cen),
-    {ok,PeerID} = maps:find(peerId,Cen),
+    {ok,CenId} = maps:find("cenID",Cen),
+    {ok,PeerID} = maps:find("peerId",Cen),
     case PeerID of
 	unassigned ->
 	    create_peer(CenId,ContId,PeerNum),
-	    maps:update(peerId,leviathan_linux:mk_lev_eth_name(PeerNum),Cen);
+	    maps:update("peerId",leviathan_linux:mk_lev_eth_name(PeerNum),Cen);
 	_ ->
 	    ?DEBUG("Peer already created! ContId = ~p, Cen = ~p, PeerNum = ~p",[ContId,Cen,PeerNum]),
 	    Cen
@@ -180,9 +261,31 @@ create_peer(CenId,ContId,PeerNum)->
     CmdBundle = leviathan_linux:new_peer(CenId,ContId,PeerNum),
     leviathan_linux:eval(CmdBundle).
 
+    
 
-set_cont(NewContMap)->
-    ?DEBUG("NewContMap = ~p",[NewContMap]).
+
+
+
+
+
+
+
+%% Fake calls to walking the contsmap
+
+get_cont("c1")->
+    ?CONT1;
+get_cont("c2") ->
+    ?CONT2;
+get_cont("c3") ->
+    ?CONT3;
+get_cont("c4")->
+    ?CONT4;
+get_cont("c5") ->
+    ?CONT5.
+
+
+set_cont(NewContMap)->ok.
+    %%io:format("NewContMap = ~p",[NewContMap]).
     
 
 %% Internal functions
