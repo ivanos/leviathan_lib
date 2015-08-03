@@ -5,28 +5,103 @@
 -include("leviathan_logger.hrl").
 
 
--define(CENMAP1,#{"cenID" => "cen1","contIDs" => ["c1","c2","c3"]}).
--define(CENMAP2,#{"cenID" => "cen2","contIDs" => ["c1","c2"]}).
--define(CENMAP4,#{"cenID" => "cen4","contIDs" => ["c2","c4"]}).
--define(CENMAP5,#{"cenID" => "cen5","contIDs" => ["c2","c4","c5"]}).
+%% CEN to Container Map
+%  5 CENs
+%  This will define which, if any, bridges to construct
+%
+%
+
+-define(CENMAP1,#{"cenID" => "cen1", "type"=>"bus", "contIDs" => ["c1","c2","c3"]}).   %% 3 wires
+-define(CENMAP2,#{"cenID" => "cen2", "type"=>"wire", "contIDs" => ["c1","c2"]}).  %% 1 wire
+-define(CENMAP4,#{"cenID" => "cen4", "type"=>"wire", "contIDs" => ["c2","c4"]}). %% 1 wire
+-define(CENMAP5,#{"cenID" => "cen5", "type"=>"bus","contIDs" => ["c2","c4","c5"]}).  %% 3 wires
 -define(CENSMAP,#{"cens" => [?CENMAP1,?CENMAP2,?CENMAP4,?CENMAP5]}).
 
 
--define(CONT1,#{"contID" => "c1","cens" => [#{"cenID"=>"cen1","peerId"=>"eth0"},
-					    #{"cenID"=>"cen2","peerId"=>"eth1"}]}).
+%% Container to CEN Map
+%% 5 Containers
 
--define(CONT2,#{"contID" => "c2","cens" => [#{"cenID"=>"cen1","peerId"=>unassigned},
-					    #{"cenID"=>"cen2","peerId"=>unassigned},
-					    #{"cenID"=>"cen4","peerId"=>unassigned},
-					    #{"cenID"=>"cen5","peerId"=>unassigned}]}).
-
--define(CONT3,#{"contID" => "c3","cens" => [#{"cenID"=>"cen1","peerId"=>unassigned}]}).
-
--define(CONT4,#{"contID" => "c4","cens" => [#{"cenID"=>"cen4","peerId"=>unassigned},
-					    #{"cenID"=>"cen5","peerId"=>unassigned}]}).
-
--define(CONT5,#{"contID" => "c5","cens" => [#{"cenID"=>"cen5","peerId"=>unassigned}]}).
+-define(CONT1,#{"contID" => "c1","cens" => ["cen1","cen2"]}).  
+-define(CONT2,#{"contID" => "c2","cens" => ["cen1","cen2","cen3","cen4"]}).
+-define(CONT3,#{"contID" => "c3","cens" => ["cen1"]}).
+-define(CONT4,#{"contID" => "c4","cens" => ["cen4","cen5"]}).
+-define(CONT5,#{"contID" => "c5","cens" => ["cen5"]}).
 -define(CONTSMAP,#{"conts"=>[?CONT1,?CONT2,?CONT3,?CONT4,?CONT5]}).
+
+%% Wire Map
+%% Total of 8 wires
+
+%% 3 wires for cen1
+-define(WIRE1,#{"wire"=>[#{"endID"=>"c1.0i",
+			   "alias"=>"eth0"
+			   "dest"=>#{"type"=>"cont",
+				     "ID"=>"c1",
+				     "alias"=>"eth0"}},
+			 #{"endID"=>"c1.0o",
+			   "dest"=>#{"type"=>"cen",
+				     "ID"=>"cen1"}}]}).
+-define(WIRE2,#{"wire"=>[#{"endID"=>"c2.0i",
+			   "dest"=>#{"type"=>"cont",
+				     "ID"=>"c2",
+				     "alias"=>"eth0"}},
+			 #{"endID"=>"c2.0o",
+			   "dest"=>#{"type"=>"cen",
+				     "ID"=>"c1"}}]}).
+-define(WIRE3,#{"wire"=>[#{"endID"=>"c3.0i",
+			   "dest"=>#{"type"=>"cont",
+				     "ID"=>"c3",
+				     "alias"=>"eth0"}},
+			 #{"endID"=>"c3.0o",
+			   "dest"=>#{"type"=>"cen",
+				     "ID"=>"cen1"}}]}).
+
+%% 1 wire for cen2
+-define(WIRE4,#{"wire"=>[#{"endID"=>"c1.1i",
+			   "dest"=>#{"type"=>"cont",
+				     "ID"=>"c1",
+				     "alias"=>"eth1"}},
+			 #{"endID"=>"c2.1i",
+			   "dest"=>#{"type"=>"cont",
+				     "ID"=>"c2",
+				     "alias"=>"eth1"}}]}).
+
+%% 1 wire for cen4
+-define(WIRE5,#{"wire"=>[#{"endID"=>"c2.2i",
+			   "dest"=>#{"type"=>"cont",
+				     "ID"=>"c2",
+				     "alias"=>"eth2"}},
+			 #{"endID"=>"c4.0i",
+			   "dest"=>#{"type"=>"cont",
+				     "ID"=>"c4",
+				     "alias"=>"eth4"}}]}).
+
+%% 3 wires for cen5
+-define(WIRE6,#{"wire"=>[#{"endID"=>"c2.3i",
+			   "dest"=>#{"type"=>"cont",
+				     "ID"=>"c2",
+				     "alias"=>"eth3"}},
+			 #{"endID"=>"c2.3o",
+			   "dest"=>#{"type"=>"cen",
+				     "ID"=>"cen5"}}]}).
+-define(WIRE7,#{"wire"=>[#{"endID"=>"c4.1i",
+			   "dest"=>#{"type"=>"cont",
+				     "ID"=>"c4",
+				     "alias"=>"eth1"}},
+			 #{"endID"=>"c4.1o",
+			   "dest"=>#{"type"=>"cen",
+				     "ID"=>"cen5"}}]}).
+-define(WIRE8,#{"wire"=>[#{"endID"=>"c5.0i",
+			   "dest"=>#{"type"=>"cont",
+				     "ID"=>"c5",
+				     "alias"=>"eth0"}},
+			 #{"endID"=>"c5.1o",
+			   "dest"=>#{"type"=>"cen",
+				     "ID"=>"cen5"}}]}).
+-define(WIREMAP,#{"wires"=>[?WIRE1,?WIRE2,?WIRE3,?WIRE4,?WIRE5,?WIRE6,?WIRE7,?WIRE8]}).
+
+
+
+
 
 
 -spec import_cen_to_dobby(filename:filename_all()) -> ok | {error, Reason} when
@@ -159,7 +234,7 @@ create_peer(CenId,ContId,PeerNum)->
 
 
 
-%% Fake calls to lucet:get_cen(...) and lucet:get_cont(...) for development
+%% Fake calls to walking the contsmap
 
 get_cont("c1")->
     ?CONT1;
