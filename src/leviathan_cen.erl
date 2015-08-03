@@ -54,10 +54,15 @@
 }">>).
 
 test_import() ->
-    import_cen_binary_to_dobby(?TESTDATA).
+    import_cen_binary_to_dobby(?TESTDATA),
+    test_add_peer_id(<<"c1">>,<<"cen1">>,<<"eth0">>),
+    test_add_peer_id(<<"c1">>,<<"cen2">>,<<"eth1">>).
 
 test_prepare_cens() ->
     prepare_cens(?CENSLIST).
+
+test_add_peer_id(Container, Cen, PeerId) ->
+    ok = dby:publish(<<"leviathan_cen">>, {Container, Cen, [{<<"peerId">>, PeerId}]}, [persistent]).
 
 -spec import_cen_to_dobby(filename:filename_all()) -> ok | {error, Reason} when
       Reason :: term().
