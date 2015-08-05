@@ -12,6 +12,30 @@
 %
 %
 
+-define(CENSLIST, [<<"cen1">>,<<"cen2">>,<<"cen3">>,<<"cen4">>,<<"cen5">>]).
+-define(TESTDATA, <<"{\"cenList\":
+ [{
+     \"cenID\" : \"cen1\",
+     \"containerIDs\" : [ \"c1\",\"c2\",\"c13\"]
+  },
+  {
+      \"cenID\":\"cen2\",
+      \"containerIDs\":[\"c1\",\"c2\"]
+  },
+  {
+      \"cenID\":\"cen3\",
+      \"containerIDs\":[\"c2\"]
+  },
+  {
+      \"cenID\":\"cen4\",
+      \"containerIDs\":[\"c2\",\"c4\"]
+  },
+  {
+      \"cenID\":\"cen5\",
+      \"containerIDs\":[\"c2\",\"c4\",\"c5\"]
+  }]
+}">>).
+
 -define(CENMAP1,#{"cenID" => "cen1", "type"=>"bus", "contIDs" => ["c1","c2","c3"]}).   %% 3 wires
 -define(CENMAP2,#{"cenID" => "cen2", "type"=>"wire", "contIDs" => ["c1","c2"]}).  %% 1 wire
 -define(CENMAP4,#{"cenID" => "cen4", "type"=>"wire", "contIDs" => ["c2","c4"]}). %% 1 wire
@@ -108,35 +132,9 @@
 
 
 
--define(CENSLIST, [<<"cen1">>,<<"cen2">>,<<"cen3">>,<<"cen4">>,<<"cen5">>]).
--define(TESTDATA, <<"{\"cenList\":
- [{
-     \"cenID\" : \"cen1\",
-     \"containerIDs\" : [ \"c1\",\"c2\",\"c13\",\"c14\"]
-  },
-  {
-      \"cenID\":\"cen2\",
-      \"containerIDs\":[\"c4\",\"c5\",\"c6\",\"c7\"]
-  },
-  {
-      \"cenID\":\"cen3\",
-      \"containerIDs\":[\"c15\",\"c16\",\"c9\",\"c10\",\"c11\"]
-  },
-  {
-      \"cenID\":\"cen4\",
-      \"containerIDs\":[\"c11\",\"c12\"]
-  },
-  {
-      \"cenID\":\"cen5\",
-      \"containerIDs\":[\"c2\",\"c3\"]
-  }]
-}">>).
-
 % functions for demos
-%test_import() ->
-%    import_cen_binary_to_dobby(?TESTDATA),
-%    test_add_peer_id(<<"c1">>,<<"cen1">>,<<"eth0">>),
-%    test_add_peer_id(<<"c1">>,<<"cen2">>,<<"eth1">>).
+test_import() ->
+    leviathan_dby:import_binary(<<"host1">>, ?TESTDATA).
 
 %-define(CENIDS, ["cen1","cen2","cen4","cen5"]).
 
@@ -155,18 +153,6 @@ test_add_peer_id(Container, Cen, PeerId) ->
     ok = dby:publish(?PUBLISHER, {Container, Cen, [{<<"peerId">>, PeerId}]}, [persistent]).
 
 % exports
-
-%-spec import_cen_to_dobby(filename:filename_all()) -> ok | {error, Reason} when
-%      Reason :: term().
-%import_cen_to_dobby(Filename) ->
-%    {ok, Binary} = file:read_file(Filename),
-%    import_cen_binary_to_dobby(Binary).
-
-%import_cen_binary_to_dobby(Binary) ->
-%    #{<<"cenList">> := Cens} = jiffy:decode(Binary, [return_maps]),
-%    ProcessedCens = process_cens(Cens),
-%    publsh_cens(ProcessedCens).
-
 
 
 %

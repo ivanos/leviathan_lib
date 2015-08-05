@@ -56,12 +56,10 @@ install_iso8601() ->
 dby_id(List) ->
     dby_id(List, []).
 
-dby_id([], []) ->
-    [];
-dby_id([Last], Acc) ->
-    iolist_to_binary([Acc, Last]);
+dby_id([E], Acc) ->
+    iolist_to_binary([Acc, E]);
 dby_id([E | Rest], Acc) ->
-    dby_id(Rest, [Acc, ">", E]).
+    dby_id(Rest, [Acc, E, ">"]).
 
 dby_cen_id(Host, CenId) ->
     dby_id([<<"lev_cen">>, Host, CenId]).
@@ -129,8 +127,10 @@ container_from_cens_json(Context, Host, CensJson) ->
 % prepare to publish cens and the wiring
 cens_from_cens_json(Context0, Host, CensJson) ->
     lists:foldl(
-        fun(#{<<"cenId">> := CenId, <<"containerIDs">> := ContIds}, Context) ->
-            wire_cen(Context, Host, CenId, ContIds)
+        fun(#{<<"cenID">> := CenId, <<"containerIDs">> := ContIds}, Context) ->
+            wire_cen(Context, Host, CenId, ContIds);
+           (_, _) ->
+            throw(bad_json)
         end, Context0, CensJson).
 
 % wiring helpers
@@ -177,7 +177,7 @@ wire_cen_to_container(Host, CenId) ->
                 dby_endpoint(Host, InEndpoint, Eth),
                 dby_endpoint_to_container(Host, InEndpoint, ContId),
                 dby_endpoint(Host, OutEndpoint, null),
-                dby_endpoint_to_cen(Host, InEndpoint, CenId)
+                dby_endpoint_to_cen(Host, OutEndpoint, CenId)
             ])
     end.
 
@@ -202,9 +202,10 @@ next_out_endpoint(Context, ContId) ->
     next_count(Context, {out_endpoint, ContId}, FormatFn).
 
 % helper
-next_count(Context, Key, FormatFn) ->
-    N = maps:get(Key, Context, 0),
-    {maps:update(Key, N + 1,  Context), FormatFn(N)}.
+next_count(Context = #{count := CountMap}, Key, FormatFn) ->
+    N = maps:get(Key, CountMap, 0),
+    {maps:update(count, maps:put(Key, N + 1,  CountMap), Context),
+     FormatFn(N)}.
 
 % name formatters
 eth_name(N) ->
