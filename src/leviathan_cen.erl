@@ -16,7 +16,7 @@
 -define(TESTDATA, <<"{\"cenList\":
  [{
      \"cenID\" : \"cen1\",
-     \"containerIDs\" : [ \"c1\",\"c2\",\"c13\"]
+     \"containerIDs\" : [ \"c1\",\"c2\",\"c3\"]
   },
   {
       \"cenID\":\"cen2\",
