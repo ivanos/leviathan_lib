@@ -50,3 +50,69 @@ To test it:
 
 > It's not possible to see all the CENs simultaneously as the visualizer
 > can only display one root node at once.
+
+## Leviathan Erlang Data Structures
+
+A CEN is a represented by a map:
+
+Key | Value | Description
+--- | ----- | -----------
+cenID | CEN ID | CEN Identifier
+wiring_type | bus, wire, or null | type of wiring used
+conIDs | list of container IDs | containers in the CEN
+
+A Container is represented by a map:
+
+Key | Value | Description
+--- | ----- | -----------
+contID | container ID | Container ID
+cens | list of CEN IDs | Container is in these CENs
+
+A Wire is represented by a pair of maps in a list. Each map has:
+
+Key | Value | Description
+--- | ----- | -----------
+endID | endpoint | Endpoint identifier (description above)
+dest | destination map | See below
+
+A destination map:
+
+Key | Value | Description
+--- | ----- | -----------
+type | cont or cen | the endpoint is a container or CEN
+ID | identifier | name of the CEN or the container ID
+alias | string | (only for containers) interface name in the container
+
+## Dobby Data Model
+
+Identifier names.  Fields starting with a Capital letter are the fillins:
+
+Type | Name Format | Example
+---- | ----------- | -------
+CEN | lev_cen>CEN | lev_cen>cen1
+container | lev_cont>Host>Container | lev_cen>host1>4c01db0b339c
+endpoint | lev_endpoint>Host>Endpoint | lev_endpiont>host1>4c01db0b339c.0i
+
+CEN metadata:
+
+Key | Value | Description
+--- | ----- | -----------
+wiring_type | bus, wire, null | Type of wiring
+status | pending, preparing, ready | Status of the CEN
+
+There is no Container metadata.
+
+Endpiont metadata:
+
+Key | Value | Description
+--- | ----- | -----------
+alias | Alias Name | alias for this endpoint in the container (e.g., eth0)
+
+Links:
+
+Type, Type | Link Type | Description
+---------- | --------- | -----------
+CEN, Container | part_of | container is in the CEN
+Endpoint, Endpoint | next_to | connection between the two endpoints
+Endpoint, Container | next_to | endpoint is part_of the container (inside interface)
+Endpoint, CEN | next_to | endpoint is part_of the CEN (outside interface)
