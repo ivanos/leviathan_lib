@@ -31,15 +31,18 @@ import_binary(Host, Binary) ->
 
 -spec get_cen(string(), string()) -> #{}.
 get_cen(Host, CenId) ->
-    DobbyCenId = dby_cen_id(Host, CenId),
-    ContIds = dby:search(fun linked_containers/4, [], DobbyCenId, [{max_depth, 1}]),
-    #{cenID => CenId, contIDs => ContIds}.
+    dby:search(fun linked_containers/4,
+        #{cenID => null,
+         wire_type => null,
+         contIDs => []},
+        dby_cen_id(Host, CenId), [{max_depth, 1}]).
 
 -spec get_cont(string(), string()) -> #{}.
 get_cont(Host, ContId) ->
-    DobbyContId = dby_cont_id(Host, ContId),
-    CenInfo = dby:search(fun linked_cens/4, [], DobbyContId, [{max_depth, 1}]),
-    #{contID => ContId, cens => CenInfo}.
+    dby:search(fun linked_cens/4,
+        #{contID => null,
+         cens => []},
+        dby_cont_id(Host, ContId), [{max_depth, 1}]).
 
 % -----------------------------------------------------------------------------
 %
@@ -71,7 +74,7 @@ dby_endpoint_id(Host, Endpoint) ->
     dby_id([<<"lev_endpoint">>, Host, Endpoint]).
 
 dby_cen(Host, CenId, Metadata) when is_binary(CenId) ->
-    {dby_cen_id(Host, CenId), [{<<"CenID">>, CenId},
+    {dby_cen_id(Host, CenId), [{<<"cenID">>, CenId},
                                {<<"type">>, <<"cen">>}] ++ Metadata}.
 
 dby_cont(Host, ContId, Metadata) when is_binary(ContId) ->
@@ -237,20 +240,42 @@ wire_type_md(wire) ->
 wire_type_md(bus) ->
     {<<"wire_type">>, <<"bus">>}.
 
+md_wire_type(null) ->
+    null;
+md_wire_type(<<"wire">>) ->
+    wire;
+md_wire_type(<<"bus">>) ->
+    bus.
+
 % search
 
 -define(MATCH_CONTAINER, ?MDVALUE(<<"type">>, <<"container">>)).
 -define(MATCH_CEN, ?MDVALUE(<<"type">>, <<"cen">>)).
 
 % dby:search function to return list of containers linked to an identifier.
-linked_containers(Container, ?MATCH_CONTAINER, _, Acc) ->
-    {continue, [binary_to_list(Container) | Acc]};
+linked_containers(_, Metadata = ?MATCH_CEN, [], Acc) ->
+    ?MDVALUE(<<"wire_type">>, WireType) = Metadata,
+    ?MDVALUE(<<"cenID">>, CenId) = Metadata,
+    {continue, Acc#{cenID := CenId,
+                    wire_type := md_wire_type(WireType)}};
+linked_containers(_, Metadata = ?MATCH_CONTAINER, _, Acc) ->
+    ?MDVALUE(<<"contID">>, ContId) = Metadata,
+    {continue, map_prepend(Acc, contIDs, binary_to_list(ContId))};
 linked_containers(_, _, _, Acc) ->
     {continue, Acc}.
 
 % dby:search function to return list of cens linked to an identifier.
-% XXX should peerId be a separate identifier?
-linked_cens(_, ?MATCH_CEN, [{_, _, ?MDVALUE(<<"cenID">>, CenId)} | _], Acc) ->
-    {continue, [CenId | Acc]};
+linked_cens(_, Metadata = ?MATCH_CONTAINER, [], Acc) ->
+    ?MDVALUE(<<"contID">>, ContId) = Metadata,
+    {continue, Acc#{contID := ContId}};
+linked_cens(_, Metadata = ?MATCH_CEN, _, Acc) ->
+    ?MDVALUE(<<"cenID">>, CenId) = Metadata,
+    {continue, map_prepend(Acc, cens, binary_to_list(CenId))};
 linked_cens(_, _, _, Acc) ->
     {continue, Acc}.
+
+% map helpers
+
+map_prepend(Map, Key, Value) ->
+    {ok, OldList} = maps:find(Key, Map),
+    maps:update(Key, [Value | OldList], Map).
