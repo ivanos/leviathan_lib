@@ -314,7 +314,7 @@ md_wire_type(<<"bus">>) ->
 
 % dby:search function to return list of containers linked to an identifier.
 linked_containers(_, ?MATCH_CEN(CenId, WireType), [], Acc) ->
-    {continue, Acc#{cenID := CenId,
+    {continue, Acc#{cenID := binary_to_list(CenId),
                     wire_type := md_wire_type(WireType)}};
 linked_containers(_, ?MATCH_CONTAINER(ContId), _, Acc) ->
     {continue, map_prepend(Acc, contIDs, binary_to_list(ContId))};
@@ -323,7 +323,7 @@ linked_containers(_, _, _, Acc) ->
 
 % dby:search function to return list of cens linked to an identifier.
 linked_cens(_, ?MATCH_CONTAINER(ContId), [], Acc) ->
-    {continue, Acc#{contID := ContId}};
+    {continue, Acc#{contID := binary_to_list(ContId)}};
 linked_cens(_, ?MATCH_CEN(CenId, _), _, Acc) ->
     {continue, map_prepend(Acc, cens, binary_to_list(CenId))};
 linked_cens(_, _, _, Acc) ->
