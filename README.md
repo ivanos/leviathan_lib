@@ -92,6 +92,9 @@ Type | Name Format | Example
 CEN | lev_cen>CEN | lev_cen>cen1
 container | lev_cont>Host>Container | lev_cen>host1>4c01db0b339c
 endpoint | lev_endpoint>Host>Endpoint | lev_endpiont>host1>4c01db0b339c.0i
+bridge | lev_bridge>Host>Bridge | lev_bridge>host1>cen1
+
+Endpoints may be inside the container (in) or outside the container (out).
 
 CEN metadata:
 
@@ -107,12 +110,21 @@ Endpiont metadata:
 Key | Value | Description
 --- | ----- | -----------
 alias | Alias Name | alias for this endpoint in the container (e.g., eth0)
+status | pending, preparing, ready | Status of the endpoint
+
+Bridge metadata:
+
+Key | Value | Description
+--- | ----- | -----------
+status | pending, preparing, ready | Status of the bridge
 
 Links:
 
 Type, Type | Link Type | Description
 ---------- | --------- | -----------
 CEN, Container | part_of | container is in the CEN
-Endpoint, Endpoint | next_to | connection between the two endpoints
-Endpoint, Container | next_to | endpoint is part_of the container (inside interface)
-Endpoint, CEN | next_to | endpoint is part_of the CEN (outside interface)
+Endpoint(in), Endpoint(in) | connected_to | connection between the in endpoints (wire)
+Endpoint(in), Container | bound_to | endpoint is bound_to the container
+Endpoint(in), Endpoint(out) | veth_peer | endpoints are ethernet peers
+Endpoint(out), Bridge | bound_to | endpoint is bound_to a network bridge
+Bridge, Cen | policy_engine | Bridge manages network traffic for Cen
