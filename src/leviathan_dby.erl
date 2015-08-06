@@ -10,7 +10,6 @@
          get_wires/2]).
 
 -define(PUBLISHER, atom_to_binary(?MODULE, utf8)).
--define(MDVALUE(Key, Value), #{Key := #{value := Value}}).
 
 % -----------------------------------------------------------------------------
 %
@@ -46,8 +45,8 @@ get_cont(Host, ContId) ->
         dby_cont_id(Host, ContId), [{max_depth, 1}]).
 
 get_wires(Host, CenId) ->
-    dby:search(fun wires/4,
-        #{skipped => []}, dby_cen_id(Host, CenId), [depth, {max_depth, 5}, {loop, link}]).
+    dby:search(fun wires/4, [],
+            dby_cen_id(Host, CenId), [depth, {max_depth, 4}, {loop, none}]).
 
 % -----------------------------------------------------------------------------
 %
@@ -279,31 +278,42 @@ md_wire_type(<<"bus">>) ->
 
 % search
 
--define(MATCH_CONTAINER, ?MDVALUE(<<"type">>, <<"container">>)).
--define(MATCH_CEN, ?MDVALUE(<<"type">>, <<"cen">>)).
--define(MATCH_IN_ENDPOINT, #{<<"type">> := #{value := <<"endpoint">>},
-                             <<"side">> := #{value := <<"in">>}}).
--define(MATCH_OUT_ENDPOINT, #{<<"type">> := #{value := <<"endpoint">>},
-                              <<"side">> := #{value := <<"out">>}}).
+-define(MDVALUE(Key, Var), Key := #{value := Var}).
+
+-define(MDTYPE(Type), ?MDVALUE(<<"type">>, Type)).
+
+-define(MATCH_CONTAINER(ContId), #{?MDTYPE(<<"container">>),
+                                   ?MDVALUE(<<"contID">>, ContId)}).
+
+-define(MATCH_BRIDGE(BridgeId), #{?MDTYPE(<<"bridge">>),
+                                  ?MDVALUE(<<"bridgeID">>, BridgeId)}).
+
+-define(MATCH_CEN(CenId, WireType), #{?MDTYPE(<<"cen">>),
+                                       ?MDVALUE(<<"cenID">>, CenId),
+                                       ?MDVALUE(<<"wire_type">>, WireType)}).
+
+-define(MATCH_IN_ENDPOINT(EndId, Alias), #{?MDTYPE(<<"endpoint">>),
+                                          ?MDVALUE(<<"side">>, <<"in">>),
+                                          ?MDVALUE(<<"endID">>, EndId),
+                                          ?MDVALUE(<<"alias">>, Alias)}).
+
+-define(MATCH_OUT_ENDPOINT(EndId), #{?MDTYPE(<<"endpoint">>),
+                                     ?MDVALUE(<<"side">>, <<"out">>),
+                                     ?MDVALUE(<<"endID">>, EndId)}).
 
 % dby:search function to return list of containers linked to an identifier.
-linked_containers(_, Metadata = ?MATCH_CEN, [], Acc) ->
-    ?MDVALUE(<<"wire_type">>, WireType) = Metadata,
-    ?MDVALUE(<<"cenID">>, CenId) = Metadata,
+linked_containers(_, ?MATCH_CEN(CenId, WireType), [], Acc) ->
     {continue, Acc#{cenID := CenId,
                     wire_type := md_wire_type(WireType)}};
-linked_containers(_, Metadata = ?MATCH_CONTAINER, _, Acc) ->
-    ?MDVALUE(<<"contID">>, ContId) = Metadata,
+linked_containers(_, ?MATCH_CONTAINER(ContId), _, Acc) ->
     {continue, map_prepend(Acc, contIDs, binary_to_list(ContId))};
 linked_containers(_, _, _, Acc) ->
     {continue, Acc}.
 
 % dby:search function to return list of cens linked to an identifier.
-linked_cens(_, Metadata = ?MATCH_CONTAINER, [], Acc) ->
-    ?MDVALUE(<<"contID">>, ContId) = Metadata,
+linked_cens(_, ?MATCH_CONTAINER(ContId), [], Acc) ->
     {continue, Acc#{contID := ContId}};
-linked_cens(_, Metadata = ?MATCH_CEN, _, Acc) ->
-    ?MDVALUE(<<"cenID">>, CenId) = Metadata,
+linked_cens(_, ?MATCH_CEN(CenId, _), _, Acc) ->
     {continue, map_prepend(Acc, cens, binary_to_list(CenId))};
 linked_cens(_, _, _, Acc) ->
     {continue, Acc}.
@@ -311,13 +321,10 @@ linked_cens(_, _, _, Acc) ->
 % dby:search function to return the list of wires
 % looks for:
 % if cen wire_type is bus:
-%   cont <-> endpoint (inside)
-%   cont <-> endpoint (outside) <-> cen
+%   bridge <-> endpoint (outside) <-> endpoint (inside) <-> cont
 % if cen wire_type is wire:
-%   cont <-> endpoint (inside)
-%   cont <-> endpoint (outside) <-> endpoint (outside) <-> cont
-wires(_, Metadata = ?MATCH_CEN, [], Acc) ->
-    ?MDVALUE(<<"wire_type">>, WireType) = Metadata,
+%   cont <-> endpoint (inside) <-> endpoint (inside) <-> cont
+wires(_, ?MATCH_CEN(_, WireType), [], Acc) ->
     case md_wire_type(WireType) of
         null ->
             {stop, Acc};
@@ -325,82 +332,49 @@ wires(_, Metadata = ?MATCH_CEN, [], Acc) ->
             {continue, fun wires_bus/4, Acc};
         wire ->
             {continue, fun wires_wire/4, Acc}
-    end.
+    end;
+wires(_, _, _, Acc) ->
+    {continue, Acc}.
 
-%   cont <-> endpoint (inside)
-wires_bus(_, EndpointMetadata = ?MATCH_IN_ENDPOINT,
-                [{_, ContainerMetadata = ?MATCH_CONTAINER, _} | _], Acc) ->
-    ?MDVALUE(<<"endID">>, EndId) = EndpointMetadata,
-    ?MDVALUE(<<"contID">>, ContId) = ContainerMetadata,
-    Dest = #{
-        type => cont,
-        id => ContId
-    },
-    Endpoint = #{
-        endID => EndId,
-        dest => maybe_alias(Dest, EndpointMetadata)
-    },
-    {continue, map_mapput(ContId, inside, Endpoint, Acc)};
-%   cont <-> endpoint (outside) <-> cen
-wires_bus(_, CenMetadata = ?MATCH_CEN,
-                [{_, EndpointMetadata = ?MATCH_OUT_ENDPOINT, _},
-                 {_, ContainerMetadata = ?MATCH_CONTAINER, _} | _], Acc) ->
-    ?MDVALUE(<<"cenID">>, CenId) = CenMetadata,
-    ?MDVALUE(<<"endID">>, EndId) = EndpointMetadata,
-    ?MDVALUE(<<"contID">>, ContId) = ContainerMetadata,
-    Endpoint = #{
-        endID => EndId,
-        dst => #{
-            type => cen,
-            id => CenId
-        }
-    },
-    {continue, map_mapput(ContId, outside, Endpoint, Acc)};
-wires_bus(_, M, P, Acc) ->
-    {continue, map_prepend(Acc, skipped, {M, P})}.
+%   bridge <-> endpoint (outside) <-> endpoint (inside) <-> cont
+wires_bus(_, ?MATCH_BRIDGE(BridgeId),
+                [{_, ?MATCH_OUT_ENDPOINT(OutEndId), _},
+                 {_, ?MATCH_IN_ENDPOINT(InEndId, Alias), _},
+                 {_, ?MATCH_CONTAINER(ContId), _} | _], Acc) ->
+    Wire = [
+        #{endID => binary_to_list(InEndId),
+          dest => #{type => cont,
+                    id => binary_to_list(ContId),
+                    alias => binary_to_list(Alias)}},
+        #{endID => binary_to_list(OutEndId),
+          dest => #{type => cen,
+                    id => binary_to_list(BridgeId)}}],
+    {continue, [Wire | Acc]};
+wires_bus(_, _, _, Acc) ->
+    {continue, Acc}.
 
-%   cont <-> endpoint (inside)
-wires_wire(_, EndpointMetadata = ?MATCH_IN_ENDPOINT,
-                [{_, ContainerMetadata = ?MATCH_CONTAINER, _} | _], Acc) ->
-    ?MDVALUE(<<"endID">>, EndId) = EndpointMetadata,
-    ?MDVALUE(<<"contID">>, ContId) = ContainerMetadata,
-    Dest = #{
-        type => cont,
-        id => ContId
-    },
-    Endpoint = #{
-        endID => EndId,
-        dest => maybe_alias(Dest, EndpointMetadata)
-    },
-    {continue, map_mapput(ContId, inside, Endpoint, Acc)};
-%   cont <-> endpoint (outside) <-> endpoint (outside) <-> cont
-wires_wire(_, ContainerMetadata1 = ?MATCH_CONTAINER,
-                [{_, EndpointMetadata1 = ?MATCH_OUT_ENDPOINT, _},
-                 {_, EndpointMetadata2 = ?MATCH_OUT_ENDPOINT, _},
-                 {_, ContainerMetadata2 = ?MATCH_CONTAINER, _} | _], Acc) ->
-    ?MDVALUE(<<"endID">>, EndId1) = EndpointMetadata1,
-    ?MDVALUE(<<"endID">>, EndId2) = EndpointMetadata2,
-    ?MDVALUE(<<"contID">>, ContId1) = ContainerMetadata1,
-    ?MDVALUE(<<"contID">>, ContId2) = ContainerMetadata2,
-    Endpoint1 = #{
-        endID => EndId1,
-        dst => #{
-            type => cen
-        }
-    },
-    {continue, map_mapput(ContId1, outside, Endpoint1, Acc)}.
-
-maybe_alias(Dest, ?MDVALUE(<<"alias">>, Alias)) ->
-    Dest#{alias => Alias};
-maybe_alias(Dest, _) ->
-    Dest.
+%   cont <-> endpoint (inside) <-> endpoint (inside) <-> cont
+wires_wire(Id, _, Path, Acc) ->
+    {continue, [{Id, [I || {I, _, _} <- Path]} | Acc]};
+wires_wire(_, ?MATCH_CONTAINER(ContId1),
+                [{_, ?MATCH_IN_ENDPOINT(EndId1, Alias1), _},
+                 {_, ?MATCH_IN_ENDPOINT(EndId2, Alias2), _},
+                 {_, ?MATCH_CONTAINER(ContId2), _} | _], Acc) ->
+    Wire = [
+        #{endID => binary_to_list(EndId1),
+          dest => #{type => cont,
+                    id => binary_to_list(ContId1),
+                    alias => binary_to_list(Alias1)}},
+        #{endID => binary_to_list(EndId2),
+          dest => #{type => cont,
+                    id => binary_to_list(ContId2),
+                    alias => binary_to_list(Alias2)}}],
+    {continue, [Wire | Acc]};
+wires_wire(_, _, _, Acc) ->
+    {continue, Acc}.
 
 % map helpers
 
 map_prepend(Map, Key, Value) ->
     {ok, OldList} = maps:find(Key, Map),
     maps:update(Key, [Value | OldList], Map).
-
-map_mapput(Key, InnerKey, Value, Map) ->
-    InnerMap = maps:get(Key, Map, #{}),
-    maps:put(Key, maps:put(InnerKey, Value, InnerMap), Map).
