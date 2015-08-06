@@ -47,9 +47,15 @@ get_cont(Host, ContId) ->
 get_wires(_, #{wire_type := null}) ->
     [];
 get_wires(Host, #{cenID := CenId, wire_type := bus}) ->
+    % bus data model in dobby benefits from searching breadth first.
+    % This makes it easy to find the paths that form the wires.
     dby:search(fun wires/4, [],
             dby_cen_id(Host, CenId), [breadth, {max_depth, 4}, {loop, link}]);
 get_wires(Host, #{cenID := CenId, wire_type := wire}) ->
+    % wire data model in dobby beneifts from searching depth first because
+    % the containers are both linked to the starting point. A breadth
+    % first search never finds the complete path for the wire because
+    % it partially traverses the wire from both directions.
     dby:search(fun wires/4, [],
             dby_cen_id(Host, CenId), [depth, {max_depth, 4}, {loop, link}]).
 
