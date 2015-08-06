@@ -44,9 +44,14 @@ get_cont(Host, ContId) ->
          cens => []},
         dby_cont_id(Host, ContId), [{max_depth, 1}]).
 
-get_wires(Host, CenId) ->
+get_wires(_, #{wire_type := null}) ->
+    [];
+get_wires(Host, #{cenID := CenId, wire_type := bus}) ->
     dby:search(fun wires/4, [],
-            dby_cen_id(Host, CenId), [depth, {max_depth, 4}, {loop, none}]).
+            dby_cen_id(Host, CenId), [breadth, {max_depth, 4}, {loop, link}]);
+get_wires(Host, #{cenID := CenId, wire_type := wire}) ->
+    dby:search(fun wires/4, [],
+            dby_cen_id(Host, CenId), [depth, {max_depth, 4}, {loop, link}]).
 
 % -----------------------------------------------------------------------------
 %
@@ -354,8 +359,6 @@ wires_bus(_, _, _, Acc) ->
     {continue, Acc}.
 
 %   cont <-> endpoint (inside) <-> endpoint (inside) <-> cont
-wires_wire(Id, _, Path, Acc) ->
-    {continue, [{Id, [I || {I, _, _} <- Path]} | Acc]};
 wires_wire(_, ?MATCH_CONTAINER(ContId1),
                 [{_, ?MATCH_IN_ENDPOINT(EndId1, Alias1), _},
                  {_, ?MATCH_IN_ENDPOINT(EndId2, Alias2), _},
