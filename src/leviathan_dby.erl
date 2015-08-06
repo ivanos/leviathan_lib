@@ -6,10 +6,10 @@
          import_binary/2]).
 
 -export([get_cen/2,
-         get_cont/2]).
+         get_cont/2,
+         get_wires/2]).
 
 -define(PUBLISHER, atom_to_binary(?MODULE, utf8)).
--define(MDVALUE(Key, Value), #{Key := #{value := Value}}).
 
 % -----------------------------------------------------------------------------
 %
@@ -44,6 +44,10 @@ get_cont(Host, ContId) ->
          cens => []},
         dby_cont_id(Host, ContId), [{max_depth, 1}]).
 
+get_wires(Host, CenId) ->
+    dby:search(fun wires/4, [],
+            dby_cen_id(Host, CenId), [depth, {max_depth, 4}, {loop, none}]).
+
 % -----------------------------------------------------------------------------
 %
 % Internal functions
@@ -67,6 +71,9 @@ dby_id([E | Rest], Acc) ->
 dby_cen_id(Host, CenId) ->
     dby_id([<<"lev_cen">>, Host, CenId]).
 
+dby_bridge_id(Host, BridgeId) ->
+    dby_id([<<"lev_bridge">>, Host, BridgeId]).
+
 dby_cont_id(Host, ContId) ->
     dby_id([<<"lev_cont">>, Host, ContId]).
 
@@ -77,28 +84,38 @@ dby_cen(Host, CenId, Metadata) when is_binary(CenId) ->
     {dby_cen_id(Host, CenId), [{<<"cenID">>, CenId},
                                {<<"type">>, <<"cen">>}] ++ Metadata}.
 
+dby_bridge(Host, BridgeId, Metadata) when is_binary(BridgeId) ->
+    {dby_bridge_id(Host, BridgeId), [{<<"bridgeID">>, BridgeId},
+                               {<<"type">>, <<"bridge">>}] ++ Metadata}.
+
 dby_cont(Host, ContId, Metadata) when is_binary(ContId) ->
     {dby_cont_id(Host, ContId), [{<<"contID">>, ContId},
                                 {<<"type">>, <<"container">>}] ++ Metadata}.
 
-dby_endpoint(Host, EndID, Metadata) when is_binary(EndID) ->
-    {dby_endpoint_id(Host, EndID), [{<<"type">>, <<"part_of">>}] ++ Metadata}.
+dby_endpoint(Host, EndID, Side, Metadata) when is_binary(EndID) ->
+    {dby_endpoint_id(Host, EndID), [{<<"type">>, <<"endpoint">>},
+                                      endpoint_side_md(Side),
+                                     {<<"endID">>, EndID}] ++ Metadata}.
 
 dby_cen_to_container(Host, CenId, ContId) ->
-    next_to_link(dby_cen_id(Host, CenId), dby_cont_id(Host, ContId)).
+    dby_link(dby_cen_id(Host, CenId),
+             dby_cont_id(Host, ContId), <<"part_of">>).
 
 dby_endpoint_to_container(Host, EndpointId, ContId) ->
-    next_to_link(dby_endpoint_id(Host, EndpointId), dby_cont_id(Host, ContId)).
+    dby_link(dby_endpoint_id(Host, EndpointId),
+             dby_cont_id(Host, ContId), <<"bound_to">>).
 
-dby_endpoint_to_cen(Host, EndpointId, CenId) ->
-    next_to_link(dby_endpoint_id(Host, EndpointId), dby_cen_id(Host, CenId)).
+dby_endpoint_to_bridge(Host, EndpointId, BridgeId) ->
+    dby_link(dby_endpoint_id(Host, EndpointId),
+                dby_bridge_id(Host, BridgeId), <<"bound_to">>).
 
-dby_endpoint_to_endpoint(Host, EndpointId1, EndpointId2) ->
-    next_to_link(dby_endpoint_id(Host, EndpointId1), dby_endpoint_id(Host, EndpointId2)).
+dby_endpoint_to_endpoint(Host, EndpointId1, EndpointId2, Type) ->
+    dby_link(dby_endpoint_id(Host, EndpointId1),
+             dby_endpoint_id(Host, EndpointId2), Type).
 
 % helper
-next_to_link(E1, E2) ->
-    {E1, E2, [{<<"type">>, <<"next_to">>}]}.
+dby_link(E1, E2, Type) ->
+    {E1, E2, [{<<"type">>, Type}]}.
 
 %% process decoded json
 
@@ -149,25 +166,29 @@ wire_cen(Context, Host, CenId, [ContId]) ->
     ]);
 wire_cen(Context0, Host, CenId, [ContId1, ContId2]) ->
     % wire the containers directly if there are two containers in the CEN
-    {Context1, ContId1Endpoint} = next_in_endpoint(Context0, ContId1),
-    {Context2, ContId2Endpoint} = next_in_endpoint(Context1, ContId2),
+    {Context1, ContId1InEndpoint} = next_in_endpoint(Context0, ContId1),
+    {Context2, ContId2InEndpoint} = next_in_endpoint(Context1, ContId2),
     {Context3, Cont1Eth} = next_eth(Context2, ContId1),
     {Context4, Cont2Eth} = next_eth(Context3, ContId2),
     topublish(Context4, [
         dby_cen(Host, CenId, [wire_type_md(wire), status_md(pending)]),
         dby_cen_to_container(Host, CenId, ContId1),
         dby_cen_to_container(Host, CenId, ContId2),
-        dby_endpoint(Host, ContId1Endpoint,
+        dby_endpoint(Host, ContId1InEndpoint, inside,
                                 [alias_md(Cont1Eth), status_md(pending)]),
-        dby_endpoint(Host, ContId2Endpoint,
+        dby_endpoint(Host, ContId2InEndpoint, inside,
                                 [alias_md(Cont2Eth), status_md(pending)]),
-        dby_endpoint_to_container(Host, ContId1Endpoint, ContId1),
-        dby_endpoint_to_container(Host, ContId2Endpoint, ContId2),
-        dby_endpoint_to_endpoint(Host, ContId1Endpoint, ContId2Endpoint)
+        dby_endpoint_to_container(Host, ContId1InEndpoint, ContId1),
+        dby_endpoint_to_container(Host, ContId2InEndpoint, ContId2),
+        dby_endpoint_to_endpoint(Host, ContId1InEndpoint,
+                                       ContId2InEndpoint, <<"connected_to">>)
     ]);
 wire_cen(Context, Host, CenId, ContainerIds) ->
     Context1 = topublish(Context,
-        [dby_cen(Host, CenId, [wire_type_md(bus), status_md(pending)])]),
+        [
+            dby_cen(Host, CenId, [wire_type_md(bus), status_md(pending)]),
+            dby_bridge(Host, CenId, [status_md(pending)])
+        ]),
     lists:foldl(wire_cen_to_container(Host, CenId), Context1, ContainerIds).
 
 wire_cen_to_container(Host, CenId) ->
@@ -178,10 +199,13 @@ wire_cen_to_container(Host, CenId) ->
         topublish(Context3,
             [
                 dby_cen_to_container(Host, CenId, ContId),
-                dby_endpoint(Host, InEndpoint, [alias_md(Eth), status_md(pending)]),
+                dby_endpoint(Host, InEndpoint, inside,
+                                        [alias_md(Eth), status_md(pending)]),
                 dby_endpoint_to_container(Host, InEndpoint, ContId),
-                dby_endpoint(Host, OutEndpoint, [status_md(pending)]),
-                dby_endpoint_to_cen(Host, OutEndpoint, CenId)
+                dby_endpoint(Host, OutEndpoint, outside, [status_md(pending)]),
+                dby_endpoint_to_endpoint(Host, InEndpoint,
+                                               OutEndpoint, <<"veth_peer">>),
+                dby_endpoint_to_bridge(Host, OutEndpoint, CenId)
             ])
     end.
 
@@ -240,6 +264,11 @@ wire_type_md(wire) ->
 wire_type_md(bus) ->
     {<<"wire_type">>, <<"bus">>}.
 
+endpoint_side_md(inside) ->
+    {<<"side">>, <<"in">>};
+endpoint_side_md(outside) ->
+    {<<"side">>, <<"out">>}.
+
 md_wire_type(null) ->
     null;
 md_wire_type(<<"wire">>) ->
@@ -249,29 +278,99 @@ md_wire_type(<<"bus">>) ->
 
 % search
 
--define(MATCH_CONTAINER, ?MDVALUE(<<"type">>, <<"container">>)).
--define(MATCH_CEN, ?MDVALUE(<<"type">>, <<"cen">>)).
+-define(MDVALUE(Key, Var), Key := #{value := Var}).
+
+-define(MDTYPE(Type), ?MDVALUE(<<"type">>, Type)).
+
+-define(MATCH_CONTAINER(ContId), #{?MDTYPE(<<"container">>),
+                                   ?MDVALUE(<<"contID">>, ContId)}).
+
+-define(MATCH_BRIDGE(BridgeId), #{?MDTYPE(<<"bridge">>),
+                                  ?MDVALUE(<<"bridgeID">>, BridgeId)}).
+
+-define(MATCH_CEN(CenId, WireType), #{?MDTYPE(<<"cen">>),
+                                       ?MDVALUE(<<"cenID">>, CenId),
+                                       ?MDVALUE(<<"wire_type">>, WireType)}).
+
+-define(MATCH_IN_ENDPOINT(EndId, Alias), #{?MDTYPE(<<"endpoint">>),
+                                          ?MDVALUE(<<"side">>, <<"in">>),
+                                          ?MDVALUE(<<"endID">>, EndId),
+                                          ?MDVALUE(<<"alias">>, Alias)}).
+
+-define(MATCH_OUT_ENDPOINT(EndId), #{?MDTYPE(<<"endpoint">>),
+                                     ?MDVALUE(<<"side">>, <<"out">>),
+                                     ?MDVALUE(<<"endID">>, EndId)}).
 
 % dby:search function to return list of containers linked to an identifier.
-linked_containers(_, Metadata = ?MATCH_CEN, [], Acc) ->
-    ?MDVALUE(<<"wire_type">>, WireType) = Metadata,
-    ?MDVALUE(<<"cenID">>, CenId) = Metadata,
+linked_containers(_, ?MATCH_CEN(CenId, WireType), [], Acc) ->
     {continue, Acc#{cenID := CenId,
                     wire_type := md_wire_type(WireType)}};
-linked_containers(_, Metadata = ?MATCH_CONTAINER, _, Acc) ->
-    ?MDVALUE(<<"contID">>, ContId) = Metadata,
+linked_containers(_, ?MATCH_CONTAINER(ContId), _, Acc) ->
     {continue, map_prepend(Acc, contIDs, binary_to_list(ContId))};
 linked_containers(_, _, _, Acc) ->
     {continue, Acc}.
 
 % dby:search function to return list of cens linked to an identifier.
-linked_cens(_, Metadata = ?MATCH_CONTAINER, [], Acc) ->
-    ?MDVALUE(<<"contID">>, ContId) = Metadata,
+linked_cens(_, ?MATCH_CONTAINER(ContId), [], Acc) ->
     {continue, Acc#{contID := ContId}};
-linked_cens(_, Metadata = ?MATCH_CEN, _, Acc) ->
-    ?MDVALUE(<<"cenID">>, CenId) = Metadata,
+linked_cens(_, ?MATCH_CEN(CenId, _), _, Acc) ->
     {continue, map_prepend(Acc, cens, binary_to_list(CenId))};
 linked_cens(_, _, _, Acc) ->
+    {continue, Acc}.
+
+% dby:search function to return the list of wires
+% looks for:
+% if cen wire_type is bus:
+%   bridge <-> endpoint (outside) <-> endpoint (inside) <-> cont
+% if cen wire_type is wire:
+%   cont <-> endpoint (inside) <-> endpoint (inside) <-> cont
+wires(_, ?MATCH_CEN(_, WireType), [], Acc) ->
+    case md_wire_type(WireType) of
+        null ->
+            {stop, Acc};
+        bus ->
+            {continue, fun wires_bus/4, Acc};
+        wire ->
+            {continue, fun wires_wire/4, Acc}
+    end;
+wires(_, _, _, Acc) ->
+    {continue, Acc}.
+
+%   bridge <-> endpoint (outside) <-> endpoint (inside) <-> cont
+wires_bus(_, ?MATCH_BRIDGE(BridgeId),
+                [{_, ?MATCH_OUT_ENDPOINT(OutEndId), _},
+                 {_, ?MATCH_IN_ENDPOINT(InEndId, Alias), _},
+                 {_, ?MATCH_CONTAINER(ContId), _} | _], Acc) ->
+    Wire = [
+        #{endID => binary_to_list(InEndId),
+          dest => #{type => cont,
+                    id => binary_to_list(ContId),
+                    alias => binary_to_list(Alias)}},
+        #{endID => binary_to_list(OutEndId),
+          dest => #{type => cen,
+                    id => binary_to_list(BridgeId)}}],
+    {continue, [Wire | Acc]};
+wires_bus(_, _, _, Acc) ->
+    {continue, Acc}.
+
+%   cont <-> endpoint (inside) <-> endpoint (inside) <-> cont
+wires_wire(Id, _, Path, Acc) ->
+    {continue, [{Id, [I || {I, _, _} <- Path]} | Acc]};
+wires_wire(_, ?MATCH_CONTAINER(ContId1),
+                [{_, ?MATCH_IN_ENDPOINT(EndId1, Alias1), _},
+                 {_, ?MATCH_IN_ENDPOINT(EndId2, Alias2), _},
+                 {_, ?MATCH_CONTAINER(ContId2), _} | _], Acc) ->
+    Wire = [
+        #{endID => binary_to_list(EndId1),
+          dest => #{type => cont,
+                    id => binary_to_list(ContId1),
+                    alias => binary_to_list(Alias1)}},
+        #{endID => binary_to_list(EndId2),
+          dest => #{type => cont,
+                    id => binary_to_list(ContId2),
+                    alias => binary_to_list(Alias2)}}],
+    {continue, [Wire | Acc]};
+wires_wire(_, _, _, Acc) ->
     {continue, Acc}.
 
 % map helpers

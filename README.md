@@ -50,3 +50,81 @@ To test it:
 
 > It's not possible to see all the CENs simultaneously as the visualizer
 > can only display one root node at once.
+
+## Leviathan Erlang Data Structures
+
+A CEN is a represented by a map:
+
+Key | Value | Description
+--- | ----- | -----------
+cenID | CEN ID | CEN Identifier
+wiring_type | bus, wire, or null | type of wiring used
+conIDs | list of container IDs | containers in the CEN
+
+A Container is represented by a map:
+
+Key | Value | Description
+--- | ----- | -----------
+contID | container ID | Container ID
+cens | list of CEN IDs | Container is in these CENs
+
+A Wire is represented by a pair of maps in a list. Each map has:
+
+Key | Value | Description
+--- | ----- | -----------
+endID | endpoint | Endpoint identifier (description above)
+dest | destination map | See below
+
+A destination map:
+
+Key | Value | Description
+--- | ----- | -----------
+type | cont or cen | the endpoint is a container or CEN
+ID | identifier | name of the CEN or the container ID
+alias | string | (only for containers) interface name in the container
+
+## Dobby Data Model
+
+Identifier names.  Fields starting with a Capital letter are the fillins:
+
+Type | Name Format | Example
+---- | ----------- | -------
+CEN | lev_cen>CEN | lev_cen>cen1
+container | lev_cont>Host>Container | lev_cen>host1>4c01db0b339c
+endpoint | lev_endpoint>Host>Endpoint | lev_endpiont>host1>4c01db0b339c.0i
+bridge | lev_bridge>Host>Bridge | lev_bridge>host1>cen1
+
+Endpoints may be inside the container (in) or outside the container (out).
+
+CEN metadata:
+
+Key | Value | Description
+--- | ----- | -----------
+wiring_type | bus, wire, null | Type of wiring
+status | pending, preparing, ready | Status of the CEN
+
+There is no Container metadata.
+
+Endpiont metadata:
+
+Key | Value | Description
+--- | ----- | -----------
+alias | Alias Name | alias for this endpoint in the container (e.g., eth0)
+status | pending, preparing, ready | Status of the endpoint
+
+Bridge metadata:
+
+Key | Value | Description
+--- | ----- | -----------
+status | pending, preparing, ready | Status of the bridge
+
+Links:
+
+Type, Type | Link Type | Description
+---------- | --------- | -----------
+CEN, Container | part_of | container is in the CEN
+Endpoint(in), Endpoint(in) | connected_to | connection between the in endpoints (wire)
+Endpoint(in), Container | bound_to | endpoint is bound_to the container
+Endpoint(in), Endpoint(out) | veth_peer | endpoints are ethernet peers
+Endpoint(out), Bridge | bound_to | endpoint is bound_to a network bridge
+Bridge, Cen | policy_engine | Bridge manages network traffic for Cen
