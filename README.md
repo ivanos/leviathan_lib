@@ -61,12 +61,22 @@ cenID | CEN ID | CEN Identifier
 wiring_type | bus, wire, or null | type of wiring used
 conIDs | list of container IDs | containers in the CEN
 
+Example:
+```
+#{cenID => "cen1", wire_type => bus, contIDs => ["c1","c2","c3"]}
+```
+
 A Container is represented by a map:
 
 Key | Value | Description
 --- | ----- | -----------
 contID | container ID | Container ID
 cens | list of CEN IDs | Container is in these CENs
+
+Example:
+```
+#{contID => "c1", cens => ["cen1","cen2"]}
+```
 
 A Wire is represented by a pair of maps in a list. Each map has:
 
@@ -82,6 +92,27 @@ Key | Value | Description
 type | cont or cen | the endpoint is a container or CEN
 ID | identifier | name of the CEN or the container ID
 alias | string | (only for containers) interface name in the container
+
+Examples:
+```
+[#{endID =>"c1.0i",
+   dest => #{type => cont,
+             id =>"c1",
+             alias =>"eth0"}},
+ #{endID =>"c1.0o",
+   dest => #{type => cen,
+             id =>"cen1"}}]
+```
+```
+[#{endID =>"c2.2i",
+   dest => #{type => cont,
+             id =>"c2",
+             alias =>"eth2"}},
+ #{endID =>"c4.0i",
+  dest => #{type => cont,
+            id =>"c4",
+            alias =>"eth0"}}]
+```
 
 ## Dobby Data Model
 
