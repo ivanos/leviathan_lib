@@ -3,28 +3,28 @@
 -compile(export_all).
 
 %
-% example: brctl addbr levbr0
+% example: /sbin/brctl addbr levbr0
 %
 addbr(BridgeName)->
-    "brctl addbr " ++ BridgeName.
+    "/sbin/brctl addbr " ++ BridgeName.
 
 %
-% example: brctl addbr levbr0
+% example: /sbin/brctl addbr levbr0
 %
 delbr(BridgeName)->
-    "brctl delbr " ++ BridgeName.
+    "/sbin/brctl delbr " ++ BridgeName.
 
 %
-% example: brctl addif docker0 A
+% example: /sbin/brctl addif docker0 A
 %
 addif(BridgeName,DeviceName)->
-    "brctl addif " ++ BridgeName ++ " " ++ DeviceName.
+    "/sbin/brctl addif " ++ BridgeName ++ " " ++ DeviceName.
 
 %
-% example: brctl addif docker0 A
+% example: /sbin/brctl addif docker0 A
 %
 delif(BridgeName,DeviceName)->
-    "brctl delif " ++ BridgeName ++ " " ++ DeviceName.
+    "/sbin/brctl delif " ++ BridgeName ++ " " ++ DeviceName.
 
 
 %% TODO %%
