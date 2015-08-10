@@ -62,9 +62,19 @@ prepare(CenIds) ->
 % Top Level Processor
 %
 prepare_lev(#{censmap := CensMap, contsmap := ContsMap, wiremap := WireMap}) ->
+    % mark cens as preparing
+    cens_status(CensMap, preparing),
     prepare_cens(CensMap),
     prepare_conts(ContsMap),
-    prepare_wires(WireMap).
+    prepare_wires(WireMap),
+    % mark cens as ready
+    cens_status(CensMap, ready).
+
+cens_status(#{cens := Cens}, Status) ->
+    lists:foreach(
+        fun(#{cenID := CenId}) ->
+            leviathan_dby:set_cen_status("host1", CenId, Status)
+        end, Cens).
 
 prepare_cens(#{cens := Cens}) ->
     %%     make any necessary Ethernet buses

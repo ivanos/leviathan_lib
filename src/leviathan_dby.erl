@@ -7,7 +7,8 @@
 
 -export([get_cen/2,
          get_cont/2,
-         get_wires/2]).
+         get_wires/2,
+         set_cen_status/3]).
 
 -define(PUBLISHER, atom_to_binary(?MODULE, utf8)).
 
@@ -59,12 +60,19 @@ get_wires(Host, #{cenID := CenId, wire_type := wire}) ->
     dby:search(fun wires/4, [],
             dby_cen_id(Host, CenId), [depth, {max_depth, 4}, {loop, link}]).
 
+% status
+set_cen_status(Host, CenId, Status) ->
+    set_status(dby_cen_id(Host, CenId), Status).
+
 % -----------------------------------------------------------------------------
 %
 % Internal functions
 %
 % -----------------------------------------------------------------------------
 
+set_status(DbyId, Status) ->
+    dby:publish(?PUBLISHER, {DbyId, [status_md(Status)]}, [persistent]).
+    
 install_iso8601() ->
     {module, _} = dby:install(iso8601),
     ok.
@@ -266,7 +274,12 @@ alias_md(Alias) ->
     {<<"alias">>, Alias}.
 
 status_md(pending) ->
-    {<<"status">>, <<"pending">>}.
+    {<<"status">>, <<"pending">>};
+status_md(preparing) ->
+    {<<"status">>, <<"preparing">>};
+status_md(ready) ->
+    {<<"status">>, <<"ready">>}.
+
 
 wire_type_md(null) ->
     {<<"wire_type">>, null};
