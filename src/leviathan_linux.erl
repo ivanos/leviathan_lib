@@ -57,10 +57,12 @@ new_peer(EndId1,EndId2)->
 peer2cont(Cid,EndId,Alias)->
     CPid = leviathan_docker:inspect_pid(Cid),
     [leviathan_ip:link_set_netns(EndId,CPid),
-    leviathan_ip:netns_exec_ip_link_set_dev_name(CPid,EndId,Alias)].
+    leviathan_ip:netns_exec_ip_link_set_dev_name(CPid,EndId,Alias),
+    leviathan_ip:netns_exec_ip_link_set_up(CPid,Alias)].
 
 peer2cen(CenId,EndId)->
-    [leviathan_brctl:addif(CenId,EndId)].
+    [leviathan_brctl:addif(CenId,EndId),
+     leviathan_ip:link_set_up(EndId)].
 
 
 delete_peer(EndId)->
