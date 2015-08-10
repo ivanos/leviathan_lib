@@ -18,13 +18,13 @@ delbr(BridgeName)->
 % example: brctl addif docker0 A
 %
 addif(BridgeName,DeviceName)->
-    "brtcl addif " ++ BridgeName ++ " " ++ DeviceName.
+    "brctl addif " ++ BridgeName ++ " " ++ DeviceName.
 
 %
 % example: brctl addif docker0 A
 %
 delif(BridgeName,DeviceName)->
-    "brtcl delif " ++ BridgeName ++ " " ++ DeviceName.
+    "brctl delif " ++ BridgeName ++ " " ++ DeviceName.
 
 
 %% TODO %%

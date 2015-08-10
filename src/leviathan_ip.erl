@@ -9,7 +9,7 @@
 link_add_type_veth_peer_name(DevNameA,DevNameB)->
     "ip link add " ++  DevNameA ++ " type veth peer name " ++ DevNameB.
 
-link_delete_type_veth_peer(DevName,DevName)->
+link_delete_type_veth_peer(DevName)->
     "ip link delete " ++  DevName ++ " type veth peer".
     
 link_set_up(DevName)->
@@ -24,9 +24,12 @@ netns_exec_ip_link_set_dev_name(CPid,OrigDevName,NewDevName)->
 netns_exec_ip_link_set_address(CPid,DevName,Address)->
     "ip netns exec " ++ CPid ++ " ip link set " ++ DevName ++ " address " ++ Address.
 
-
 netns_exec_ip_link_set_up(CPid,DevName)->
     "ip netns exec " ++ CPid ++ " ip link set " ++ DevName ++ " up".
+
+
+netns_exec_ip_link_delete_type_veth_peer(CPid,DevName)->
+    "ip netns exec " ++ CPid ++ " ip link delete " ++ DevName ++ " type veth peer".
 
 
 %

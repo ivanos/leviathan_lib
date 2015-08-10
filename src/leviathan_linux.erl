@@ -57,21 +57,26 @@ new_peer(EndId1,EndId2)->
 peer2cont(Cid,EndId,Alias)->
     CPid = leviathan_docker:inspect_pid(Cid),
     [leviathan_ip:link_set_netns(EndId,CPid),
-    leviathan_ip:netns_exec_ip_link_set_dev_name(CPid,EndId,Alias)].
+    leviathan_ip:netns_exec_ip_link_set_dev_name(CPid,EndId,Alias),
+    leviathan_ip:netns_exec_ip_link_set_up(CPid,Alias)].
 
 peer2cen(CenId,EndId)->
-    [leviathan_brctl:addif(CenId,EndId)].
+    [leviathan_brctl:addif(CenId,EndId),
+     leviathan_ip:link_set_up(EndId)].
 
 
 delete_peer(EndId)->
     [leviathan_ip:link_delete_type_veth_peer(EndId)].
+
+delete_cont_interface(Cid,Alias)->
+    CPid = leviathan_docker:inspect_pid(Cid),
+    [leviathan_ip:netns_exec_ip_link_delete_type_veth_peer(CPid,Alias)].
     
 
 new_bridge(BridgeNum)->
     [leviathan_brctl:addbr(BridgeNum)].
 
 eval(CmdBundle)->
-    %%lists:map(fun(X)->os:cmd(X) end,CmdBundle).
-    lists:map(fun(X)->io:format("~p~n",[X]) end,CmdBundle).
-    
+    EvalBundle = lists:map(fun(X)->Result = os:cmd(X), {X,Result} end,CmdBundle),
+    lists:map(fun({Cmd,Output})->io:format("   Cmd: ~p~nOutput: ~p~n",[Cmd,Output]) end,EvalBundle).
     

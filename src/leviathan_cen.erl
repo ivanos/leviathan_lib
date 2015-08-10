@@ -113,3 +113,46 @@ prepare_wire_end(#{endID := EndId,
                 dest := #{type := cont, id := ContId, alias := Alias}}) ->
     CmdBundle = leviathan_linux:peer2cont(ContId, EndId, Alias),
     leviathan_linux:eval(CmdBundle).
+
+
+%% === DESTROY ===== %%%
+
+% destroy cens from a list of cen ids
+destroy(CenIds) ->
+    destroy_lev(get_levmap(CenIds)).
+
+%
+% Top Level Processor
+%
+destroy_lev(#{censmap := CensMap, wiremap := WireMap}) ->
+    destroy_cens(CensMap),
+    destroy_wires(WireMap).
+
+destroy_cens(#{cens := Cens}) ->
+    %%     make any necessary Ethernet buses
+    %%     if a Cen has more than 2 containers, we'll create a bus
+    %%
+    lists:foreach(fun(CenMap)->
+			  #{wire_type := CenType} = CenMap,
+			  case CenType of
+			      bus ->
+				  #{cenID := CenId} = CenMap,
+				  CmdBundle = leviathan_linux:delete_bus(CenId),
+				  leviathan_linux:eval(CmdBundle);
+			      _ -> ok %% don't create a bus
+			  end
+		  end, Cens).
+
+destroy_wires(WireMap)->
+    #{wires := Wires} = WireMap,
+    lists:foreach(fun(Wire)->destroy_wire(Wire) end, Wires).
+
+destroy_wire(Wire) ->
+    lists:foreach(fun(WireEnd) -> destroy_wire_end(WireEnd) end, Wire).
+
+destroy_wire_end(#{endID := EndId, dest := #{type := cen}}) ->
+    CmdBundle = leviathan_linux:delete_peer(EndId),
+    leviathan_linux:eval(CmdBundle);				      
+destroy_wire_end(#{dest := #{type := cont, id := ContId, alias := Alias}}) ->
+    CmdBundle = leviathan_linux:delete_cont_interface(ContId,Alias),
+    leviathan_linux:eval(CmdBundle).
