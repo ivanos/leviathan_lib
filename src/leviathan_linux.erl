@@ -71,7 +71,6 @@ new_bridge(BridgeNum)->
     [leviathan_brctl:addbr(BridgeNum)].
 
 eval(CmdBundle)->
-    %%lists:map(fun(X)->os:cmd(X) end,CmdBundle).
-    lists:map(fun(X)->io:format("~p~n",[X]) end,CmdBundle).
-    
+    EvalBundle = lists:map(fun(X)->Result = os:cmd(X), {X,Result} end,CmdBundle),
+    lists:map(fun({Cmd,Output})->io:format("   Cmd: ~p~nOutput: ~p~n",[Cmd,Output]) end,EvalBundle).
     
