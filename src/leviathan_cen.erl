@@ -125,8 +125,10 @@ destroy(CenIds) ->
 % Top Level Processor
 %
 destroy_lev(#{censmap := CensMap, wiremap := WireMap}) ->
+    cens_status(CensMap, destroy),
     destroy_cens(CensMap),
-    destroy_wires(WireMap).
+    destroy_wires(WireMap),
+    cens_status(CensMap, pending).
 
 destroy_cens(#{cens := Cens}) ->
     %%     make any necessary Ethernet buses

@@ -278,7 +278,9 @@ status_md(pending) ->
 status_md(preparing) ->
     {<<"status">>, <<"preparing">>};
 status_md(ready) ->
-    {<<"status">>, <<"ready">>}.
+    {<<"status">>, <<"ready">>};
+status_md(destroy) ->
+    {<<"status">>, <<"destroy">>}.
 
 
 wire_type_md(null) ->
