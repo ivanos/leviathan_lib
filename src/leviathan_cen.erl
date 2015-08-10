@@ -54,6 +54,10 @@ contids_from_cens(Cens) ->
             sets:union(Acc, sets:from_list(ContIds))
         end, sets:new(), Cens)).
 
+% prepare cens from a list of cen ids
+prepare(CenIds) ->
+    prepare_lev(get_levmap(CenIds)).
+
 %
 % Top Level Processor
 %
