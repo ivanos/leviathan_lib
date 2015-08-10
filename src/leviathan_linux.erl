@@ -67,6 +67,10 @@ peer2cen(CenId,EndId)->
 
 delete_peer(EndId)->
     [leviathan_ip:link_delete_type_veth_peer(EndId)].
+
+delete_cont_interface(Cid,Alias)->
+    CPid = leviathan_docker:inspect_pid(Cid),
+    [leviathan_ip:netns_exec_ip_link_delete_type_veth_peer(CPid,Alias)].
     
 
 new_bridge(BridgeNum)->
