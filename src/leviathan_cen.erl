@@ -2,7 +2,24 @@
 
 -compile(export_all).
 
+-export([remove_container_from_cen/3,
+        add_container_to_cen/3]).
+
 -include("leviathan_logger.hrl").
+
+%-------------------------------------------------------------------------------
+% API
+%-------------------------------------------------------------------------------
+
+add_container_to_cen(HostId, ContainerId, CenId) ->
+    % XXX not implemented
+    ?INFO("Add container to cen: Container(~s, ~s), Cen(~s)",
+                                            [HostId, ContainerId, CenId]).
+
+remove_container_from_cen(HostId, ContainerId, CenId) ->
+    % XXX not implemented
+    ?INFO("Remove container from cen: Container(~s, ~s), Cen(~s)",
+                                            [HostId, ContainerId, CenId]).
 
 % To test:
 % 1. load the cen.json file in this repo via leviathan_dby:import_file/2
