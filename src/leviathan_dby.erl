@@ -45,20 +45,14 @@ get_cont(Host, ContId) ->
          cens => []},
         dby_cont_id(Host, ContId), [{max_depth, 1}]).
 
-get_wires(#{wire_type := null}) ->
-    [];
-get_wires(#{cenID := CenId, wire_type := bus}) ->
-    % bus data model in dobby benefits from searching breadth first.
-    % This makes it easy to find the paths that form the wires.
-    dby:search(fun wires/4, [],
-            dby_cen_id(CenId), [breadth, {max_depth, 4}, {loop, link}]);
-get_wires(#{cenID := CenId, wire_type := wire}) ->
-    % wire data model in dobby beneifts from searching depth first because
-    % the containers are both linked to the starting point. A breadth
-    % first search never finds the complete path for the wire because
-    % it partially traverses the wire from both directions.
-    dby:search(fun wires/4, [],
-            dby_cen_id(CenId), [depth, {max_depth, 4}, {loop, link}]).
+get_wires(Cen) ->
+    #{wires := Wires, ipaddrmap := IpAddrMap} = wire_search(Cen),
+    lists:map(
+        fun([WireEnd1, WireEnd2]) ->
+            % if neeeded, add IP address to wire ends
+            [ipaddr_for_wireend(WireEnd1, IpAddrMap),
+             ipaddr_for_wireend(WireEnd2, IpAddrMap)]
+        end, Wires).
 
 % status
 set_cen_status(CenId, Status) ->
@@ -357,6 +351,9 @@ md_wire_type(<<"bus">>) ->
                                        ?MDVALUE(<<"cenID">>, CenId),
                                        ?MDVALUE(<<"wire_type">>, WireType)}).
 
+-define(MATCH_ENDPOINT(EndId), #{?MDTYPE(<<"endpoint">>),
+                                 ?MDVALUE(<<"endID">>, EndId)}).
+
 -define(MATCH_IN_ENDPOINT(EndId, Alias), #{?MDTYPE(<<"endpoint">>),
                                           ?MDVALUE(<<"side">>, <<"in">>),
                                           ?MDVALUE(<<"endID">>, EndId),
@@ -365,6 +362,9 @@ md_wire_type(<<"bus">>) ->
 -define(MATCH_OUT_ENDPOINT(EndId), #{?MDTYPE(<<"endpoint">>),
                                      ?MDVALUE(<<"side">>, <<"out">>),
                                      ?MDVALUE(<<"endID">>, EndId)}).
+
+-define(MATCH_IPADDR(IpAddr), #{?MDTYPE(<<"ipaddr">>),
+                                ?MDVALUE(<<"ipaddr">>, IpAddr)}).
 
 % dby:search function to return list of containers linked to an identifier.
 linked_containers(_, ?MATCH_CEN(CenId, WireType), [], Acc) ->
@@ -382,6 +382,21 @@ linked_cens(_, ?MATCH_CEN(CenId, _), _, Acc) ->
     {continue, map_prepend(Acc, cens, binary_to_list(CenId))};
 linked_cens(_, _, _, Acc) ->
     {continue, Acc}.
+
+wire_search(#{wire_type := null}) ->
+    [];
+wire_search(#{cenID := CenId, wire_type := bus}) ->
+    % bus data model in dobby benefits from searching breadth first.
+    % This makes it easy to find the paths that form the wires.
+    dby:search(fun wires/4, #{wires => [], ipaddrmap => #{}},
+            dby_cen_id(CenId), [breadth, {max_depth, 5}, {loop, link}]);
+wire_search(#{cenID := CenId, wire_type := wire}) ->
+    % wire data model in dobby beneifts from searching depth first because
+    % the containers are both linked to the starting point. A breadth
+    % first search never finds the complete path for the wire because
+    % it partially traverses the wire from both directions.
+    dby:search(fun wires/4, #{wires => [], ipaddrmap => #{}},
+            dby_cen_id(CenId), [depth, {max_depth, 4}, {loop, link}]).
 
 % dby:search function to return the list of wires
 % looks for:
@@ -405,7 +420,8 @@ wires(_, _, _, Acc) ->
 wires_bus(_, ?MATCH_BRIDGE(BridgeId),
                 [{_, ?MATCH_OUT_ENDPOINT(OutEndId), _},
                  {_, ?MATCH_IN_ENDPOINT(InEndId, Alias), _},
-                 {_, ?MATCH_CONTAINER(ContId), _} | _], Acc) ->
+                 {_, ?MATCH_CONTAINER(ContId), _} | _],
+                                                 Acc = #{wires := Wires}) ->
     Wire = [
         #{endID => binary_to_list(InEndId),
           dest => #{type => cont,
@@ -414,7 +430,11 @@ wires_bus(_, ?MATCH_BRIDGE(BridgeId),
         #{endID => binary_to_list(OutEndId),
           dest => #{type => cen,
                     id => binary_to_list(BridgeId)}}],
-    {continue, [Wire | Acc]};
+    {continue, Acc#{wires := [Wire | Wires]}};
+wires_bus(_, ?MATCH_IPADDR(IpAddr),
+                [{_, ?MATCH_ENDPOINT(EndId), _} | _],
+                                        Acc = #{ipaddrmap := IpAddrMap}) ->
+    {continue, Acc#{ipaddrmap := put_ipaddr(EndId, IpAddr, IpAddrMap)}};
 wires_bus(_, _, _, Acc) ->
     {continue, Acc}.
 
@@ -422,7 +442,8 @@ wires_bus(_, _, _, Acc) ->
 wires_wire(_, ?MATCH_CONTAINER(ContId1),
                 [{_, ?MATCH_IN_ENDPOINT(EndId1, Alias1), _},
                  {_, ?MATCH_IN_ENDPOINT(EndId2, Alias2), _},
-                 {_, ?MATCH_CONTAINER(ContId2), _} | _], Acc) ->
+                 {_, ?MATCH_CONTAINER(ContId2), _} | _],
+                                                 Acc = #{wires := Wires}) ->
     Wire = [
         #{endID => binary_to_list(EndId1),
           dest => #{type => cont,
@@ -432,9 +453,24 @@ wires_wire(_, ?MATCH_CONTAINER(ContId1),
           dest => #{type => cont,
                     id => binary_to_list(ContId2),
                     alias => binary_to_list(Alias2)}}],
-    {continue, [Wire | Acc]};
+    {continue, Acc#{wires := [Wire | Wires]}};
+wires_wire(_, ?MATCH_IPADDR(IpAddr),
+                [{_, ?MATCH_ENDPOINT(EndId), _} | _],
+                                        Acc = #{ipaddrmap := IpAddrMap}) ->
+    {continue, Acc#{ipaddrmap := put_ipaddr(EndId, IpAddr, IpAddrMap)}};
 wires_wire(_, _, _, Acc) ->
     {continue, Acc}.
+
+ipaddr_for_wireend(WireEnd = #{endID := EndId, dest := Dest}, IpAddrMap) ->
+    case maps:get(EndId, IpAddrMap, not_found) of
+        not_found ->
+            WireEnd;
+        IpAddr ->
+            WireEnd#{dest := Dest#{ip_address => IpAddr}}
+    end.
+
+put_ipaddr(EndId, IpAddr, IpAddrMap) ->
+    maps:put(binary_to_list(EndId), binary_to_list(IpAddr), IpAddrMap).
 
 % map helpers
 
