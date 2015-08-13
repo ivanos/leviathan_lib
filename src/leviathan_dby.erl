@@ -119,6 +119,10 @@ dby_endpoint(Host, EndID, Side, Metadata) when is_binary(EndID) ->
                                       endpoint_side_md(Side),
                                      {<<"endID">>, EndID}] ++ Metadata}.
 
+dby_ipaddr(IpAddr) ->
+    {dby_ipaddr_id(IpAddr), [{<<"type">>, <<"ipaddr">>},
+                             {<<"ipaddr">>, IpAddr}]}.
+
 dby_endpoint_to_ipaddr(Host, EndpointId, IpAddr) ->
     dby_link(dby_endpoint_id(Host, EndpointId), dby_ipaddr_id(IpAddr),
                                                             <<"bound_to">>).
@@ -206,11 +210,11 @@ wire_cen(Context0, Host, CenId, [ContId1, ContId2]) ->
         dby_cen_to_container(Host, CenId, ContId2),
         dby_endpoint(Host, ContId1InEndpoint, inside,
                                 [alias_md(Cont1Eth), status_md(pending)]),
-        dby_ipaddr_id(Cont1IpAddr),
+        dby_ipaddr(Cont1IpAddr),
         dby_endpoint_to_ipaddr(Host, ContId1InEndpoint, Cont1IpAddr),
         dby_endpoint(Host, ContId2InEndpoint, inside,
                                 [alias_md(Cont2Eth), status_md(pending)]),
-        dby_ipaddr_id(Cont2IpAddr),
+        dby_ipaddr(Cont2IpAddr),
         dby_endpoint_to_ipaddr(Host, ContId2InEndpoint, Cont2IpAddr),
         dby_endpoint_to_container(Host, ContId1InEndpoint, ContId1),
         dby_endpoint_to_container(Host, ContId2InEndpoint, ContId2),
@@ -237,7 +241,7 @@ wire_cen_to_container(Host, CenId) ->
                 dby_cen_to_container(Host, CenId, ContId),
                 dby_endpoint(Host, InEndpoint, inside,
                                         [alias_md(Eth), status_md(pending)]),
-                dby_ipaddr_id(IpAddr),
+                dby_ipaddr(IpAddr),
                 dby_endpoint_to_ipaddr(Host, InEndpoint, IpAddr),
                 dby_endpoint_to_container(Host, InEndpoint, ContId),
                 dby_endpoint(Host, OutEndpoint, outside, [status_md(pending)]),
