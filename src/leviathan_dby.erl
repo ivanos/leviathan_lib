@@ -5,10 +5,10 @@
 -export([import_file/2,
          import_binary/2]).
 
--export([get_cen/2,
+-export([get_cen/1,
          get_cont/2,
-         get_wires/2,
-         set_cen_status/3]).
+         get_wires/1,
+         set_cen_status/2]).
 
 -define(PUBLISHER, atom_to_binary(?MODULE, utf8)).
 
@@ -30,13 +30,13 @@ import_binary(Host, Binary) ->
 
 % getters
 
--spec get_cen(string(), string()) -> #{}.
-get_cen(Host, CenId) ->
+-spec get_cen(string()) -> #{}.
+get_cen(CenId) ->
     dby:search(fun linked_containers/4,
         #{cenID => null,
          wire_type => null,
          contIDs => []},
-        dby_cen_id(Host, CenId), [{max_depth, 1}]).
+        dby_cen_id(CenId), [{max_depth, 1}]).
 
 -spec get_cont(string(), string()) -> #{}.
 get_cont(Host, ContId) ->
@@ -45,24 +45,18 @@ get_cont(Host, ContId) ->
          cens => []},
         dby_cont_id(Host, ContId), [{max_depth, 1}]).
 
-get_wires(_, #{wire_type := null}) ->
-    [];
-get_wires(Host, #{cenID := CenId, wire_type := bus}) ->
-    % bus data model in dobby benefits from searching breadth first.
-    % This makes it easy to find the paths that form the wires.
-    dby:search(fun wires/4, [],
-            dby_cen_id(Host, CenId), [breadth, {max_depth, 4}, {loop, link}]);
-get_wires(Host, #{cenID := CenId, wire_type := wire}) ->
-    % wire data model in dobby beneifts from searching depth first because
-    % the containers are both linked to the starting point. A breadth
-    % first search never finds the complete path for the wire because
-    % it partially traverses the wire from both directions.
-    dby:search(fun wires/4, [],
-            dby_cen_id(Host, CenId), [depth, {max_depth, 4}, {loop, link}]).
+get_wires(Cen) ->
+    #{wires := Wires, ipaddrmap := IpAddrMap} = wire_search(Cen),
+    lists:map(
+        fun([WireEnd1, WireEnd2]) ->
+            % if neeeded, add IP address to wire ends
+            [ipaddr_for_wireend(WireEnd1, IpAddrMap),
+             ipaddr_for_wireend(WireEnd2, IpAddrMap)]
+        end, Wires).
 
 % status
-set_cen_status(Host, CenId, Status) ->
-    set_status(dby_cen_id(Host, CenId), Status).
+set_cen_status(CenId, Status) ->
+    set_status(dby_cen_id(CenId), Status).
 
 % -----------------------------------------------------------------------------
 %
@@ -87,8 +81,8 @@ dby_id([E], Acc) ->
 dby_id([E | Rest], Acc) ->
     dby_id(Rest, [Acc, E, ">"]).
 
-dby_cen_id(Host, CenId) ->
-    dby_id([<<"lev_cen">>, Host, CenId]).
+dby_cen_id(CenId) ->
+    dby_id([<<"lev_cen">>, CenId]).
 
 dby_bridge_id(Host, BridgeId) ->
     dby_id([<<"lev_bridge">>, Host, BridgeId]).
@@ -99,8 +93,11 @@ dby_cont_id(Host, ContId) ->
 dby_endpoint_id(Host, Endpoint) ->
     dby_id([<<"lev_endpoint">>, Host, Endpoint]).
 
-dby_cen(Host, CenId, Metadata) when is_binary(CenId) ->
-    {dby_cen_id(Host, CenId), [{<<"cenID">>, CenId},
+dby_ipaddr_id(IpAddr) ->
+    dby_id([<<"lev_ip">>, IpAddr]).
+
+dby_cen(CenId, Metadata) when is_binary(CenId) ->
+    {dby_cen_id(CenId), [{<<"cenID">>, CenId},
                                {<<"type">>, <<"cen">>}] ++ Metadata}.
 
 dby_bridge(Host, BridgeId, Metadata) when is_binary(BridgeId) ->
@@ -116,8 +113,16 @@ dby_endpoint(Host, EndID, Side, Metadata) when is_binary(EndID) ->
                                       endpoint_side_md(Side),
                                      {<<"endID">>, EndID}] ++ Metadata}.
 
+dby_ipaddr(IpAddr) ->
+    {dby_ipaddr_id(IpAddr), [{<<"type">>, <<"ipaddr">>},
+                             {<<"ipaddr">>, IpAddr}]}.
+
+dby_endpoint_to_ipaddr(Host, EndpointId, IpAddr) ->
+    dby_link(dby_endpoint_id(Host, EndpointId), dby_ipaddr_id(IpAddr),
+                                                            <<"bound_to">>).
+
 dby_cen_to_container(Host, CenId, ContId) ->
-    dby_link(dby_cen_id(Host, CenId),
+    dby_link(dby_cen_id(CenId),
              dby_cont_id(Host, ContId), <<"part_of">>).
 
 dby_endpoint_to_container(Host, EndpointId, ContId) ->
@@ -165,38 +170,46 @@ container_from_cens_json(Context, Host, CensJson) ->
 cens_from_cens_json(Context0, Host, CensJson) ->
     lists:foldl(
         fun(#{<<"cenID">> := CenId, <<"containerIDs">> := ContIds}, Context) ->
-            wire_cen(Context, Host, CenId, ContIds);
+            wire_cen(count_cen(Context), Host, CenId, ContIds);
            (_, _) ->
             throw(bad_json)
         end, Context0, CensJson).
 
 % wiring helpers
 
-wire_cen(Context, Host, CenId, []) ->
+wire_cen(Context, _, CenId, []) ->
     % no wire the CEN has no containers
     topublish(Context, [
-        dby_cen(Host, CenId, [wire_type_md(null), status_md(pending)])
+        dby_cen(CenId, [wire_type_md(null), status_md(pending)])
     ]);
 wire_cen(Context, Host, CenId, [ContId]) ->
     % no wire if the CEN has zero or one containers
     topublish(Context, [
-        dby_cen(Host, CenId, [wire_type_md(null), status_md(pending)]),
+        dby_cen(CenId, [wire_type_md(null), status_md(pending)]),
         dby_cen_to_container(Host, CenId, ContId)
     ]);
 wire_cen(Context0, Host, CenId, [ContId1, ContId2]) ->
     % wire the containers directly if there are two containers in the CEN
-    {Context1, ContId1InEndpoint} = next_in_endpoint(Context0, ContId1),
-    {Context2, ContId2InEndpoint} = next_in_endpoint(Context1, ContId2),
+    Context1 = count_cont(Context0, CenId),
+    {Context2, ContId1InEndpoint} = next_in_endpoint(Context1, ContId1),
     {Context3, Cont1Eth} = next_eth(Context2, ContId1),
-    {Context4, Cont2Eth} = next_eth(Context3, ContId2),
-    topublish(Context4, [
-        dby_cen(Host, CenId, [wire_type_md(wire), status_md(pending)]),
+    Cont1IpAddr = ip_addr(Context3, CenId),
+    Context4 = count_cont(Context3, CenId),
+    {Context5, ContId2InEndpoint} = next_in_endpoint(Context4, ContId2),
+    {Context6, Cont2Eth} = next_eth(Context5, ContId2),
+    Cont2IpAddr = ip_addr(Context6, CenId),
+    topublish(Context6, [
+        dby_cen(CenId, [wire_type_md(wire), status_md(pending)]),
         dby_cen_to_container(Host, CenId, ContId1),
         dby_cen_to_container(Host, CenId, ContId2),
         dby_endpoint(Host, ContId1InEndpoint, inside,
                                 [alias_md(Cont1Eth), status_md(pending)]),
+        dby_ipaddr(Cont1IpAddr),
+        dby_endpoint_to_ipaddr(Host, ContId1InEndpoint, Cont1IpAddr),
         dby_endpoint(Host, ContId2InEndpoint, inside,
                                 [alias_md(Cont2Eth), status_md(pending)]),
+        dby_ipaddr(Cont2IpAddr),
+        dby_endpoint_to_ipaddr(Host, ContId2InEndpoint, Cont2IpAddr),
         dby_endpoint_to_container(Host, ContId1InEndpoint, ContId1),
         dby_endpoint_to_container(Host, ContId2InEndpoint, ContId2),
         dby_endpoint_to_endpoint(Host, ContId1InEndpoint,
@@ -205,21 +218,25 @@ wire_cen(Context0, Host, CenId, [ContId1, ContId2]) ->
 wire_cen(Context, Host, CenId, ContainerIds) ->
     Context1 = topublish(Context,
         [
-            dby_cen(Host, CenId, [wire_type_md(bus), status_md(pending)]),
+            dby_cen(CenId, [wire_type_md(bus), status_md(pending)]),
             dby_bridge(Host, CenId, [status_md(pending)])
         ]),
     lists:foldl(wire_cen_to_container(Host, CenId), Context1, ContainerIds).
 
 wire_cen_to_container(Host, CenId) ->
     fun(ContId, Context0) ->
-        {Context1, InEndpoint} = next_in_endpoint(Context0, ContId),
-        {Context2, OutEndpoint} = next_out_endpoint(Context1, ContId),
-        {Context3, Eth} = next_eth(Context2, ContId),
-        topublish(Context3,
+        Context1 = count_cont(Context0, CenId),
+        {Context2, InEndpoint} = next_in_endpoint(Context1, ContId),
+        {Context3, OutEndpoint} = next_out_endpoint(Context2, ContId),
+        {Context4, Eth} = next_eth(Context3, ContId),
+        IpAddr = ip_addr(Context4, CenId),
+        topublish(Context4,
             [
                 dby_cen_to_container(Host, CenId, ContId),
                 dby_endpoint(Host, InEndpoint, inside,
                                         [alias_md(Eth), status_md(pending)]),
+                dby_ipaddr(IpAddr),
+                dby_endpoint_to_ipaddr(Host, InEndpoint, IpAddr),
                 dby_endpoint_to_container(Host, InEndpoint, ContId),
                 dby_endpoint(Host, OutEndpoint, outside, [status_md(pending)]),
                 dby_endpoint_to_endpoint(Host, InEndpoint,
@@ -233,6 +250,16 @@ wire_cen_to_container(Host, CenId) ->
 % add to the list to publish to the end of the list.
 topublish(Context = #{topublish := ToPublish}, AddToPublish) ->
     Context#{topublish := [ToPublish, AddToPublish]}.
+
+% mark the next cen
+count_cen(Context) ->
+    {Context1, _} = next_count(Context, cen, fun(_) -> ok end),
+    Context1.
+
+% mark next container in cen
+count_cont(Context, CenId) ->
+    {Context1, _} = next_count(Context, {conts, CenId}, fun(_) -> ok end),
+    Context1.
 
 % get next eth port for a container
 next_eth(Context, ContId) ->
@@ -253,6 +280,12 @@ next_count(Context = #{count := CountMap}, Key, FormatFn) ->
     N = maps:get(Key, CountMap, 0),
     {maps:update(count, maps:put(Key, N + 1,  CountMap), Context),
      FormatFn(N)}.
+
+% format ip addr
+ip_addr(#{count := CountMap}, CenId) ->
+    CenCount = maps:get(cen, CountMap),
+    ContCount = maps:get({conts, CenId}, CountMap),
+    leviathan_cin:ip_address(CenCount, ContCount).
 
 % name formatters
 eth_name(N) ->
@@ -318,6 +351,9 @@ md_wire_type(<<"bus">>) ->
                                        ?MDVALUE(<<"cenID">>, CenId),
                                        ?MDVALUE(<<"wire_type">>, WireType)}).
 
+-define(MATCH_ENDPOINT(EndId), #{?MDTYPE(<<"endpoint">>),
+                                 ?MDVALUE(<<"endID">>, EndId)}).
+
 -define(MATCH_IN_ENDPOINT(EndId, Alias), #{?MDTYPE(<<"endpoint">>),
                                           ?MDVALUE(<<"side">>, <<"in">>),
                                           ?MDVALUE(<<"endID">>, EndId),
@@ -326,6 +362,9 @@ md_wire_type(<<"bus">>) ->
 -define(MATCH_OUT_ENDPOINT(EndId), #{?MDTYPE(<<"endpoint">>),
                                      ?MDVALUE(<<"side">>, <<"out">>),
                                      ?MDVALUE(<<"endID">>, EndId)}).
+
+-define(MATCH_IPADDR(IpAddr), #{?MDTYPE(<<"ipaddr">>),
+                                ?MDVALUE(<<"ipaddr">>, IpAddr)}).
 
 % dby:search function to return list of containers linked to an identifier.
 linked_containers(_, ?MATCH_CEN(CenId, WireType), [], Acc) ->
@@ -343,6 +382,21 @@ linked_cens(_, ?MATCH_CEN(CenId, _), _, Acc) ->
     {continue, map_prepend(Acc, cens, binary_to_list(CenId))};
 linked_cens(_, _, _, Acc) ->
     {continue, Acc}.
+
+wire_search(#{wire_type := null}) ->
+    [];
+wire_search(#{cenID := CenId, wire_type := bus}) ->
+    % bus data model in dobby benefits from searching breadth first.
+    % This makes it easy to find the paths that form the wires.
+    dby:search(fun wires/4, #{wires => [], ipaddrmap => #{}},
+            dby_cen_id(CenId), [breadth, {max_depth, 5}, {loop, link}]);
+wire_search(#{cenID := CenId, wire_type := wire}) ->
+    % wire data model in dobby beneifts from searching depth first because
+    % the containers are both linked to the starting point. A breadth
+    % first search never finds the complete path for the wire because
+    % it partially traverses the wire from both directions.
+    dby:search(fun wires/4, #{wires => [], ipaddrmap => #{}},
+            dby_cen_id(CenId), [depth, {max_depth, 4}, {loop, link}]).
 
 % dby:search function to return the list of wires
 % looks for:
@@ -366,7 +420,8 @@ wires(_, _, _, Acc) ->
 wires_bus(_, ?MATCH_BRIDGE(BridgeId),
                 [{_, ?MATCH_OUT_ENDPOINT(OutEndId), _},
                  {_, ?MATCH_IN_ENDPOINT(InEndId, Alias), _},
-                 {_, ?MATCH_CONTAINER(ContId), _} | _], Acc) ->
+                 {_, ?MATCH_CONTAINER(ContId), _} | _],
+                                                 Acc = #{wires := Wires}) ->
     Wire = [
         #{endID => binary_to_list(InEndId),
           dest => #{type => cont,
@@ -375,7 +430,11 @@ wires_bus(_, ?MATCH_BRIDGE(BridgeId),
         #{endID => binary_to_list(OutEndId),
           dest => #{type => cen,
                     id => binary_to_list(BridgeId)}}],
-    {continue, [Wire | Acc]};
+    {continue, Acc#{wires := [Wire | Wires]}};
+wires_bus(_, ?MATCH_IPADDR(IpAddr),
+                [{_, ?MATCH_ENDPOINT(EndId), _} | _],
+                                        Acc = #{ipaddrmap := IpAddrMap}) ->
+    {continue, Acc#{ipaddrmap := put_ipaddr(EndId, IpAddr, IpAddrMap)}};
 wires_bus(_, _, _, Acc) ->
     {continue, Acc}.
 
@@ -383,7 +442,8 @@ wires_bus(_, _, _, Acc) ->
 wires_wire(_, ?MATCH_CONTAINER(ContId1),
                 [{_, ?MATCH_IN_ENDPOINT(EndId1, Alias1), _},
                  {_, ?MATCH_IN_ENDPOINT(EndId2, Alias2), _},
-                 {_, ?MATCH_CONTAINER(ContId2), _} | _], Acc) ->
+                 {_, ?MATCH_CONTAINER(ContId2), _} | _],
+                                                 Acc = #{wires := Wires}) ->
     Wire = [
         #{endID => binary_to_list(EndId1),
           dest => #{type => cont,
@@ -393,9 +453,24 @@ wires_wire(_, ?MATCH_CONTAINER(ContId1),
           dest => #{type => cont,
                     id => binary_to_list(ContId2),
                     alias => binary_to_list(Alias2)}}],
-    {continue, [Wire | Acc]};
+    {continue, Acc#{wires := [Wire | Wires]}};
+wires_wire(_, ?MATCH_IPADDR(IpAddr),
+                [{_, ?MATCH_ENDPOINT(EndId), _} | _],
+                                        Acc = #{ipaddrmap := IpAddrMap}) ->
+    {continue, Acc#{ipaddrmap := put_ipaddr(EndId, IpAddr, IpAddrMap)}};
 wires_wire(_, _, _, Acc) ->
     {continue, Acc}.
+
+ipaddr_for_wireend(WireEnd = #{endID := EndId, dest := Dest}, IpAddrMap) ->
+    case maps:get(EndId, IpAddrMap, not_found) of
+        not_found ->
+            WireEnd;
+        IpAddr ->
+            WireEnd#{dest := Dest#{ip_address => IpAddr}}
+    end.
+
+put_ipaddr(EndId, IpAddr, IpAddrMap) ->
+    maps:put(binary_to_list(EndId), binary_to_list(IpAddr), IpAddrMap).
 
 % map helpers
 

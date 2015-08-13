@@ -1,0 +1,13 @@
+-module(leviathan_cin).
+
+-export([ip_address/2]).
+
+% Generate an IP address in the form:
+% 10.NN.C1.C2
+% where NN is in the range 10-250 and C1.C2 is 0.10-255.240
+% NN is derived from the NetCount, C1.C2 from ContCount
+ip_address(NetCount, ContCount) when NetCount =< 244, ContCount =< 65511 ->
+    B = NetCount + 6, %% offset
+    C = ContCount + 9, %% offset
+    <<C1:8, C2:8>> = <<C:16>>,
+    list_to_binary(inet_parse:ntoa({10, B, C1, C2})).
