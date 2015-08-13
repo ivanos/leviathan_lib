@@ -59,7 +59,7 @@ Key | Value | Description
 --- | ----- | -----------
 cenID | CEN ID | CEN Identifier
 wiring_type | bus, wire, or null | type of wiring used
-conIDs | list of container IDs | containers in the CEN
+contIDs | list of container IDs | containers in the CEN
 
 Example:
 ```
