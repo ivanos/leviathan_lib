@@ -5,10 +5,10 @@
 -export([import_file/2,
          import_binary/2]).
 
--export([get_cen/2,
+-export([get_cen/1,
          get_cont/2,
-         get_wires/2,
-         set_cen_status/3]).
+         get_wires/1,
+         set_cen_status/2]).
 
 -define(PUBLISHER, atom_to_binary(?MODULE, utf8)).
 
@@ -30,13 +30,13 @@ import_binary(Host, Binary) ->
 
 % getters
 
--spec get_cen(string(), string()) -> #{}.
-get_cen(Host, CenId) ->
+-spec get_cen(string()) -> #{}.
+get_cen(CenId) ->
     dby:search(fun linked_containers/4,
         #{cenID => null,
          wire_type => null,
          contIDs => []},
-        dby_cen_id(Host, CenId), [{max_depth, 1}]).
+        dby_cen_id(CenId), [{max_depth, 1}]).
 
 -spec get_cont(string(), string()) -> #{}.
 get_cont(Host, ContId) ->
@@ -45,24 +45,24 @@ get_cont(Host, ContId) ->
          cens => []},
         dby_cont_id(Host, ContId), [{max_depth, 1}]).
 
-get_wires(_, #{wire_type := null}) ->
+get_wires(#{wire_type := null}) ->
     [];
-get_wires(Host, #{cenID := CenId, wire_type := bus}) ->
+get_wires(#{cenID := CenId, wire_type := bus}) ->
     % bus data model in dobby benefits from searching breadth first.
     % This makes it easy to find the paths that form the wires.
     dby:search(fun wires/4, [],
-            dby_cen_id(Host, CenId), [breadth, {max_depth, 4}, {loop, link}]);
-get_wires(Host, #{cenID := CenId, wire_type := wire}) ->
+            dby_cen_id(CenId), [breadth, {max_depth, 4}, {loop, link}]);
+get_wires(#{cenID := CenId, wire_type := wire}) ->
     % wire data model in dobby beneifts from searching depth first because
     % the containers are both linked to the starting point. A breadth
     % first search never finds the complete path for the wire because
     % it partially traverses the wire from both directions.
     dby:search(fun wires/4, [],
-            dby_cen_id(Host, CenId), [depth, {max_depth, 4}, {loop, link}]).
+            dby_cen_id(CenId), [depth, {max_depth, 4}, {loop, link}]).
 
 % status
-set_cen_status(Host, CenId, Status) ->
-    set_status(dby_cen_id(Host, CenId), Status).
+set_cen_status(CenId, Status) ->
+    set_status(dby_cen_id(CenId), Status).
 
 % -----------------------------------------------------------------------------
 %
@@ -87,8 +87,8 @@ dby_id([E], Acc) ->
 dby_id([E | Rest], Acc) ->
     dby_id(Rest, [Acc, E, ">"]).
 
-dby_cen_id(Host, CenId) ->
-    dby_id([<<"lev_cen">>, Host, CenId]).
+dby_cen_id(CenId) ->
+    dby_id([<<"lev_cen">>, CenId]).
 
 dby_bridge_id(Host, BridgeId) ->
     dby_id([<<"lev_bridge">>, Host, BridgeId]).
@@ -99,8 +99,8 @@ dby_cont_id(Host, ContId) ->
 dby_endpoint_id(Host, Endpoint) ->
     dby_id([<<"lev_endpoint">>, Host, Endpoint]).
 
-dby_cen(Host, CenId, Metadata) when is_binary(CenId) ->
-    {dby_cen_id(Host, CenId), [{<<"cenID">>, CenId},
+dby_cen(CenId, Metadata) when is_binary(CenId) ->
+    {dby_cen_id(CenId), [{<<"cenID">>, CenId},
                                {<<"type">>, <<"cen">>}] ++ Metadata}.
 
 dby_bridge(Host, BridgeId, Metadata) when is_binary(BridgeId) ->
@@ -117,7 +117,7 @@ dby_endpoint(Host, EndID, Side, Metadata) when is_binary(EndID) ->
                                      {<<"endID">>, EndID}] ++ Metadata}.
 
 dby_cen_to_container(Host, CenId, ContId) ->
-    dby_link(dby_cen_id(Host, CenId),
+    dby_link(dby_cen_id(CenId),
              dby_cont_id(Host, ContId), <<"part_of">>).
 
 dby_endpoint_to_container(Host, EndpointId, ContId) ->
@@ -172,15 +172,15 @@ cens_from_cens_json(Context0, Host, CensJson) ->
 
 % wiring helpers
 
-wire_cen(Context, Host, CenId, []) ->
+wire_cen(Context, _, CenId, []) ->
     % no wire the CEN has no containers
     topublish(Context, [
-        dby_cen(Host, CenId, [wire_type_md(null), status_md(pending)])
+        dby_cen(CenId, [wire_type_md(null), status_md(pending)])
     ]);
 wire_cen(Context, Host, CenId, [ContId]) ->
     % no wire if the CEN has zero or one containers
     topublish(Context, [
-        dby_cen(Host, CenId, [wire_type_md(null), status_md(pending)]),
+        dby_cen(CenId, [wire_type_md(null), status_md(pending)]),
         dby_cen_to_container(Host, CenId, ContId)
     ]);
 wire_cen(Context0, Host, CenId, [ContId1, ContId2]) ->
@@ -190,7 +190,7 @@ wire_cen(Context0, Host, CenId, [ContId1, ContId2]) ->
     {Context3, Cont1Eth} = next_eth(Context2, ContId1),
     {Context4, Cont2Eth} = next_eth(Context3, ContId2),
     topublish(Context4, [
-        dby_cen(Host, CenId, [wire_type_md(wire), status_md(pending)]),
+        dby_cen(CenId, [wire_type_md(wire), status_md(pending)]),
         dby_cen_to_container(Host, CenId, ContId1),
         dby_cen_to_container(Host, CenId, ContId2),
         dby_endpoint(Host, ContId1InEndpoint, inside,
@@ -205,7 +205,7 @@ wire_cen(Context0, Host, CenId, [ContId1, ContId2]) ->
 wire_cen(Context, Host, CenId, ContainerIds) ->
     Context1 = topublish(Context,
         [
-            dby_cen(Host, CenId, [wire_type_md(bus), status_md(pending)]),
+            dby_cen(CenId, [wire_type_md(bus), status_md(pending)]),
             dby_bridge(Host, CenId, [status_md(pending)])
         ]),
     lists:foldl(wire_cen_to_container(Host, CenId), Context1, ContainerIds).

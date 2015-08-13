@@ -3,7 +3,9 @@
 -compile(export_all).
 
 -export([remove_container_from_cen/3,
-        add_container_to_cen/3]).
+        add_container_to_cen/3,
+        destroy_cen/1,
+        new_cen/1]).
 
 -include("leviathan_logger.hrl").
 
@@ -11,15 +13,31 @@
 % API
 %-------------------------------------------------------------------------------
 
+% Add a container to a CEN
 add_container_to_cen(HostId, ContainerId, CenId) ->
     % XXX not implemented
     ?INFO("Add container to cen: Container(~s, ~s), Cen(~s)",
-                                            [HostId, ContainerId, CenId]).
+                                            [HostId, ContainerId, CenId]),
+    ok.
 
+% Remove a container from a CEN
 remove_container_from_cen(HostId, ContainerId, CenId) ->
     % XXX not implemented
     ?INFO("Remove container from cen: Container(~s, ~s), Cen(~s)",
-                                            [HostId, ContainerId, CenId]).
+                                            [HostId, ContainerId, CenId]),
+    ok.
+
+% Create new CEN
+new_cen(CenId) ->
+    % XXX not implemented
+    ?INFO("Create cen: Cen(~s)", [CenId]),
+    ok.
+    
+% Destroy CEN
+destroy_cen(CenId) ->
+    % XXX not implemented
+    ?INFO("Remove cen: Cen(~s)", [CenId]),
+    ok.
 
 % To test:
 % 1. load the cen.json file in this repo via leviathan_dby:import_file/2
@@ -50,7 +68,7 @@ get_levmap(CenIds) ->
 
 % XXX host is hardcoded
 get_cens(CenIds) ->
-    [leviathan_dby:get_cen("host1", CenId) || CenId <- CenIds].
+    [leviathan_dby:get_cen(CenId) || CenId <- CenIds].
 
 % XXX host is hardcoded
 get_conts(Cens) ->
@@ -58,11 +76,11 @@ get_conts(Cens) ->
     [leviathan_dby:get_cont("host1", ContId) || ContId <- ContIds].
 
 % XXX host is hardcoded
-% leviathan_dby:get_wires/2 returns the list of wires per Cen. Flatten
+% leviathan_dby:get_wires/1 returns the list of wires per Cen. Flatten
 % the list with lists:append/1 rather than with lists:flatten/1 because
 % the wires themselves are lists.
 get_wiremaps(Cens) ->
-    lists:append([leviathan_dby:get_wires("host1", Cen) || Cen <- Cens]).
+    lists:append([leviathan_dby:get_wires(Cen) || Cen <- Cens]).
 
 % make a list of unique container ids by inspecting the cens
 contids_from_cens(Cens) ->
@@ -90,7 +108,7 @@ prepare_lev(#{censmap := CensMap, contsmap := ContsMap, wiremap := WireMap}) ->
 cens_status(#{cens := Cens}, Status) ->
     lists:foreach(
         fun(#{cenID := CenId}) ->
-            leviathan_dby:set_cen_status("host1", CenId, Status)
+            leviathan_dby:set_cen_status(CenId, Status)
         end, Cens).
 
 prepare_cens(#{cens := Cens}) ->
