@@ -76,6 +76,10 @@ delete_cont_interface(Cid,Alias)->
 new_bridge(BridgeNum)->
     [leviathan_brctl:addbr(BridgeNum)].
 
+set_ip_address(Cid, Alias, IPAddress)->
+    CPid = leviathan_docker:inspect_pid(Cid),
+    [leviathan_ip:netns_exec_ip_addr_add_dev(CPid,IPAddress ++ "/16",Alias)].   %% XXX hardcoded to /16
+
 eval(CmdBundle)->
     EvalBundle = lists:map(fun(X)->Result = os:cmd(X), {X,Result} end,CmdBundle),
     lists:map(fun({Cmd,Output})->io:format("   Cmd: ~p~nOutput: ~p~n",[Cmd,Output]) end,EvalBundle).

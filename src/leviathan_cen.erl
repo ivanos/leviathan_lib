@@ -145,9 +145,16 @@ prepare_wire_end(#{endID := EndId, dest := #{type := cen, id := CenId}}) ->
     CmdBundle = leviathan_linux:peer2cen(CenId,EndId),
     leviathan_linux:eval(CmdBundle);				      
 prepare_wire_end(#{endID := EndId,
-                dest := #{type := cont, id := ContId, alias := Alias}}) ->
+                dest := #{type := cont, id := ContId, alias := Alias}} = WireEnd) ->
     CmdBundle = leviathan_linux:peer2cont(ContId, EndId, Alias),
-    leviathan_linux:eval(CmdBundle).
+    leviathan_linux:eval(CmdBundle),
+    case WireEnd of
+	#{endID := EndId,
+	  dest := Dest} ->
+	    leviathan_cin:prepare_wire_end(Dest);
+	_ -> ok  %% No IP Address
+    end.
+	
 
 
 %% === DESTROY ===== %%%
