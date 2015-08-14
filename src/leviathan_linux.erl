@@ -42,7 +42,8 @@ remove_netns(Cid)->
 %  By definition a bus as more than 2 containers connected 
 %  
 new_bus(CenId)->
-    [leviathan_brctl:addbr(CenId)].
+    [leviathan_brctl:addbr(CenId),
+     leviathan_ifconfig:dev_up(CenId)].
 
 delete_bus(CenId)->
     [leviathan_brctl:delbr(CenId)].
