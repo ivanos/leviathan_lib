@@ -35,6 +35,7 @@ get_cen(CenId) ->
     dby:search(fun linked_containers/4,
         #{cenID => null,
          wire_type => null,
+	 ipaddr => null,  %% does not route to outside
          contIDs => []},
         dby_cen_id(CenId), [{max_depth, 1}]).
 
@@ -98,11 +99,11 @@ dby_ipaddr_id(IpAddr) ->
 
 dby_cen(CenId, Metadata) when is_binary(CenId) ->
     {dby_cen_id(CenId), [{<<"cenID">>, CenId},
-                               {<<"type">>, <<"cen">>}] ++ Metadata}.
+			 {<<"type">>, <<"cen">>}] ++ Metadata}.
 
 dby_bridge(Host, BridgeId, Metadata) when is_binary(BridgeId) ->
     {dby_bridge_id(Host, BridgeId), [{<<"bridgeID">>, BridgeId},
-                               {<<"type">>, <<"bridge">>}] ++ Metadata}.
+				     {<<"type">>, <<"bridge">>}] ++ Metadata}.
 
 dby_cont(Host, ContId, Metadata) when is_binary(ContId) ->
     {dby_cont_id(Host, ContId), [{<<"contID">>, ContId},
@@ -218,7 +219,7 @@ wire_cen(Context0, Host, CenId, [ContId1, ContId2]) ->
 wire_cen(Context, Host, CenId, ContainerIds) ->
     Context1 = topublish(Context,
         [
-            dby_cen(CenId, [wire_type_md(bus), status_md(pending)]),
+            dby_cen(CenId, [wire_type_md(bus), status_md(pending),cen_ip_addr_md(cen_ip_addr(Context))]),
             dby_bridge(Host, CenId, [status_md(pending)])
         ]),
     lists:foldl(wire_cen_to_container(Host, CenId), Context1, ContainerIds).
@@ -287,6 +288,11 @@ ip_addr(#{count := CountMap}, CenId) ->
     ContCount = maps:get({conts, CenId}, CountMap),
     leviathan_cin:ip_address(CenCount, ContCount).
 
+% format ip addr for cens
+cen_ip_addr(#{count := CountMap}) ->
+    CenCount = maps:get(cen, CountMap),
+    leviathan_cin:cen_ip_address(CenCount).
+
 % name formatters
 eth_name(N) ->
     Nbinary = integer_to_binary(N),
@@ -314,6 +320,9 @@ status_md(ready) ->
     {<<"status">>, <<"ready">>};
 status_md(destroy) ->
     {<<"status">>, <<"destroy">>}.
+
+cen_ip_addr_md(IPAddress)->
+    {<<"status">>,IPAddress}.
 
 
 wire_type_md(null) ->

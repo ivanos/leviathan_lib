@@ -18,6 +18,9 @@ link_set_up(DevName)->
 link_set_netns(DevName,CPid)->
     "ip link set " ++ DevName ++ " netns " ++ CPid.
 
+addr_add_dev(Address,DevName)->
+    "ip addr add " ++ Address ++ " dev " ++ DevName.
+
 netns_exec_ip_link_set_dev_name(CPid,OrigDevName,NewDevName)->
     "ip netns exec " ++ CPid ++ " ip link set dev " ++ OrigDevName ++ " name " ++ NewDevName.
 

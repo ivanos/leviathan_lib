@@ -79,7 +79,11 @@ new_bridge(BridgeNum)->
 
 set_ip_address(Cid, Alias, IPAddress)->
     CPid = leviathan_docker:inspect_pid(Cid),
-    [leviathan_ip:netns_exec_ip_addr_add_dev(CPid,IPAddress ++ "/16",Alias)].   %% XXX hardcoded to /16
+    {ok,{A,B,_,_}} = inet:parse_ipv4_address(IPAddress),
+    Gateway = {A,B,0,1},
+    GatewayString = inet:ntoa(Gateway),
+    [leviathan_ip:netns_exec_ip_addr_add_dev(CPid,IPAddress ++ "/16",Alias), %% XXX hardcoded to /16
+     leviathan_ip:netns_exec_ip_route_add_default_via(CPid,GatewayString)].
 
 eval(CmdBundle)->
     EvalBundle = lists:map(fun(X)->Result = os:cmd(X), {X,Result} end,CmdBundle),
