@@ -24,3 +24,8 @@ inspect_pid
 	    "cid:"++Cid % for testing
     end.
     
+
+start(CType,Options,Cmd)->
+    "docker start -d " ++ Options ++ " -t " ++ CType ++ " " ++ Cmd.
+
+
