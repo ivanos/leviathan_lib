@@ -88,11 +88,11 @@ set_ip_address(Cid, Alias, IPAddress)->
 
 eval(CmdBundle)->
     EvalBundle = lists:map(fun(X)->Result = os:cmd(X), {X,Result} end,CmdBundle),
-    Output = lists:map(fun({Cmd,Output})->io:format("   Cmd: ~p~nOutput: ~p~n",[Cmd,Output]),Acc++[Ouput] end,EvalBundle).
+    lists:map(fun({Cmd,Output})->io:format("   Cmd: ~p~nOutput: ~p~n",[Cmd,Output]) end,EvalBundle).
 
 eval(CmdBundle,output)->
     EvalBundle = lists:map(fun(X)->Result = os:cmd(X), {X,Result} end,CmdBundle),
-    Output = lists:foldl(fun({Cmd,Output},Acc)->io:format("   Cmd: ~p~nOutput: ~p~n",[Cmd,Output]),Acc++[Ouput] end,EvalBundle,[]),
+    Output = lists:foldl(fun({Cmd,Output},Acc)->io:format("   Cmd: ~p~nOutput: ~p~n",[Cmd,Output]),Acc++[Output] end,EvalBundle,[]),
     Output.
     
     
