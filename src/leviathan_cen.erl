@@ -116,11 +116,12 @@ prepare_cens(#{cens := Cens}) ->
     %%     if a Cen has more than 2 containers, we'll create a bus
     %%
     lists:foreach(fun(CenMap)->
-			  #{wire_type := CenType} = CenMap,
+			  #{wire_type := CenType, 
+			    ip_address := IPAddress} = CenMap,
 			  case CenType of
 			      bus ->
 				  #{cenID := CenId} = CenMap,
-				  CmdBundle = leviathan_linux:new_bus(CenId),
+				  CmdBundle = leviathan_linux:new_bus(CenId,IPAddress),
 				  leviathan_linux:eval(CmdBundle);
 			      _ -> ok %% don't create a bus
 			  end

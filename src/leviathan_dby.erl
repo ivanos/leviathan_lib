@@ -30,12 +30,20 @@ import_binary(Host, Binary) ->
 
 % getters
 
+-spec get_bridge(string()) -> #{}.
+get_bridge(BridgeId) ->
+    dby:search(fun bridge/4,
+	       #{bridgeID => null,
+		 ipaddr => null}, 
+	       dby_bridge_id("host1",BridgeId), [{max_depth, 0}]).
+
 -spec get_cen(string()) -> #{}.
 get_cen(CenId) ->
+    #{ipaddr := IPAddress} = get_bridge(CenId),
     dby:search(fun linked_containers/4,
         #{cenID => null,
          wire_type => null,
-	 ipaddr => null,  %% does not route to outside
+	 ip_address => IPAddress,
          contIDs => []},
         dby_cen_id(CenId), [{max_depth, 1}]).
 
@@ -354,7 +362,8 @@ md_wire_type(<<"bus">>) ->
                                    ?MDVALUE(<<"contID">>, ContId)}).
 
 -define(MATCH_BRIDGE(BridgeId), #{?MDTYPE(<<"bridge">>),
-                                  ?MDVALUE(<<"bridgeID">>, BridgeId)}).
+                                  ?MDVALUE(<<"bridgeID">>, BridgeId),
+				  ?MDVALUE(<<"ipaddr">>, IPAddress)}).
 
 -define(MATCH_CEN(CenId, WireType), #{?MDTYPE(<<"cen">>),
                                        ?MDVALUE(<<"cenID">>, CenId),
@@ -374,6 +383,13 @@ md_wire_type(<<"bus">>) ->
 
 -define(MATCH_IPADDR(IpAddr), #{?MDTYPE(<<"ipaddr">>),
                                 ?MDVALUE(<<"ipaddr">>, IpAddr)}).
+
+bridge(_,?MATCH_BRIDGE(BridgeId),[], Acc)-> 
+    {continue, Acc#{bridgeID := binary_to_list(BridgeId),
+                    ipaddr := binary_to_list(IPAddress)}};
+bridge(_, _, _, Acc) ->
+    {continue, Acc}.
+    
 
 % dby:search function to return list of containers linked to an identifier.
 linked_containers(_, ?MATCH_CEN(CenId, WireType), [], Acc) ->

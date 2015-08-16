@@ -41,8 +41,9 @@ remove_netns(Cid)->
 %  Bus operations:
 %  By definition a bus as more than 2 containers connected 
 %  
-new_bus(CenId)->
+new_bus(CenId,IPAddress)->
     [leviathan_brctl:addbr(CenId),
+     leviathan_ip:addr_add_dev(IPAddress,CenId),
      leviathan_ifconfig:dev_up(CenId)].
 
 delete_bus(CenId)->
