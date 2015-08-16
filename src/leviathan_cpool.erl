@@ -25,13 +25,17 @@ import_file(Filename)->
 					} = CPool,
 				       Containers = run_containers(binary:bin_to_list(CTypeBin),
 								   StartWithNum),
-				       add_conts2cins(binlist2list(CinsBin),Containers,CinDict)
+				       add_conts2cins(cin2list(CinsBin),Containers,CinDict)
 			       end,dict:new(),CPoolList),
-    io:format("NewCinDicts:~n~p~n",[NewCinDicts]).
+    CinListBin = dict:fetch_keys(NewCinDicts),
+    NewCinMap = lists:foldl(fun(CinID,Acc)->Acc++[#{"cenID"=>CinID,"containerIDs"=>dict:fetch(CinID,NewCinDicts)}] end,[],CinListBin),
+    io:format("NewCinMap:~n~p~n",[NewCinMap]),
+    leviathan_dby:import_cens("host1",NewCinMap).
 
-binlist2list(BinList)->
+cin2list(BinList)->
     lists:map(fun(Elem)->
-		      binary:bin_to_list(Elem) end,BinList).
+		      #{<<"cinID">>:=CinId} = Elem,
+		      CinId end,BinList).
 
 add_conts2cins(CinList,Containers,CinDict)->
     lists:foldl(fun(Cin,Acc)->

@@ -3,7 +3,8 @@
 -on_load(install_iso8601/0).
 
 -export([import_file/2,
-         import_binary/2]).
+         import_binary/2,
+	 import_cens/2]).
 
 -export([get_cen/1,
          get_cont/2,
