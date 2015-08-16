@@ -27,8 +27,8 @@ start_containers(_,0,Acc)->
     Acc;
 start_containers(CType,Num,Acc) when Num > 0  ->
     CmdBundle = leviathan_docker:start(CType,"--net=none","/bin/bash"),
-    Result = leviathan_linux:eval(CmdBundle),
-    Acc ++ [Result].
+    Result = leviathan_linux:eval(CmdBundle,output),
+    Acc ++ Result.
     
 
 
