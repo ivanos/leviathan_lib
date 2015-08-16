@@ -13,6 +13,9 @@
 % "ea26d835c67e92f938d67019bf4404c9d528de18281dcb0eb90d1bc8d1d9a704",
 % "dc9ff7d787c679df962000ffb7fc335dd790e5a95eeba93747a4656227dfb5cf"]
 
+test()->
+	import_file("../../deps/leviathan_lib/cpool.json").
+
 import_file(Filename)->
     {ok, Binary} = file:read_file(Filename),
     CPoolsMap = jiffy:decode(Binary, [return_maps]),
@@ -30,7 +33,7 @@ import_file(Filename)->
     CinListBin = dict:fetch_keys(NewCinDicts),
     NewCinMap = lists:foldl(fun(CinID,Acc)->Acc++[#{"cenID"=>CinID,"containerIDs"=>dict:fetch(CinID,NewCinDicts)}] end,[],CinListBin),
     io:format("NewCinMap:~n~p~n",[NewCinMap]),
-    leviathan_dby:import_cens("host1",NewCinMap).
+    leviathan_dby:import_cens(<<"host1">>,NewCinMap).
 
 cin2list(BinList)->
     lists:map(fun(Elem)->
