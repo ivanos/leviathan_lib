@@ -13,6 +13,8 @@
 
 -define(PUBLISHER, atom_to_binary(?MODULE, utf8)).
 
+-include("leviathan_logger.hrl").
+
 % -----------------------------------------------------------------------------
 %
 % API
@@ -154,6 +156,7 @@ dby_link(E1, E2, Type) ->
 %% process decoded json
 
 import_cens(Host, CensJson) ->
+    ?DEBUG("CensJson:~n~p~n",[CensJson]),
     Context0 = #{
         topublish => [],
         count => #{}
