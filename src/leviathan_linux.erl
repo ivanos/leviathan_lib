@@ -92,8 +92,8 @@ eval(CmdBundle)->
 
 eval(CmdBundle,output)->
     EvalBundle = lists:map(fun(X)->Result = os:cmd(X), {X,Result} end,CmdBundle),
-    Output = lists:foldl(fun({Cmd,Output},Acc)->io:format("   Cmd: ~p~nOutput: ~p~n",[Cmd,Output]),Acc++[Output] end,EvalBundle,[]),
-    Output.
+    Results = lists:foldl(fun({Cmd,Output},Acc)->io:format("   Cmd: ~p~nOutput: ~p~n",[Cmd,Output]),Acc++[string:strip(Output,right,$\n)] end,[],EvalBundle),
+    Results.
     
     
     
