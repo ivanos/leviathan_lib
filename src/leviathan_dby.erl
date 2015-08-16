@@ -219,8 +219,8 @@ wire_cen(Context0, Host, CenId, [ContId1, ContId2]) ->
 wire_cen(Context, Host, CenId, ContainerIds) ->
     Context1 = topublish(Context,
         [
-            dby_cen(CenId, [wire_type_md(bus), status_md(pending),cen_ip_addr_md(cen_ip_addr(Context))]),
-            dby_bridge(Host, CenId, [status_md(pending)])
+            dby_cen(CenId, [wire_type_md(bus), status_md(pending)]),
+            dby_bridge(Host, CenId, [status_md(pending),cen_ip_addr_md(cen_ip_addr(Context))])
         ]),
     lists:foldl(wire_cen_to_container(Host, CenId), Context1, ContainerIds).
 
@@ -322,7 +322,7 @@ status_md(destroy) ->
     {<<"status">>, <<"destroy">>}.
 
 cen_ip_addr_md(IPAddress)->
-    {<<"status">>,IPAddress}.
+    {<<"ipaddr">>,IPAddress}.
 
 
 wire_type_md(null) ->
