@@ -43,7 +43,7 @@ remove_netns(Cid)->
 %  
 new_bus(CenId,IPAddress)->
     [leviathan_brctl:addbr(CenId),
-     leviathan_ip:addr_add_dev(IPAddress,CenId),
+     leviathan_ip:addr_add_dev(IPAddress ++ "/16",CenId),
      leviathan_ifconfig:dev_up(CenId)].
 
 delete_bus(CenId)->
