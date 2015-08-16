@@ -4,7 +4,7 @@
 
 -include("leviathan_logger.hrl").
 
-%% same data from run_containers(...)
+%% some data from run_containers(...)
 %%
 %["bd17dea31b0ae32b3c3bf1f98888ec330d2bf154c705154e3cd788f56b946d4b",
 % "e523c61a5348646660051bcb3cd5c9c4854bc21a14e238a69e4f61a3284ffb33",
@@ -18,15 +18,24 @@ import_file(Filename)->
     CPoolsMap = jiffy:decode(Binary, [return_maps]),
     io:format("CPools = ~p~n",[CPoolsMap]),
     #{<<"cpoolList">> := CPoolList} = CPoolsMap,
-    lists:foreach(fun(CPool)->
-			  #{<<"cins">> := CinsBin,
-			    <<"start_with">> := StartWithNum,
-			    <<"type">> := CTypeBin
-			   } = CPool,
-			  run_containers(binary:bin_to_list(CTypeBin),
-					   StartWithNum)
-		  end,CPoolList).
+    NewCinDicts  = lists:foldl(fun(CPool,CinDict)->
+				       #{<<"cins">> := CinsBin,
+					 <<"start_with">> := StartWithNum,
+					 <<"type">> := CTypeBin
+					} = CPool,
+				       Containers = run_containers(binary:bin_to_list(CTypeBin),
+								   StartWithNum),
+				       add_conts2cins(binlist2list(CinsBin),Containers,CinDict)
+			       end,dict:new(),CPoolList),
+    io:format("NewCinDicts:~n~p~n",[NewCinDicts]).
 
+binlist2list(BinList)->
+    lists:map(fun(Elem)->
+		      binary:bin_to_list(Elem) end,BinList).
+
+add_conts2cins(CinList,Containers,CinDict)->
+    lists:foldl(fun(Cin,Acc)->
+			dict:append_list(Cin,Containers,Acc) end,CinDict,CinList).
 
 run_containers(CType,Num) when Num > 0 ->
     run_containers(CType,Num,[]).
