@@ -25,7 +25,7 @@ inspect_pid
     end.
     
 
-start(CType,Options,Cmd)->
-    "docker start -d " ++ Options ++ " -t " ++ CType ++ " " ++ Cmd.
+run(CType,Options,Cmd)->
+    "docker run -d " ++ Options ++ " -t " ++ CType ++ " " ++ Cmd.
 
 
