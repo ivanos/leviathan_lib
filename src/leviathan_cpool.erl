@@ -18,6 +18,9 @@ test()->
 
 import_file(Filename)->
     {ok, Binary} = file:read_file(Filename),
+    import_binary(Binary).
+
+import_binary(Binary)->
     CPoolsMap = jiffy:decode(Binary, [return_maps]),
     io:format("CPools = ~p~n",[CPoolsMap]),
     #{<<"cpoolList">> := CPoolList} = CPoolsMap,
@@ -33,7 +36,9 @@ import_file(Filename)->
     CinListBin = dict:fetch_keys(NewCinDicts),
     NewCinMap = lists:foldl(fun(CinID,Acc)->Acc++[#{<<"cenID">> => CinID,<<"containerIDs">> =>dict:fetch(CinID,NewCinDicts)}] end,[],CinListBin),
     io:format("NewCinMap:~n~p~n",[NewCinMap]),
-    leviathan_dby:import_cens(<<"host1">>,NewCinMap).
+    leviathan_dby:import_cens(<<"host1">>,NewCinMap),
+    leviathan_cen:prepare(lists:map(fun(CinId)->
+					    binary:bin_to_list(CinId) end,CinListBin)).
 
 cin2list(BinList)->
     lists:map(fun(Elem)->
