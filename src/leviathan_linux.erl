@@ -47,7 +47,8 @@ new_bus(CenId,IPAddress)->
      leviathan_ifconfig:dev_up(CenId)].
 
 delete_bus(CenId)->
-    [leviathan_brctl:delbr(CenId)].
+    [leviathan_ifconfig:dev_down(CenId),
+     leviathan_brctl:delbr(CenId)].
 
 %
 %

@@ -7,3 +7,5 @@
 dev_up(DevName)->
     "ifconfig " ++ DevName ++ " up".
     
+dev_down(DevName)->
+    "ifconfig " ++ DevName ++ " down".
