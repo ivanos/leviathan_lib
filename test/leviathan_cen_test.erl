@@ -39,8 +39,8 @@ decode_jiffy3() ->
     Cont1 = cont_map(<<"c1">>, [<<"cen1">>]),
     Cont2 = cont_map(<<"c2">>, [<<"cen1">>]),
     Wire = [
-        endpoint(<<"c1">>, <<"c1.0i">>, in, <<"eth0">>, <<"10.7.0.10">>),
-        endpoint(<<"c2">>, <<"c2.0i">>, in, <<"eth0">>, <<"10.7.0.11">>)
+        endpoint(<<"c1">>, <<"c1.0i">>, in, <<"cen1">>, <<"10.7.0.10">>),
+        endpoint(<<"c2">>, <<"c2.0i">>, in, <<"cen1">>, <<"10.7.0.11">>)
     ],
     #{censmap := #{cens := Cens},
       contsmap := #{conts := Conts},
@@ -56,15 +56,15 @@ decode_jiffy4() ->
     Cont2 = cont_map(<<"c2">>, [<<"cen1">>]),
     Cont3 = cont_map(<<"c3">>, [<<"cen1">>]),
     Wire1 = [
-        endpoint(<<"c1">>, <<"c1.0i">>, in, <<"eth0">>, <<"10.7.0.10">>),
+        endpoint(<<"c1">>, <<"c1.0i">>, in, <<"cen1">>, <<"10.7.0.10">>),
         endpoint(<<"cen1">>, <<"c1.0o">>, out)
     ],
     Wire2 = [
-        endpoint(<<"c2">>, <<"c2.0i">>, in, <<"eth0">>, <<"10.7.0.11">>),
+        endpoint(<<"c2">>, <<"c2.0i">>, in, <<"cen1">>, <<"10.7.0.11">>),
         endpoint(<<"cen1">>, <<"c2.0o">>, out)
     ],
     Wire3 = [
-        endpoint(<<"c3">>, <<"c3.0i">>, in, <<"eth0">>, <<"10.7.0.12">>),
+        endpoint(<<"c3">>, <<"c3.0i">>, in, <<"cen1">>, <<"10.7.0.12">>),
         endpoint(<<"cen1">>, <<"c3.0o">>, out)
     ],
     #{censmap := #{cens := Cens},

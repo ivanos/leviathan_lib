@@ -306,19 +306,17 @@ wire_cen(Context0, CenId, [ContId1, ContId2]) ->
     % wire the containers directly if there are two containers in the CEN
     Context1 = count_cont(Context0, CenId),
     {Context2, ContId1InEndpoint} = next_in_endpoint(Context1, ContId1),
-    {Context3, Cont1Eth} = next_eth(Context2, ContId1),
-    Cont1IpAddr = ip_addr(Context3, CenId),
-    Context4 = count_cont(Context3, CenId),
-    {Context5, ContId2InEndpoint} = next_in_endpoint(Context4, ContId2),
-    {Context6, Cont2Eth} = next_eth(Context5, ContId2),
-    Cont2IpAddr = ip_addr(Context6, CenId),
+    Cont1IpAddr = ip_addr(Context2, CenId),
+    Context3 = count_cont(Context2, CenId),
+    {Context4, ContId2InEndpoint} = next_in_endpoint(Context3, ContId2),
+    Cont2IpAddr = ip_addr(Context4, CenId),
     maps_append(wires, [#{
         endID => ContId1InEndpoint,
         side => in,
         dest => #{
                     type => cont,
                     id => ContId1,
-                    alias => Cont1Eth,
+                    alias => CenId,
                     ip_address => Cont1IpAddr
                 }
      },
@@ -328,11 +326,11 @@ wire_cen(Context0, CenId, [ContId1, ContId2]) ->
         dest => #{
                     type => cont,
                     id => ContId2,
-                    alias => Cont2Eth,
+                    alias => CenId,
                     ip_address => Cont2IpAddr
                 }
      }
-    ], Context6);
+    ], Context4);
 wire_cen(Context, CenId, ContainerIds) ->
     lists:foldl(wire_cen_to_container(CenId), Context, ContainerIds).
 
@@ -341,15 +339,14 @@ wire_cen_to_container(CenId) ->
         Context1 = count_cont(Context0, CenId),
         {Context2, InEndpoint} = next_in_endpoint(Context1, ContId),
         {Context3, OutEndpoint} = next_out_endpoint(Context2, ContId),
-        {Context4, Eth} = next_eth(Context3, ContId),
-        IpAddr = ip_addr(Context4, CenId),
+        IpAddr = ip_addr(Context3, CenId),
         maps_append(wires, [#{
             endID => InEndpoint,
             side => in,
             dest => #{
                         type => cont,
                         id => ContId,
-                        alias => Eth,
+                        alias => CenId,
                         ip_address => IpAddr
                     }
          },
@@ -361,7 +358,7 @@ wire_cen_to_container(CenId) ->
                         id => CenId
                     }
          }
-        ], Context4)
+        ], Context3)
     end.
 
 % publish context helpers
@@ -375,10 +372,6 @@ count_cen(Context) ->
 count_cont(Context, CenId) ->
     {Context1, _} = next_count(Context, {conts, CenId}, fun(_) -> ok end),
     Context1.
-
-% get next eth port for a container
-next_eth(Context, ContId) ->
-    next_count(Context, {eth, ContId}, fun eth_name/1).
 
 % get next inside port for a container
 next_in_endpoint(Context, ContId) ->
@@ -407,10 +400,6 @@ cen_ip_addr(CenCount) ->
     leviathan_cin:cen_ip_address(CenCount).
 
 % name formatters
-eth_name(N) ->
-    Nbinary = integer_to_binary(N),
-    <<"eth", Nbinary/binary>>.
-
 in_endpoint_name(ContId, N) ->
     endpoint_name(ContId, <<"i">>, N).
 
