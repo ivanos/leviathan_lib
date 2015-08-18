@@ -89,6 +89,7 @@ Key | Value | Description
 cenID | CEN ID | CEN Identifier
 wiring_type | bus, wire, or null | type of wiring used
 contIDs | list of container IDs | containers in the CEN
+ip_address | string | (only for bus) IP address of the bridge
 
 Example:
 ```
@@ -187,6 +188,7 @@ Bridge metadata:
 Key | Value | Description
 --- | ----- | -----------
 status | pending, preparing, ready | Status of the bridge
+ipaddr | String | IP Address of the bridge
 
 Ip Address metadata:
 

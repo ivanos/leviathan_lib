@@ -234,12 +234,13 @@ decode_jiffy(CensJson) ->
         wiremap => #{wires => Wires}
     }.
 
+% cens
 cens_from_jiffy(CensJson) ->
-    lists:foldl(
-        fun(#{<<"cenID">> := Cen, <<"containerIDs">> := Conts}, Acc) ->
-            [#{cenID => Cen, wire_type => wire_type(Conts), contIDs => Conts}
-                                                                        | Acc]
-        end, [], CensJson).
+    {_, Cens} = lists:foldl(
+        fun(#{<<"cenID">> := Cen, <<"containerIDs">> := Conts}, {Count, Acc}) ->
+            {Count + 1, [cen(Count, Cen, wire_type(Conts), Conts) | Acc]}
+        end, {1, []}, CensJson),
+    Cens.
 
 wire_type(Conts) when length(Conts) < 2 ->
     null;
@@ -248,6 +249,17 @@ wire_type(Conts) when length(Conts)  == 2 ->
 wire_type(Conts) when length(Conts)  > 2 ->
     bus.
 
+cen(Count, Cen, bus, Conts) ->
+     #{cenID => Cen,
+       wire_type => bus,
+       contIDs => Conts,
+       ipaddr => cen_ip_addr(Count)};
+cen(_, Cen, WireType, Conts) ->
+     #{cenID => Cen,
+       wire_type => WireType,
+       contIDs => Conts}.
+
+% conts
 conts_from_jiffy(CensJson) ->
     Pairs = cen_cont_pairs(CensJson),
     Index = lists:foldl(
@@ -354,10 +366,6 @@ wire_cen_to_container(CenId) ->
 
 % publish context helpers
 
-% add to the list to publish to the end of the list.
-topublish(Context = #{topublish := ToPublish}, AddToPublish) ->
-    Context#{topublish := [ToPublish, AddToPublish]}.
-
 % mark the next cen
 count_cen(Context) ->
     {Context1, _} = next_count(Context, cen, fun(_) -> ok end),
@@ -395,8 +403,7 @@ ip_addr(#{count := CountMap}, CenId) ->
     leviathan_cin:ip_address(CenCount, ContCount).
 
 % format ip addr for cens
-cen_ip_addr(#{count := CountMap}) ->
-    CenCount = maps:get(cen, CountMap),
+cen_ip_addr(CenCount) ->
     leviathan_cin:cen_ip_address(CenCount).
 
 % name formatters

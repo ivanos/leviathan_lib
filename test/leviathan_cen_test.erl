@@ -51,7 +51,7 @@ decode_jiffy3() ->
 
 decode_jiffy4() ->
     Json = [json_cen(<<"cen1">>, [<<"c1">>, <<"c2">>, <<"c3">>])],
-    Cen1 = cen_map(<<"cen1">>, [<<"c1">>, <<"c2">>, <<"c3">>], bus),
+    Cen1 = cen_map(<<"cen1">>, [<<"c1">>, <<"c2">>, <<"c3">>], bus, <<"10.7.0.1">>),
     Cont1 = cont_map(<<"c1">>, [<<"cen1">>]),
     Cont2 = cont_map(<<"c2">>, [<<"cen1">>]),
     Cont3 = cont_map(<<"c3">>, [<<"cen1">>]),
@@ -86,6 +86,9 @@ cen_map(CenId, ContIds, WireType) ->
       wire_type => WireType,
       contIDs => ContIds}.
 
+cen_map(CenId, ContIds, WireType, IpAddr) ->
+    (cen_map(CenId, ContIds, WireType))#{ipaddr => IpAddr}.
+
 cont_map(ContId, CenIds) ->
     #{contID => ContId,
       cens => CenIds}.
@@ -108,4 +111,4 @@ tr() ->
     dbg:start(),
     dbg:tracer(),
     dbg:p(all, c),
-    dbg:tpl(levaithan_cen, []).
+    dbg:tpl(leviathan_cen, []).

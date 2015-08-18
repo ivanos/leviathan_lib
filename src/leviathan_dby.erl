@@ -4,9 +4,7 @@
 -on_load(install_iso8601/0).
 -endif.
 
--export([import_file/2,
-         import_binary/2,
-	 import_cens/2]).
+-export([import_cens/2]).
 
 -export([get_cen/1,
          get_cont/2,
@@ -25,13 +23,11 @@
 
 % json file
 
-import_file(Host, Filename) ->
-    {ok, Binary} = file:read_file(Filename),
-    import_binary(Host, Binary).
-
-import_binary(Host, Binary) ->
-    #{<<"cenList">> := Cens} = jiffy:decode(Binary, [return_maps]),
-    import_cens(Host, Cens).
+import_cens(Host, CensMap) ->
+    ToPublish = [container_from_censmap(Host, CensMap),
+                 cens_from_censmap(Host, CensMap),
+                 wires_from_censmap(Host, CensMap)],
+    dby:publish(?PUBLISHER, lists:flatten(ToPublish), [persistent]).
 
 % getters
 
@@ -147,6 +143,10 @@ dby_endpoint_to_bridge(Host, EndpointId, BridgeId) ->
     dby_link(dby_endpoint_id(Host, EndpointId),
                 dby_bridge_id(Host, BridgeId), <<"bound_to">>).
 
+dby_bridge_to_cen(Host, BridgeId, CenId) ->
+    dby_link(dby_bridge_id(Host, BridgeId), dby_cen_id(CenId),
+                                                        <<"policy_engine">>).
+
 dby_endpoint_to_endpoint(Host, EndpointId1, EndpointId2, Type) ->
     dby_link(dby_endpoint_id(Host, EndpointId1),
              dby_endpoint_id(Host, EndpointId2), Type).
@@ -155,176 +155,76 @@ dby_endpoint_to_endpoint(Host, EndpointId1, EndpointId2, Type) ->
 dby_link(E1, E2, Type) ->
     {E1, E2, [{<<"type">>, Type}]}.
 
-%% process decoded json
-
-import_cens(Host, CensJson) ->
-    ?DEBUG("CensJson:~n~p~n",[CensJson]),
-    Context0 = #{
-        topublish => [],
-        count => #{}
-    },
-    Context1 = container_from_cens_json(Context0, Host, CensJson),
-    #{topublish := ToPublish} = cens_from_cens_json(Context1, Host, CensJson),
-    dby:publish(?PUBLISHER, lists:flatten(ToPublish), [persistent]).
-
 % prepare to publish the list of containers
-container_from_cens_json(Context, Host, CensJson) ->
-    ContSet = lists:foldl(
-        fun(#{<<"containerIDs">> := ContainerIds}, Acc) ->
-            sets:union(Acc, sets:from_list(ContainerIds));
-           (_, _) ->
-            throw(bad_json)
-        end, sets:new(), CensJson),
-    ToPublish = sets:fold(
-        fun(ContId, Acc) ->
-            [Acc, dby_cont(Host, ContId, [status_md(pending)])]
-        end, [], ContSet),
-    topublish(Context, ToPublish).
+container_from_censmap(Host, #{contsmap := #{conts := Conts}}) ->
+    lists:map(
+        fun(#{contID := ContId}) ->
+            dby_cont(Host, ContId, [status_md(pending)])
+        end, Conts).
 
-% prepare to publish cens and the wiring
-cens_from_cens_json(Context0, Host, CensJson) ->
-    lists:foldl(
-        fun(#{<<"cenID">> := CenId, <<"containerIDs">> := ContIds}, Context) ->
-            wire_cen(count_cen(Context), Host, CenId, ContIds);
-           (_, _) ->
-            throw(bad_json)
-        end, Context0, CensJson).
-
-% wiring helpers
-
-wire_cen(Context, _, CenId, []) ->
-    % no wire the CEN has no containers
-    topublish(Context, [
-        dby_cen(CenId, [wire_type_md(null), status_md(pending)])
-    ]);
-wire_cen(Context, Host, CenId, [ContId]) ->
-    % no wire if the CEN has zero or one containers
-    topublish(Context, [
-        dby_cen(CenId, [wire_type_md(null), status_md(pending)]),
-        dby_cen_to_container(Host, CenId, ContId)
-    ]);
-wire_cen(Context0, Host, CenId, [ContId1, ContId2]) ->
-    % wire the containers directly if there are two containers in the CEN
-    Context1 = count_cont(Context0, CenId),
-    {Context2, ContId1InEndpoint} = next_in_endpoint(Context1, ContId1),
-    {Context3, Cont1Eth} = next_eth(Context2, ContId1),
-    Cont1IpAddr = ip_addr(Context3, CenId),
-    Context4 = count_cont(Context3, CenId),
-    {Context5, ContId2InEndpoint} = next_in_endpoint(Context4, ContId2),
-    {Context6, Cont2Eth} = next_eth(Context5, ContId2),
-    Cont2IpAddr = ip_addr(Context6, CenId),
-    topublish(Context6, [
-        dby_cen(CenId, [wire_type_md(wire), status_md(pending)]),
-        dby_cen_to_container(Host, CenId, ContId1),
-        dby_cen_to_container(Host, CenId, ContId2),
-        dby_endpoint(Host, ContId1InEndpoint, inside,
-                                [alias_md(Cont1Eth), status_md(pending)]),
-        dby_ipaddr(Cont1IpAddr),
-        dby_endpoint_to_ipaddr(Host, ContId1InEndpoint, Cont1IpAddr),
-        dby_endpoint(Host, ContId2InEndpoint, inside,
-                                [alias_md(Cont2Eth), status_md(pending)]),
-        dby_ipaddr(Cont2IpAddr),
-        dby_endpoint_to_ipaddr(Host, ContId2InEndpoint, Cont2IpAddr),
-        dby_endpoint_to_container(Host, ContId1InEndpoint, ContId1),
-        dby_endpoint_to_container(Host, ContId2InEndpoint, ContId2),
-        dby_endpoint_to_endpoint(Host, ContId1InEndpoint,
-                                       ContId2InEndpoint, <<"connected_to">>)
-    ]);
-wire_cen(Context, Host, CenId, ContainerIds) ->
-    Context1 = topublish(Context,
-        [
-            dby_cen(CenId, [wire_type_md(bus), status_md(pending)]),
-            dby_bridge(Host, CenId, [status_md(pending),cen_ip_addr_md(cen_ip_addr(Context))])
-        ]),
-    lists:foldl(wire_cen_to_container(Host, CenId), Context1, ContainerIds).
-
-wire_cen_to_container(Host, CenId) ->
-    fun(ContId, Context0) ->
-        Context1 = count_cont(Context0, CenId),
-        {Context2, InEndpoint} = next_in_endpoint(Context1, ContId),
-        {Context3, OutEndpoint} = next_out_endpoint(Context2, ContId),
-        {Context4, Eth} = next_eth(Context3, ContId),
-        IpAddr = ip_addr(Context4, CenId),
-        topublish(Context4,
+% prepare to publish cens
+cens_from_censmap(Host, #{censmap := #{cens := Cens}}) ->
+    lists:map(
+        fun(#{cenID := CenId,
+              wire_type := bus,
+              contIDs := ContIds,
+              ipaddr := BridgeIpAddr}) ->
             [
-                dby_cen_to_container(Host, CenId, ContId),
-                dby_endpoint(Host, InEndpoint, inside,
-                                        [alias_md(Eth), status_md(pending)]),
-                dby_ipaddr(IpAddr),
-                dby_endpoint_to_ipaddr(Host, InEndpoint, IpAddr),
-                dby_endpoint_to_container(Host, InEndpoint, ContId),
-                dby_endpoint(Host, OutEndpoint, outside, [status_md(pending)]),
-                dby_endpoint_to_endpoint(Host, InEndpoint,
-                                               OutEndpoint, <<"veth_peer">>),
-                dby_endpoint_to_bridge(Host, OutEndpoint, CenId)
-            ])
-    end.
+                link_cen_to_containers(Host, CenId, ContIds, bus),
+                dby_bridge(Host, CenId, [status_md(pending),
+                                         cen_ip_addr_md(BridgeIpAddr)]),
+                dby_bridge_to_cen(Host, CenId, CenId)
+            ];
+           (#{cenID := CenId,
+              wire_type := WireType,
+              contIDs := ContIds}) ->
+            link_cen_to_containers(Host, CenId, ContIds, WireType)
+        end, Cens).
 
-% publish context helpers
+link_cen_to_containers(Host, CenId, ContIds, WireType) ->
+    [
+        dby_cen(CenId, [wire_type_md(WireType), status_md(pending)]),
+        lists:map(
+            fun(ContId) ->
+                dby_cen_to_container(Host, CenId, ContId)
+            end, ContIds)
+    ].
 
-% add to the list to publish to the end of the list.
-topublish(Context = #{topublish := ToPublish}, AddToPublish) ->
-    Context#{topublish := [ToPublish, AddToPublish]}.
+% prepare to publish wires
+wires_from_censmap(Host, #{wiremap := #{wires := Wires}}) ->
+    lists:foldl(
+        fun([EndMap1, EndMap2], Acc) ->
+            [wire_cen(Host, EndMap1, EndMap2) | Acc]
+        end, [], Wires).
 
-% mark the next cen
-count_cen(Context) ->
-    {Context1, _} = next_count(Context, cen, fun(_) -> ok end),
-    Context1.
+wire_cen(Host, Endpoint1 = #{endID := EndId1},
+               Endpoint2 = #{endID := EndId2}) ->
+    [
+        endpoint(Host, Endpoint1),
+        endpoint(Host, Endpoint2),
+        dby_endpoint_to_endpoint(Host, EndId1, EndId2, <<"conntected_to">>)
+    ].
 
-% mark next container in cen
-count_cont(Context, CenId) ->
-    {Context1, _} = next_count(Context, {conts, CenId}, fun(_) -> ok end),
-    Context1.
-
-% get next eth port for a container
-next_eth(Context, ContId) ->
-    next_count(Context, {eth, ContId}, fun eth_name/1).
-
-% get next inside port for a container
-next_in_endpoint(Context, ContId) ->
-    FormatFn = fun(N) -> in_endpoint_name(ContId, N) end,
-    next_count(Context, {in_endpoint, ContId}, FormatFn).
-
-% get next outside port for a container
-next_out_endpoint(Context, ContId) ->
-    FormatFn = fun(N) -> out_endpoint_name(ContId, N) end,
-    next_count(Context, {out_endpoint, ContId}, FormatFn).
-
-% helper
-next_count(Context = #{count := CountMap}, Key, FormatFn) ->
-    N = maps:get(Key, CountMap, 0),
-    {maps:update(count, maps:put(Key, N + 1,  CountMap), Context),
-     FormatFn(N)}.
-
-% format ip addr
-ip_addr(#{count := CountMap}, CenId) ->
-    CenCount = maps:get(cen, CountMap),
-    ContCount = maps:get({conts, CenId}, CountMap),
-    leviathan_cin:ip_address(CenCount, ContCount).
-
-% format ip addr for cens
-cen_ip_addr(#{count := CountMap}) ->
-    CenCount = maps:get(cen, CountMap),
-    leviathan_cin:cen_ip_address(CenCount).
-
-% name formatters
-eth_name(N) ->
-    Nbinary = integer_to_binary(N),
-    <<"eth", Nbinary/binary>>.
-
-in_endpoint_name(ContId, N) ->
-    endpoint_name(ContId, <<"i">>, N).
-
-out_endpoint_name(ContId, N) ->
-    endpoint_name(ContId, <<"o">>, N).
-
-endpoint_name(ContId, Side, N) ->
-    Nbinary = integer_to_binary(N),
-    <<ContId/binary, $., Nbinary/binary, Side/binary>>.
-
-% metadata helpers
-alias_md(Alias) ->
-    {<<"alias">>, Alias}.
+endpoint(Host, #{endID := EndId,
+                 side := Side,
+                 dest := #{type := cont,
+                           id := ContId,
+                           alias := Eth,
+                           ip_addres := IpAddr}}) ->
+    [
+        dby_endpoint(Host, EndId, Side, [alias_md(Eth), status_md(pending)]),
+        dby_ipaddr(IpAddr),
+        dby_endpoint_to_ipaddr(Host, EndId, IpAddr),
+        dby_endpoint_to_container(Host, EndId, ContId)
+    ];
+endpoint(Host, #{endID := EndId,
+                 side := Side,
+                 dest := #{type := cen,
+                           id := CenId}}) ->
+    [
+        dby_endpoint(Host, EndId, Side, [status_md(pending)]),
+        dby_endpoint_to_bridge(Host, EndId, CenId)
+    ].
 
 status_md(pending) ->
     {<<"status">>, <<"pending">>};
@@ -335,9 +235,8 @@ status_md(ready) ->
 status_md(destroy) ->
     {<<"status">>, <<"destroy">>}.
 
-cen_ip_addr_md(IPAddress)->
-    {<<"ipaddr">>,IPAddress}.
-
+cen_ip_addr_md(IPAddress) ->
+    {<<"ipaddr">>, IPAddress}.
 
 wire_type_md(null) ->
     {<<"wire_type">>, null};
@@ -345,6 +244,9 @@ wire_type_md(wire) ->
     {<<"wire_type">>, <<"wire">>};
 wire_type_md(bus) ->
     {<<"wire_type">>, <<"bus">>}.
+
+alias_md(Alias) ->
+    {<<"alias">>, Alias}.
 
 endpoint_side_md(inside) ->
     {<<"side">>, <<"in">>};
