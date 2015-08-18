@@ -205,22 +205,20 @@ wire_cen(Context0, Host, CenId, [ContId1, ContId2]) ->
     % wire the containers directly if there are two containers in the CEN
     Context1 = count_cont(Context0, CenId),
     {Context2, ContId1InEndpoint} = next_in_endpoint(Context1, ContId1),
-    {Context3, Cont1Eth} = next_eth(Context2, ContId1),
-    Cont1IpAddr = ip_addr(Context3, CenId),
-    Context4 = count_cont(Context3, CenId),
-    {Context5, ContId2InEndpoint} = next_in_endpoint(Context4, ContId2),
-    {Context6, Cont2Eth} = next_eth(Context5, ContId2),
-    Cont2IpAddr = ip_addr(Context6, CenId),
-    topublish(Context6, [
+    Cont1IpAddr = ip_addr(Context2, CenId),
+    Context3 = count_cont(Context2, CenId),
+    {Context4, ContId2InEndpoint} = next_in_endpoint(Context3, ContId2),
+    Cont2IpAddr = ip_addr(Context4, CenId),
+    topublish(Context4, [
         dby_cen(CenId, [wire_type_md(wire), status_md(pending)]),
         dby_cen_to_container(Host, CenId, ContId1),
         dby_cen_to_container(Host, CenId, ContId2),
         dby_endpoint(Host, ContId1InEndpoint, inside,
-                                [alias_md(Cont1Eth), status_md(pending)]),
+                                [alias_md(CenId), status_md(pending)]),
         dby_ipaddr(Cont1IpAddr),
         dby_endpoint_to_ipaddr(Host, ContId1InEndpoint, Cont1IpAddr),
         dby_endpoint(Host, ContId2InEndpoint, inside,
-                                [alias_md(Cont2Eth), status_md(pending)]),
+                                [alias_md(CenId), status_md(pending)]),
         dby_ipaddr(Cont2IpAddr),
         dby_endpoint_to_ipaddr(Host, ContId2InEndpoint, Cont2IpAddr),
         dby_endpoint_to_container(Host, ContId1InEndpoint, ContId1),
@@ -241,13 +239,12 @@ wire_cen_to_container(Host, CenId) ->
         Context1 = count_cont(Context0, CenId),
         {Context2, InEndpoint} = next_in_endpoint(Context1, ContId),
         {Context3, OutEndpoint} = next_out_endpoint(Context2, ContId),
-        {Context4, Eth} = next_eth(Context3, ContId),
-        IpAddr = ip_addr(Context4, CenId),
-        topublish(Context4,
+        IpAddr = ip_addr(Context3, CenId),
+        topublish(Context3,
             [
                 dby_cen_to_container(Host, CenId, ContId),
                 dby_endpoint(Host, InEndpoint, inside,
-                                        [alias_md(Eth), status_md(pending)]),
+                                        [alias_md(CenId), status_md(pending)]),
                 dby_ipaddr(IpAddr),
                 dby_endpoint_to_ipaddr(Host, InEndpoint, IpAddr),
                 dby_endpoint_to_container(Host, InEndpoint, ContId),
@@ -273,10 +270,6 @@ count_cen(Context) ->
 count_cont(Context, CenId) ->
     {Context1, _} = next_count(Context, {conts, CenId}, fun(_) -> ok end),
     Context1.
-
-% get next eth port for a container
-next_eth(Context, ContId) ->
-    next_count(Context, {eth, ContId}, fun eth_name/1).
 
 % get next inside port for a container
 next_in_endpoint(Context, ContId) ->
@@ -306,10 +299,6 @@ cen_ip_addr(#{count := CountMap}) ->
     leviathan_cin:cen_ip_address(CenCount).
 
 % name formatters
-eth_name(N) ->
-    Nbinary = integer_to_binary(N),
-    <<"eth", Nbinary/binary>>.
-
 in_endpoint_name(ContId, N) ->
     endpoint_name(ContId, <<"i">>, N).
 
