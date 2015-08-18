@@ -48,8 +48,37 @@ To test it:
 4. Check the Dobby Visualizer
 [http://localhost:8080/static/www/index.html](http://localhost:8080/static/www/index.html)
 
-> It's not possible to see all the CENs simultaneously as the visualizer
-> can only display one root node at once.
+It's not possible to see all the CENs simultaneously as the visualizer
+can only display one root node at once.
+
+## JSON format example
+```
+{"cenList":
+ [{
+     "cenID" : "cen1",
+     "containerIDs" : [ "c1","c2","c13","c14"]
+  },
+  {
+      "cenID":"cen2",
+      "containerIDs":["c4","c5","c6","c7"]
+  },
+  {
+      "cenID":"cen3",
+      "containerIDs":["c15","c16","c9","c10","c11"]
+  },
+  {
+      "cenID":"cen4",
+      "containerIDs":["c11","c12"]
+  },
+  {
+      "cenID":"cen5",
+      "containerIDs":["c2","c3"]
+  }]
+}
+```
+Where:
+* `cenID` is the CEN identifier
+* `containerIDs` is a list of container identifiers
 
 ## Leviathan Erlang Data Structures
 
@@ -83,6 +112,7 @@ A Wire is represented by a pair of maps in a list. Each map has:
 Key | Value | Description
 --- | ----- | -----------
 endID | endpoint | Endpoint identifier (description above)
+side | in or out | desintation is inside or outside the container
 dest | destination map | See below
 
 A destination map:
@@ -97,25 +127,29 @@ ip_address | string | (only for containers) IP address for interface
 Examples:
 ```
 [#{endID =>"c1.0i",
+   side => in,
    dest => #{type => cont,
              id =>"c1",
              alias =>"eth0",
              ip_address => "10.8.2.13"}},
  #{endID =>"c1.0o",
+   side => out,
    dest => #{type => cen,
              id =>"cen1"}}]
 ```
 ```
 [#{endID =>"c2.2i",
+   side => in,
    dest => #{type => cont,
              id =>"c2",
              alias =>"eth2",
              ip_address => "10.9.2.13"}},
  #{endID =>"c4.0i",
-  dest => #{type => cont,
-            id =>"c4",
-            alias =>"eth0",
-            ip_address => "10.9.2.14"}}]
+   side => in,
+   dest => #{type => cont,
+             id =>"c4",
+             alias =>"eth0",
+             ip_address => "10.9.2.14"}}]
 ```
 
 ## Dobby Data Model

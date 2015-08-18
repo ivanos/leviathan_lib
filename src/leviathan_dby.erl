@@ -1,6 +1,8 @@
 -module(leviathan_dby).
 
+-ifndef(TEST).
 -on_load(install_iso8601/0).
+-endif.
 
 -export([import_file/2,
          import_binary/2,
