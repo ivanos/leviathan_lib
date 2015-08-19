@@ -43,7 +43,7 @@ To test it:
    2. run with `make run cookie=dobby_allinone
 3. Import the `cen.json`
    ```erlang
-   leviathan_cen:import_cen_to_dobby("cen.json").
+   leviathan_cen:import_file("host1", "cen.json").
    ```
 4. Check the Dobby Visualizer
 [http://localhost:8080/static/www/index.html](http://localhost:8080/static/www/index.html)
