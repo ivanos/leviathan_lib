@@ -222,6 +222,113 @@ destroy_wire_end(#{dest := #{type := cont, id := ContId, alias := Alias}}) ->
 
 % -----------------------------------------------------------------------------
 %
+% Manipulate the Leviathan Map structure
+%
+% -----------------------------------------------------------------------------
+
+-define(LM_VALUE(Map, Key, Value), #{Map := #{Key := Value}}).
+-define(LM_CENS(Value), ?LM_VALUE(censmap, cens, Value)).
+-define(LM_CONTS(Value), ?LM_VALUE(contsmap, conts, Value)).
+-define(LM_WIRES(Value), ?LM_VALUE(wiremap, wires, Value)).
+
+-define(LM_SET(Map, Key, Value), #{Map := #{Key => Value}}).
+-define(LM_SET_CENS(Value), ?LM_SET(censmap, cens, Value)).
+-define(LM_SET_CONTS(Value), ?LM_SET(contsmap, conts, Value)).
+-define(LM_SET_WIRES(Value), ?LM_SET(wiremap, wires, Value)).
+
+% Add container to LM
+lm_add_container(CenId, ContId, LM0) ->
+    LM1 = add_cen(CenId, LM0),
+    LM2 = add_container_to_censmap(CenId, ContId, LM1),
+    LM3 = add_container(ContId, LM2),
+    LM4 = add_container_to_contsmap(ContId, CenId, LM3),
+    lm_wire_cens(LM4).
+
+% add cen to CEN maps
+add_cen(CenId, LM = ?LM_CENS(Cens)) ->
+    case lists:any(cenid_is(CenId), Cens) of
+        true ->
+            LM;
+        false ->
+            LM?LM_SET_CENS([new_cen_map(CenId) | Cens])
+    end.
+
+% returns filter function matching CenId
+cenid_is(MatchCenId) ->
+    fun(#{cenID := CenId}) ->
+        MatchCenId == CenId
+    end.
+
+new_cen_map(CenId) ->
+    #{cenID => CenId, wire_type => null, contIDs => []}.
+
+%add container to Cont maps
+add_container(ContId, LM = ?LM_CONTS(Conts)) ->
+    case lists:any(contid_is(ContId), Conts) of
+        true ->
+            LM;
+        false ->
+            LM?LM_SET_CONTS([new_cont_map(ContId) | Conts])
+    end.
+
+% returns filter function matching ContId
+contid_is(MatchContId) ->
+    fun(#{contID := ContId}) ->
+        MatchContId == ContId
+    end.
+
+new_cont_map(ContId) ->
+    #{contID => ContId, cens => []}.
+
+% add container to CEN map
+add_container_to_censmap(CenId, ContId, LM = ?LM_CENS(Cens0)) ->
+    Cens1 = update_censmap(CenId, Cens0,
+        fun(Cen = #{contIDs := ContIds0}) ->
+            ContIds1 = [ContId | ContIds0],
+            Cen#{contIDs := ContIds1, wire_type := wire_type(ContIds1)}
+        end),
+    LM?LM_SET_CENS(Cens1).
+
+% add container to Cont map
+add_container_to_contsmap(ContId, CenId, LM = ?LM_CONTS(Conts0)) ->
+    Conts1 = update_contsmap(ContId, Conts0,
+        fun(Cont) ->
+            maps_append(cens, CenId, Cont)
+        end),
+    LM?LM_SET_CONTS(Conts1).
+
+% Rewire the CENs
+lm_wire_cens(LM = ?LM_CENS(Cens)) ->
+    Wires = wire_cens(Cens),
+    LM?LM_SET_WIRES(Wires).
+
+% Remove container from CEN
+lm_remove_container(CenId, ContId, LM) ->
+    LM.
+
+% helpers
+
+update_censmap(CenId, Cens, UpdateFn) ->
+    update_map(cenID, CenId, Cens, UpdateFn).
+
+update_contsmap(ContId, Conts, UpdateFn) ->
+    update_map(contID, ContId, Conts, UpdateFn).
+
+update_map(KeyField, Key, List, UpdateFn) ->
+    update_map(KeyField, Key, List, UpdateFn, []).
+
+update_map(KeyField, Key, [], _, _) ->
+    throw({badarg, {KeyField, Key}});
+update_map(KeyField, Key, [Element | Rest], UpdateFn, Acc) ->
+    case maps:get(KeyField, Element) of
+        Key ->
+            lists:reverse(Acc) ++ [UpdateFn(Element)] ++ Rest;
+        _ ->
+            update_map(KeyField, Key, Rest, UpdateFn, [Element | Acc])
+    end.
+
+% -----------------------------------------------------------------------------
+%
 % Decode JSON
 %
 % -----------------------------------------------------------------------------

@@ -82,14 +82,30 @@ Where:
 
 ## Leviathan Erlang Data Structures
 
+The top level structure:
+
+Key | Value | Description
+--- | ----- | -----------
+censmap | #{cens => Cens} | map with list of CEN maps
+contsmap | #{conts => Conts} | map with list of containers maps
+wiremap | #{wires => Wires} | map with list of wire maps
+
+Example:
+```
+#{censmap => #{cens => [...]},
+  contsmap => #{conts => [...]},
+  wiremap => #{wires => [...]}
+}
+```
+
 A CEN is a represented by a map:
 
 Key | Value | Description
 --- | ----- | -----------
 cenID | CEN ID | CEN Identifier
-wiring_type | bus, wire, or null | type of wiring used
+wire_type | bus, wire, or null | type of wiring used
 contIDs | list of container IDs | containers in the CEN
-ip_address | string | (only for bus) IP address of the bridge
+ipaddr | string | (only for bus) IP address of the bridge
 
 Example:
 ```
@@ -171,7 +187,7 @@ CEN metadata:
 
 Key | Value | Description
 --- | ----- | -----------
-wiring_type | bus, wire, null | Type of wiring
+wire_type | bus, wire, null | Type of wiring
 status | pending, preparing, ready | Status of the CEN
 
 There is no Container metadata.
