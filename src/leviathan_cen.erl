@@ -2,7 +2,8 @@
 
 -compile(export_all).
 
--export([decode_file/1,
+-export([import_file/2,
+         decode_file/1,
          decode_binary/1,
          remove_container_from_cen/3,
          add_container_to_cen/3,
@@ -19,6 +20,10 @@
 % API
 %-------------------------------------------------------------------------------
 
+import_file(Host, Filename) ->
+    LM = decode_file(Filename),
+    ok = leviathan_dby:import_cens(Host, LM).
+
 decode_file(Filename) ->
     {ok, Binary} = file:read_file(Filename),
     decode_binary(Binary).
@@ -26,7 +31,6 @@ decode_file(Filename) ->
 decode_binary(Binary) ->
     #{<<"cenList">> := Cens} = jiffy:decode(Binary, [return_maps]),
     decode_jiffy(Cens).
-
 
 % Add a container to a CEN
 add_container_to_cen(HostId, ContainerId, CenId) ->
@@ -55,12 +59,12 @@ destroy_cen(CenId) ->
     ok.
 
 % To test:
-% 1. load the cen.json file in this repo via leviathan_dby:import_file/2
+% 1. load the cen.json file in this repo via leviathan_cen:import_file/2
 %    or use curl and the REST interface (see leviathan_rest_lib).
 %    The host name must be "host1"
 % 2. test_cens/0 returns the cen IDs of the cens in the .json file, so
 %    you can use that to save typing
-% 3. inspect the levmap:
+% 3. (optional) inspect the levmap:
 %       leviathan_cen:get_levmap(leviathan_cen:test_cens()).
 % 4. test prepare:
 %       leviathan_cen:test_local_prepare_lev(leviathan_cen:test_cens()).

@@ -21,13 +21,13 @@
 %
 % -----------------------------------------------------------------------------
 
-% json file
+% import CENs
 
 import_cens(Host, CensMap) ->
     ToPublish = [container_from_censmap(Host, CensMap),
                  cens_from_censmap(Host, CensMap),
                  wires_from_censmap(Host, CensMap)],
-    dby:publish(?PUBLISHER, lists:flatten(ToPublish), [persistent]).
+    ok = dby:publish(?PUBLISHER, lists:flatten(ToPublish), [persistent]).
 
 % getters
 
