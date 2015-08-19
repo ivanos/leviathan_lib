@@ -16,7 +16,6 @@ prepare_wire_end(#{type := cont, id := ContId, alias := Alias, ip_address := IPA
     CmdBundle = leviathan_linux:set_ip_address(ContId, Alias, IPAddress),
     leviathan_linux:eval(CmdBundle).
 
-
 cen_ip_address(NetCount) when NetCount =< 244 ->
     B = NetCount + 6, %% offset
     list_to_binary(inet_parse:ntoa({10, B, 0, 1})).
