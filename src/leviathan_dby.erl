@@ -202,7 +202,8 @@ wire_cen(Host, Endpoint1 = #{endID := EndId1},
     [
         endpoint(Host, Endpoint1),
         endpoint(Host, Endpoint2),
-        dby_endpoint_to_endpoint(Host, EndId1, EndId2, <<"conntected_to">>)
+        dby_endpoint_to_endpoint(Host, EndId1, EndId2,
+                endpoint_to_endpoint_type(Endpoint1, Endpoint2))
     ].
 
 endpoint(Host, #{endID := EndId,
@@ -210,7 +211,7 @@ endpoint(Host, #{endID := EndId,
                  dest := #{type := cont,
                            id := ContId,
                            alias := Eth,
-                           ip_addres := IpAddr}}) ->
+                           ip_address := IpAddr}}) ->
     [
         dby_endpoint(Host, EndId, Side, [alias_md(Eth), status_md(pending)]),
         dby_ipaddr(IpAddr),
@@ -225,6 +226,13 @@ endpoint(Host, #{endID := EndId,
         dby_endpoint(Host, EndId, Side, [status_md(pending)]),
         dby_endpoint_to_bridge(Host, EndId, CenId)
     ].
+
+endpoint_to_endpoint_type(#{dest := #{type := cont, id := ContId1}},
+                          #{dest := #{type := cont, id := ContId2}})
+                                                when ContId1 /= ContId2 ->
+    <<"connected_to">>;
+endpoint_to_endpoint_type(_,_) ->
+    <<"veth_peer">>.
 
 status_md(pending) ->
     {<<"status">>, <<"pending">>};
@@ -248,9 +256,9 @@ wire_type_md(bus) ->
 alias_md(Alias) ->
     {<<"alias">>, Alias}.
 
-endpoint_side_md(inside) ->
+endpoint_side_md(in) ->
     {<<"side">>, <<"in">>};
-endpoint_side_md(outside) ->
+endpoint_side_md(out) ->
     {<<"side">>, <<"out">>}.
 
 md_wire_type(null) ->
