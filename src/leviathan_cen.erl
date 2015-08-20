@@ -285,7 +285,7 @@ add_container_to_censmap(CenId, ContId, LM = ?LM_CENS(Cens0)) ->
     Cens1 = update_censmap(CenId, Cens0,
         fun(Cen = #{contIDs := ContIds0}) ->
             ContIds1 = [ContId | ContIds0],
-            Cen#{contIDs := ContIds1, wire_type := wire_type(ContIds1)}
+            [Cen#{contIDs := ContIds1, wire_type := wire_type(ContIds1)}]
         end),
     LM?LM_SET_CENS(Cens1).
 
@@ -293,7 +293,35 @@ add_container_to_censmap(CenId, ContId, LM = ?LM_CENS(Cens0)) ->
 add_container_to_contsmap(ContId, CenId, LM = ?LM_CONTS(Conts0)) ->
     Conts1 = update_contsmap(ContId, Conts0,
         fun(Cont) ->
-            maps_append(cens, CenId, Cont)
+            [maps_append(cens, CenId, Cont)]
+        end),
+    LM?LM_SET_CONTS(Conts1).
+
+% Remove container from CEN
+lm_remove_container(CenId, ContId, LM) ->
+    LM0 = remove_container_from_censmap(CenId, ContId, LM),
+    LM1 = remove_container_from_contsmap(ContId, CenId, LM0),
+    lm_wire_cens(LM1).
+
+% remove container from cens maps
+remove_container_from_censmap(CenId, ContId, LM = ?LM_CENS(Cens0)) ->
+    Cens1 = update_censmap(CenId, Cens0,
+        fun(Cen = #{contIDs := ContIds0}) ->
+            ContIds1 = lists:delete(ContId, ContIds0),
+            [Cen#{contIDs := ContIds1, wire_type := wire_type(ContIds1)}]
+        end),
+    LM?LM_SET_CENS(Cens1).
+
+% remove container from Cont map
+remove_container_from_contsmap(ContId, CenId, LM = ?LM_CONTS(Conts0)) ->
+    Conts1 = update_contsmap(ContId, Conts0,
+        fun(Cont = #{cens := Cens0}) ->
+            case lists:delete(CenId, Cens0) of
+                [] ->
+                    [];
+                Cens1 ->
+                    [Cont#{cens := Cens1}]
+            end
         end),
     LM?LM_SET_CONTS(Conts1).
 
@@ -301,10 +329,6 @@ add_container_to_contsmap(ContId, CenId, LM = ?LM_CONTS(Conts0)) ->
 lm_wire_cens(LM = ?LM_CENS(Cens)) ->
     Wires = wire_cens(Cens),
     LM?LM_SET_WIRES(Wires).
-
-% Remove container from CEN
-lm_remove_container(CenId, ContId, LM) ->
-    LM.
 
 % helpers
 
@@ -317,12 +341,12 @@ update_contsmap(ContId, Conts, UpdateFn) ->
 update_map(KeyField, Key, List, UpdateFn) ->
     update_map(KeyField, Key, List, UpdateFn, []).
 
-update_map(KeyField, Key, [], _, _) ->
-    throw({badarg, {KeyField, Key}});
+update_map(KeyField, Key, [], _, Acc) ->
+    Acc;
 update_map(KeyField, Key, [Element | Rest], UpdateFn, Acc) ->
     case maps:get(KeyField, Element) of
         Key ->
-            lists:reverse(Acc) ++ [UpdateFn(Element)] ++ Rest;
+            lists:reverse(Acc) ++ UpdateFn(Element) ++ Rest;
         _ ->
             update_map(KeyField, Key, Rest, UpdateFn, [Element | Acc])
     end.

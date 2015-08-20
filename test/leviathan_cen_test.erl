@@ -10,8 +10,12 @@ leviathan_cen_test_() ->
        ,{"decode_jiffy 1 container", fun decode_jiffy2/0}
        ,{"decode_jiffy 2 containers", fun decode_jiffy3/0}
        ,{"decode_jiffy 3 containers", fun decode_jiffy4/0}
-       ,{"lm_add_container", fun lm_add_container0/0}
-       ,{"lm_add_container", fun lm_add_container1/0}
+       ,{"lm_add_container test 0", fun lm_add_container0/0}
+       ,{"lm_add_container test 1", fun lm_add_container1/0}
+       ,{"lm_add_container test 1", fun lm_add_container2/0}
+       ,{"lm_remove_container test 0", fun lm_remove_container0/0}
+       ,{"lm_remove_container test 1", fun lm_remove_container1/0}
+       ,{"lm_remove_container test 2", fun lm_remove_container2/0}
     ].
 
 decode_jiffy1() ->
@@ -88,6 +92,38 @@ lm_add_container1() ->
             endpoint(<<"c1">>, <<"c1.0i">>, in, <<"cen1">>, <<"10.7.0.11">>)
         ]
     ]).
+
+lm_add_container2() ->
+    LM0 = leviathan_cen:lm_add_container(<<"cen1">>, <<"c1">>, new_lm()),
+    LM1 = leviathan_cen:lm_add_container(<<"cen1">>, <<"c2">>, LM0),
+    LM2 = leviathan_cen:lm_add_container(<<"cen1">>, <<"c3">>, LM1),
+    {Cens, Conts, _} = decompose_lm(LM2),
+    ?assertEqual(Cens, [cen_map(<<"cen1">>, [<<"c3">>, <<"c2">>, <<"c1">>], bus)]),
+    ?assertEqualLists(Conts, [cont_map(<<"c1">>, [<<"cen1">>]),
+                              cont_map(<<"c2">>, [<<"cen1">>]),
+                              cont_map(<<"c3">>, [<<"cen1">>])]).
+
+lm_remove_container0() ->
+    LM = leviathan_cen:lm_remove_container(<<"cen1">>, <<"c1">>, new_lm()),
+    ?assertEqual(LM, new_lm()).
+
+lm_remove_container1() ->
+    Json = [json_cen(<<"cen1">>, [<<"c1">>])],
+    LM0 = leviathan_cen:decode_jiffy(Json),
+    LM1 = leviathan_cen:lm_remove_container(<<"cen1">>, <<"c1">>, LM0),
+    {Cens, Conts, Wires} = decompose_lm(LM1),
+    ?assertEqual(Cens, [cen_map(<<"cen1">>, [], null)]),
+    ?assertEqual(Conts, []),
+    ?assertEqual(Wires, []).
+
+lm_remove_container2() ->
+    Json = [json_cen(<<"cen1">>, [<<"c1">>, <<"c2">>])],
+    LM0 = leviathan_cen:decode_jiffy(Json),
+    LM1 = leviathan_cen:lm_remove_container(<<"cen1">>, <<"c1">>, LM0),
+    {Cens, Conts, Wires} = decompose_lm(LM1),
+    ?assertEqual(Cens, [cen_map(<<"cen1">>, [<<"c2">>], null)]),
+    ?assertEqual(Conts, [cont_map(<<"c2">>, [<<"cen1">>])]),
+    ?assertEqual(Wires, []).
 
 %-------------------------------------------------------------------------------
 % helpers
