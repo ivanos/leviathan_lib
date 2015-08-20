@@ -16,6 +16,11 @@ leviathan_cen_test_() ->
        ,{"lm_remove_container test 0", fun lm_remove_container0/0}
        ,{"lm_remove_container test 1", fun lm_remove_container1/0}
        ,{"lm_remove_container test 2", fun lm_remove_container2/0}
+       ,{"lm_compare 0", fun lm_compare0/0}
+       ,{"lm_compare 1", fun lm_compare1/0}
+       ,{"lm_compare 2", fun lm_compare2/0}
+       ,{"lm_compare 3", fun lm_compare3/0}
+       ,{"lm_compare 4", fun lm_compare4/0}
     ].
 
 decode_jiffy1() ->
@@ -124,6 +129,53 @@ lm_remove_container2() ->
     ?assertEqual(Cens, [cen_map(<<"cen1">>, [<<"c2">>], null)]),
     ?assertEqual(Conts, [cont_map(<<"c2">>, [<<"cen1">>])]),
     ?assertEqual(Wires, []).
+
+lm_compare0() ->
+    ?assertEqual([], leviathan_cen:lm_compare(new_lm(), new_lm())).
+
+lm_compare1() ->
+    Json = [json_cen(<<"cen1">>, [<<"c1">>])],
+    LM0 = leviathan_cen:decode_jiffy(Json),
+    Instructions = [
+        {add, cen, cen_map(<<"cen1">>, [<<"c1">>], null)},
+        {add, cont, cont_map(<<"c1">>, [<<"cen1">>])}
+    ],
+    ?assertEqual(Instructions, leviathan_cen:lm_compare(new_lm(), LM0)).
+
+lm_compare2() ->
+    Json = [json_cen(<<"cen1">>, [<<"c1">>])],
+    LM0 = leviathan_cen:decode_jiffy(Json),
+    Instructions = [
+        {destroy, cen, cen_map(<<"cen1">>, [<<"c1">>], null)},
+        {destroy, cont, cont_map(<<"c1">>, [<<"cen1">>])}
+    ],
+    ?assertEqual(Instructions, leviathan_cen:lm_compare(LM0, new_lm())).
+
+lm_compare3() ->
+    OldLM = leviathan_cen:decode_jiffy([json_cen(<<"cen1">>, [<<"c1">>])]),
+    NewLM = leviathan_cen:decode_jiffy([json_cen(<<"cen1">>,
+                                                    [<<"c2">>, <<"c1">>])]),
+    Instructions = [
+        {add, cont, cont_map(<<"c2">>, [<<"cen1">>])},
+        {add, wire, [
+            endpoint(<<"c2">>, <<"c2.0i">>, in, <<"cen1">>, <<"10.7.0.10">>),
+            endpoint(<<"c1">>, <<"c1.0i">>, in, <<"cen1">>, <<"10.7.0.11">>)
+        ]}
+    ],
+    ?assertEqual(Instructions, leviathan_cen:lm_compare(OldLM, NewLM)).
+
+lm_compare4() ->
+    OldLM = leviathan_cen:decode_jiffy([json_cen(<<"cen1">>,
+                                                    [<<"c2">>, <<"c1">>])]),
+    NewLM = leviathan_cen:decode_jiffy([json_cen(<<"cen1">>, [<<"c1">>])]),
+    Instructions = [
+        {destroy, cont, cont_map(<<"c2">>, [<<"cen1">>])},
+        {destroy, wire, [
+            endpoint(<<"c2">>, <<"c2.0i">>, in, <<"cen1">>, <<"10.7.0.10">>),
+            endpoint(<<"c1">>, <<"c1.0i">>, in, <<"cen1">>, <<"10.7.0.11">>)
+        ]}
+    ],
+    ?assertEqual(Instructions, leviathan_cen:lm_compare(OldLM, NewLM)).
 
 %-------------------------------------------------------------------------------
 % helpers

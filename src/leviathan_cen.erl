@@ -330,7 +330,70 @@ lm_wire_cens(LM = ?LM_CENS(Cens)) ->
     Wires = wire_cens(Cens),
     LM?LM_SET_WIRES(Wires).
 
+% Compare LMs
+% Returns a list of instructions, list of:
+% - {add, cen, CenMap}
+% - {add, cont, ContMap}
+% - {add, wire, Wire}
+% - {destroy, cen, CenMap}
+% - {destroy, cont, ContMap}
+% - {destroy, wire, Wire}
+lm_compare(Old, New) ->
+    lists:flatten([
+        compare_cens(Old, New),
+        compare_conts(Old, New),
+        compare_wires(Old, New)
+    ]).
+
+compare_cens(?LM_CENS(OldCens), ?LM_CENS(NewCens)) ->
+    delta_instructions(cen, cens_map(OldCens), cens_map(NewCens)).
+
+cens_map(Cens) ->
+    map_from_list(Cens, fun(#{cenID := CenId}) -> CenId end).
+
+compare_conts(?LM_CONTS(OldConts), ?LM_CONTS(NewConts)) ->
+    delta_instructions(cont, conts_map(OldConts), conts_map(NewConts)).
+
+conts_map(Conts) ->
+    map_from_list(Conts, fun(#{contID := ContId}) -> ContId end).
+
+compare_wires(?LM_WIRES(OldWires), ?LM_WIRES(NewWires)) ->
+    delta_instructions(wire, wires_map(OldWires), wires_map(NewWires)).
+
+wires_map(Wires) ->
+    map_from_list(Wires,
+        fun([#{endID := End1}, #{endID := End2}]) ->
+            normalize_ends({End1, End2})
+        end).
+
+normalize_ends({End1, End2}) when End1 > End2 ->
+    {End1, End2};
+normalize_ends({End1, End2}) ->
+    {End2, End1}.
+
+delta_instructions(Item, OldMap, NewMap) ->
+    {OldOnly, NewOnly} = compare_maps(OldMap, NewMap),
+    [
+        instructions(destroy, Item, OldOnly),
+        instructions(add, Item, NewOnly)
+    ].
+
+compare_maps(OldMap, NewMap) ->
+    OldOnlyMap = maps:without(maps:keys(NewMap), OldMap),
+    NewOnlyMap = maps:without(maps:keys(OldMap), NewMap),
+    {maps:values(OldOnlyMap), maps:values(NewOnlyMap)}.
+
+instructions(Operation, Item, List) ->
+    lists:map(fun(Element) -> {Operation, Item, Element} end, List).
+
 % helpers
+
+map_from_list(List, KeyFn) ->
+    lists:foldl(
+        fun(Element, Acc) ->
+            Key = KeyFn(Element),
+            maps:put(Key, Element, Acc)
+        end, #{}, List).
 
 update_censmap(CenId, Cens, UpdateFn) ->
     update_map(cenID, CenId, Cens, UpdateFn).
@@ -341,7 +404,7 @@ update_contsmap(ContId, Conts, UpdateFn) ->
 update_map(KeyField, Key, List, UpdateFn) ->
     update_map(KeyField, Key, List, UpdateFn, []).
 
-update_map(KeyField, Key, [], _, Acc) ->
+update_map(_, _, [], _, Acc) ->
     Acc;
 update_map(KeyField, Key, [Element | Rest], UpdateFn, Acc) ->
     case maps:get(KeyField, Element) of
