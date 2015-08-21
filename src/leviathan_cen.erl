@@ -436,7 +436,10 @@ decode_jiffy(CensJson) ->
 cens_from_jiffy(CensJson) ->
     {_, Cens} = lists:foldl(
         fun(#{<<"cenID">> := Cen, <<"containerIDs">> := Conts}, {Count, Acc}) ->
-            {Count + 1, [cen(Count, Cen, wire_type(Conts), Conts) | Acc]}
+            {Count + 1, [cen(Count,
+                         Cen,
+                         wire_type(Conts),
+                         Conts) | Acc]}
         end, {1, []}, CensJson),
     Cens.
 
@@ -448,14 +451,14 @@ wire_type(Conts) when length(Conts)  > 2 ->
     bus.
 
 cen(Count, Cen, bus, Conts) ->
-     #{cenID => Cen,
+     #{cenID => binary_to_list(Cen),
        wire_type => bus,
-       contIDs => Conts,
+       contIDs => list_binary_to_list(Conts),
        ipaddr => cen_ip_addr(Count)};
 cen(_, Cen, WireType, Conts) ->
-     #{cenID => Cen,
+     #{cenID => binary_to_list(Cen),
        wire_type => WireType,
-       contIDs => Conts}.
+       contIDs => list_binary_to_list(Conts)}.
 
 % conts
 conts_from_jiffy(CensJson) ->
@@ -466,7 +469,8 @@ conts_from_jiffy(CensJson) ->
         end, #{}, Pairs),
     maps:fold(
         fun(Cont, Cens, Acc) ->
-            [#{contID => Cont, cens => Cens} | Acc]
+            [#{contID => binary_to_list(Cont),
+               cens => list_binary_to_list(Cens)} | Acc]
         end, [], Index).
 
 cen_cont_pairs(CensJson) ->
@@ -591,19 +595,21 @@ next_count(Context = #{count := CountMap}, Key, FormatFn) ->
 ip_addr(#{count := CountMap}, CenId) ->
     CenCount = maps:get(cen, CountMap),
     ContCount = maps:get({conts, CenId}, CountMap),
-    leviathan_cin:ip_address(CenCount, ContCount).
+    binary_to_list(leviathan_cin:ip_address(CenCount, ContCount)).
 
 % format ip addr for cens
 cen_ip_addr(CenCount) ->
-    leviathan_cin:cen_ip_address(CenCount).
+    binary_to_list(leviathan_cin:cen_ip_address(CenCount)).
 
 % name formatters
 in_endpoint_name(ContId, N) ->
-    endpoint_name(ContId, <<"i">>, N).
+    endpoint_name(ContId, "i", N).
 
 out_endpoint_name(ContId, N) ->
-    endpoint_name(ContId, <<"o">>, N).
+    endpoint_name(ContId, "o", N).
 
 endpoint_name(ContId, Side, N) ->
-    Nbinary = integer_to_binary(N),
-    <<ContId/binary, $., Nbinary/binary, Side/binary>>.
+    lists:flatten([ContId, $., integer_to_list(N), Side]).
+
+list_binary_to_list(List) ->
+    lists:map(fun binary_to_list/1, List).
