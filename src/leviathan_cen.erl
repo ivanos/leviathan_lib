@@ -340,6 +340,7 @@ lm_wire_cens(LM = ?LM_CENS(Cens)) ->
 % - {destroy, cont, ContMap}
 % - {destroy, wire, Wire}
 % - {destroy, cont_in_cen, {ContId, CenId}}
+% - {set, wire_type, {CenId, WireType}}
 lm_compare(Old, New) ->
     lists:flatten([
         compare_cens(Old, New),
@@ -364,7 +365,9 @@ compare_cens_containers(?LM_CENS(OldCens), ?LM_CENS(NewCens)) ->
                 instructions(destroy, cont_in_cen,
                     [{ContId, CenId}|| ContId <- ToRemove]),
                 instructions(add, cont_in_cen,
-                    [{ContId, CenId} || ContId <- ToAdd])
+                    [{ContId, CenId} || ContId <- ToAdd]),
+                set_wiretype(CenId, wire_type(OldList),
+                                    wire_type(NewList))
             ]
         end, CommonKeys).
 
@@ -376,6 +379,11 @@ compare_conts(?LM_CONTS(OldConts), ?LM_CONTS(NewConts)) ->
 
 conts_map(Conts) ->
     map_from_list(Conts, fun(#{contID := ContId}) -> ContId end).
+
+set_wiretype(_, Wiretype, Wiretype) ->
+    [];
+set_wiretype(CenId, _, NewWiretype) ->
+    {set, wire_type, {CenId, NewWiretype}}.
 
 compare_wires(?LM_WIRES(OldWires), ?LM_WIRES(NewWires)) ->
     delta_instructions(wire, wires_map(OldWires), wires_map(NewWires)).

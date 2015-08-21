@@ -104,7 +104,9 @@ update_instruction(Host, {destroy, cont, Cont}) ->
 update_instruction(Host, {destroy, wire, Wire}) ->
     pub_destroy_wire(Host, Wire);
 update_instruction(Host, {destroy, cont_in_cen, {ContId, CenId}}) ->
-    pub_destroy_cont_in_cen(Host, ContId, CenId).
+    pub_destroy_cont_in_cen(Host, ContId, CenId);
+update_instruction(_, {set, wire_type, {CenId, WireType}}) ->
+    pub_set_wire_type(CenId, WireType).
 
 set_status(DbyId, Status) ->
     dby:publish(?PUBLISHER, {DbyId, [status_md(Status)]}, [persistent]).
@@ -265,7 +267,7 @@ endpoint(Host, #{endID := EndId,
                            ip_address := IpAddr}}) ->
     [
         dby_endpoint(Host, list_to_binary(EndId), Side, [alias_md(list_to_binary(Eth)), status_md(pending)]),
-        dby_ipaddr(list_to_binary(IpAddr)),
+       dby_ipaddr(list_to_binary(IpAddr)),
         dby_endpoint_to_ipaddr(Host, list_to_binary(EndId), list_to_binary(IpAddr)),
         dby_endpoint_to_container(Host, list_to_binary(EndId), list_to_binary(ContId))
     ];
@@ -295,6 +297,10 @@ pub_destroy_cont_in_cen(Host, ContId, CenId) ->
     [{dby_cen_id(list_to_binary(CenId)),
       dby_cont_id(Host, list_to_binary(ContId)),
       delete}].
+
+% set wiretype in cen
+pub_set_wire_type(CenId, WireType) ->
+    [{dby_cen_id(list_to_binary(CenId)), [wire_type_md(WireType)]}].
 
 status_md(pending) ->
     {<<"status">>, <<"pending">>};
