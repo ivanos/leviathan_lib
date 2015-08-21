@@ -11,6 +11,9 @@ link_add_type_veth_peer_name(DevNameA,DevNameB)->
 
 link_delete_type_veth_peer(DevName)->
     "ip link delete " ++  DevName ++ " type veth peer".
+
+link_set_dev_name(OrigDevName,NewDevName)->
+    "ip link set dev " ++ OrigDevName ++ " name " ++ NewDevName.
     
 link_set_up(DevName)->
     "ip link set " ++ DevName ++ " up".

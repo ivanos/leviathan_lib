@@ -29,3 +29,10 @@ run(CType,Options,Cmd)->
     "docker run -d " ++ Options ++ " -t " ++ CType ++ " " ++ Cmd.
 
 
+ps()->
+    "docker ps".
+
+inspect(ContainerID)->
+    "docker inspect " ++ ContainerID.
+
+

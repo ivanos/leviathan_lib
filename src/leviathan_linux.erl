@@ -94,7 +94,9 @@ eval(CmdBundle)->
 eval(CmdBundle,output)->
     EvalBundle = lists:map(fun(X)->Result = os:cmd(X), {X,Result} end,CmdBundle),
     Results = lists:foldl(fun({Cmd,Output},Acc)->io:format("   Cmd: ~p~nOutput: ~p~n",[Cmd,Output]),Acc++[binary:list_to_bin(string:substr(string:strip(Output,right,$\n),1,12))] end,[],EvalBundle),
+    Results;  
+eval(CmdBundle,output_raw)->
+    EvalBundle = lists:map(fun(X)->Result = os:cmd(X), {X,Result} end,CmdBundle),
+    Results = lists:foldl(fun({_Cmd,Output},Acc)->%io:format("   Cmd: ~p~nOutput: ~p~n",[Cmd,Output]),
+				  Acc++[Output] end,[],EvalBundle),
     Results.
-    
-    
-    
