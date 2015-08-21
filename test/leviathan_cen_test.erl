@@ -156,6 +156,7 @@ lm_compare3() ->
     NewLM = leviathan_cen:decode_jiffy([json_cen(<<"cen1">>,
                                                     [<<"c2">>, <<"c1">>])]),
     Instructions = [
+        {add, cont_in_cen, {"c2", "cen1"}},
         {add, cont, cont_map("c2", ["cen1"])},
         {add, wire, [
             endpoint("c2", "c2.0i", in, "cen1", "10.7.0.10"),
@@ -169,6 +170,7 @@ lm_compare4() ->
                                                     [<<"c2">>, <<"c1">>])]),
     NewLM = leviathan_cen:decode_jiffy([json_cen(<<"cen1">>, [<<"c1">>])]),
     Instructions = [
+        {destroy, cont_in_cen, {"c2", "cen1"}},
         {destroy, cont, cont_map("c2", ["cen1"])},
         {destroy, wire, [
             endpoint("c2", "c2.0i", in, "cen1", "10.7.0.10"),

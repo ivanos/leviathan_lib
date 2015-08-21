@@ -284,7 +284,7 @@ new_cont_map(ContId) ->
 add_container_to_censmap(CenId, ContId, LM = ?LM_CENS(Cens0)) ->
     Cens1 = update_censmap(CenId, Cens0,
         fun(Cen = #{contIDs := ContIds0}) ->
-            ContIds1 = [ContId | ContIds0],
+            ContIds1 = list_add_unique(ContId, ContIds0),
             [Cen#{contIDs := ContIds1, wire_type := wire_type(ContIds1)}]
         end),
     LM?LM_SET_CENS(Cens1).
@@ -335,18 +335,38 @@ lm_wire_cens(LM = ?LM_CENS(Cens)) ->
 % - {add, cen, CenMap}
 % - {add, cont, ContMap}
 % - {add, wire, Wire}
+% - {add, cont_in_cen, {ContId, CenId}}
 % - {destroy, cen, CenMap}
 % - {destroy, cont, ContMap}
 % - {destroy, wire, Wire}
+% - {destroy, cont_in_cen, {ContId, CenId}}
 lm_compare(Old, New) ->
     lists:flatten([
         compare_cens(Old, New),
+        compare_cens_containers(Old, New),
         compare_conts(Old, New),
         compare_wires(Old, New)
     ]).
 
 compare_cens(?LM_CENS(OldCens), ?LM_CENS(NewCens)) ->
     delta_instructions(cen, cens_map(OldCens), cens_map(NewCens)).
+
+compare_cens_containers(?LM_CENS(OldCens), ?LM_CENS(NewCens)) ->
+    OldMap = cens_map(OldCens),
+    NewMap = cens_map(NewCens),
+    CommonKeys = maps:keys(maps:with(maps:keys(OldMap), NewMap)),
+    lists:map(
+        fun(CenId) ->
+            #{contIDs := OldList} = maps:get(CenId, OldMap),
+            #{contIDs := NewList} = maps:get(CenId, NewMap),
+            {ToRemove, ToAdd} = compare_lists(OldList, NewList),
+            [
+                instructions(destroy, cont_in_cen,
+                    [{ContId, CenId}|| ContId <- ToRemove]),
+                instructions(add, cont_in_cen,
+                    [{ContId, CenId} || ContId <- ToAdd])
+            ]
+        end, CommonKeys).
 
 cens_map(Cens) ->
     map_from_list(Cens, fun(#{cenID := CenId}) -> CenId end).
@@ -382,6 +402,13 @@ compare_maps(OldMap, NewMap) ->
     OldOnlyMap = maps:without(maps:keys(NewMap), OldMap),
     NewOnlyMap = maps:without(maps:keys(OldMap), NewMap),
     {maps:values(OldOnlyMap), maps:values(NewOnlyMap)}.
+
+compare_lists(OldList, NewList) ->
+    OldSet = sets:from_list(OldList),
+    NewSet = sets:from_list(NewList),
+    OldOnlySet = sets:subtract(OldSet, NewSet),
+    NewOnlySet = sets:subtract(NewSet, OldSet),
+    {sets:to_list(OldOnlySet), sets:to_list(NewOnlySet)}.
 
 instructions(Operation, Item, List) ->
     lists:map(fun(Element) -> {Operation, Item, Element} end, List).
@@ -613,3 +640,11 @@ endpoint_name(ContId, Side, N) ->
 
 list_binary_to_list(List) ->
     lists:map(fun binary_to_list/1, List).
+
+list_add_unique(Element, List) ->
+    case lists:member(Element, List) of
+        false ->
+            [Element | List];
+        true ->
+            List
+    end.

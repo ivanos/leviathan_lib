@@ -68,9 +68,10 @@ get_wires(Cen) ->
 % update
 
 update_cens(Host, Instructions) ->
-    lists:foreach(
+    ToPublish = lists:map(
         fun(Instruction) -> update_instruction(Host, Instruction) end,
-        Instructions).
+        Instructions),
+    ok = dby:publish(?PUBLISHER, lists:flatten(ToPublish), [persistent]).
 
 % status
 set_cen_status(CenId, Status) ->
@@ -94,12 +95,16 @@ update_instruction(Host, {add, cont, Cont}) ->
     pub_cont(Host, Cont);
 update_instruction(Host, {add, wire, Wire}) ->
     pub_wire(Host, Wire);
+update_instruction(Host, {add, cont_in_cen, {ContId, CenId}}) ->
+    pub_cont_in_cen(Host, ContId, CenId);
 update_instruction(Host, {destroy, cen, Cen}) ->
     pub_destroy_cen(Host, Cen);
 update_instruction(Host, {destroy, cont, Cont}) ->
     pub_destroy_cont(Host, Cont);
 update_instruction(Host, {destroy, wire, Wire}) ->
-    pub_destroy_wire(Host, Wire).
+    pub_destroy_wire(Host, Wire);
+update_instruction(Host, {destroy, cont_in_cen, {ContId, CenId}}) ->
+    pub_destroy_cont_in_cen(Host, ContId, CenId).
 
 set_status(DbyId, Status) ->
     dby:publish(?PUBLISHER, {DbyId, [status_md(Status)]}, [persistent]).
@@ -146,7 +151,7 @@ dby_endpoint(Host, EndID, Side, Metadata) when is_binary(EndID) ->
                                       endpoint_side_md(Side),
                                      {<<"endID">>, EndID}] ++ Metadata}.
 
-dby_ipaddr(IpAddr) ->
+dby_ipaddr(IpAddr) when is_binary(IpAddr) ->
     {dby_ipaddr_id(IpAddr), [{<<"type">>, <<"ipaddr">>},
                              {<<"ipaddr">>, IpAddr}]}.
 
@@ -184,11 +189,11 @@ container_from_lm(Host, #{contsmap := #{conts := Conts}}) ->
 
 % prepare to publish one container
 pub_cont(Host, #{contID := ContId}) ->
-    [dby_cont(Host, ContId, [status_md(pending)])].
+    [dby_cont(Host, list_to_binary(ContId), [status_md(pending)])].
 
 % prepare to delete one container
 pub_destroy_cont(Host, #{contID := ContId}) ->
-    [{dby_cont_id(Host, ContId), delete}].
+    [{dby_cont_id(Host, list_to_binary(ContId)), delete}].
 
 % prepare to publish cens
 cens_from_lm(Host, #{censmap := #{cens := Cens}}) ->
@@ -201,9 +206,9 @@ pub_cen(Host, #{cenID := CenId,
           ipaddr := BridgeIpAddr}) ->
     [
         link_cen_to_containers(Host, CenId, ContIds, bus),
-        dby_bridge(Host, CenId, [status_md(pending),
+        dby_bridge(Host, list_to_binary(CenId), [status_md(pending),
                                          cen_ip_addr_md(BridgeIpAddr)]),
-        dby_bridge_to_cen(Host, CenId, CenId)
+        dby_bridge_to_cen(Host, list_to_binary(CenId), list_to_binary(CenId))
     ];
 pub_cen(Host, #{cenID := CenId,
           wire_type := WireType,
@@ -220,10 +225,10 @@ pub_destroy_cen(_Host, #{cenID := CenId}) ->
 % link CEN to containers
 link_cen_to_containers(Host, CenId, ContIds, WireType) ->
     [
-        dby_cen(CenId, [wire_type_md(WireType), status_md(pending)]),
+        dby_cen(list_to_binary(CenId), [wire_type_md(WireType), status_md(pending)]),
         lists:map(
             fun(ContId) ->
-                dby_cen_to_container(Host, CenId, ContId)
+                dby_cen_to_container(Host, list_to_binary(CenId), list_to_binary(ContId))
             end, ContIds)
     ].
 
@@ -240,15 +245,15 @@ pub_wire(Host, [Endpoint1 = #{endID := EndId1},
     [
         endpoint(Host, Endpoint1),
         endpoint(Host, Endpoint2),
-        dby_endpoint_to_endpoint(Host, EndId1, EndId2,
+        dby_endpoint_to_endpoint(Host, list_to_binary(EndId1), list_to_binary(EndId2),
                 endpoint_to_endpoint_type(Endpoint1, Endpoint2))
     ].
 
 % prepare to delete one wire
 pub_destroy_wire(Host, [#{endID := EndId1}, #{endID := EndId2}]) ->
     [
-        {dby_endpoint_id(Host, EndId1), delete},
-        {dby_endpoint_id(Host, EndId2), delete}
+        {dby_endpoint_id(Host, list_to_binary(EndId1)), delete},
+        {dby_endpoint_id(Host, list_to_binary(EndId2)), delete}
         % XXX delete IP addresses?
     ].
 
@@ -259,18 +264,18 @@ endpoint(Host, #{endID := EndId,
                            alias := Eth,
                            ip_address := IpAddr}}) ->
     [
-        dby_endpoint(Host, EndId, Side, [alias_md(Eth), status_md(pending)]),
-        dby_ipaddr(IpAddr),
-        dby_endpoint_to_ipaddr(Host, EndId, IpAddr),
-        dby_endpoint_to_container(Host, EndId, ContId)
+        dby_endpoint(Host, list_to_binary(EndId), Side, [alias_md(list_to_binary(Eth)), status_md(pending)]),
+        dby_ipaddr(list_to_binary(IpAddr)),
+        dby_endpoint_to_ipaddr(Host, list_to_binary(EndId), list_to_binary(IpAddr)),
+        dby_endpoint_to_container(Host, list_to_binary(EndId), list_to_binary(ContId))
     ];
 endpoint(Host, #{endID := EndId,
                  side := Side,
                  dest := #{type := cen,
                            id := CenId}}) ->
     [
-        dby_endpoint(Host, EndId, Side, [status_md(pending)]),
-        dby_endpoint_to_bridge(Host, EndId, CenId)
+        dby_endpoint(Host, list_to_binary(EndId), Side, [status_md(pending)]),
+        dby_endpoint_to_bridge(Host, list_to_binary(EndId), list_to_binary(CenId))
     ].
 
 endpoint_to_endpoint_type(#{dest := #{type := cont, id := ContId1}},
@@ -279,6 +284,17 @@ endpoint_to_endpoint_type(#{dest := #{type := cont, id := ContId1}},
     <<"connected_to">>;
 endpoint_to_endpoint_type(_,_) ->
     <<"veth_peer">>.
+
+% prepare to add container to cen
+pub_cont_in_cen(Host, ContId, CenId) ->
+    [dby_cen_to_container(Host, list_to_binary(CenId),
+                                list_to_binary(ContId))].
+
+% prepare to destroy container to cen
+pub_destroy_cont_in_cen(Host, ContId, CenId) ->
+    [{dby_cen_id(list_to_binary(CenId)),
+      dby_cont_id(Host, list_to_binary(ContId)),
+      delete}].
 
 status_md(pending) ->
     {<<"status">>, <<"pending">>};
@@ -371,7 +387,7 @@ linked_cens(_, _, _, Acc) ->
     {continue, Acc}.
 
 wire_search(#{wire_type := null}) ->
-    [];
+    #{wires => [], ipaddrmap => #{}};
 wire_search(#{cenID := CenId, wire_type := bus}) ->
     % bus data model in dobby benefits from searching breadth first.
     % This makes it easy to find the paths that form the wires.
