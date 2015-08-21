@@ -54,7 +54,7 @@ configure_cin2(Event)->
 
 %
 % Test call to ip_monitor passing it three user defined event handlers: 
-% print_event(Event) and handle_new_ip(Event) 
+% print_event(Event), handle_new_ip(Event), and configure_cin2(Event)
 %
 test_ip_monitor()->
     ip_monitor([fun print_event/1,fun handle_new_ip/1,fun configure_cin2/1]),
