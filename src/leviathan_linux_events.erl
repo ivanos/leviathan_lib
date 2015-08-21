@@ -38,7 +38,7 @@ handle_new_ip(Event)->
     end.
 
 %
-% matches "set address" events where 
+% matches "set_address" events where 
 % alias (i.e. interface name) is "cin2"
 % and prints a message
 %
