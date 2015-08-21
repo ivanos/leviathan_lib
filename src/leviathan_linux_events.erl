@@ -18,9 +18,17 @@
 % Sample user defined ip_monitor event handlers
 %
 %
+
+%
+% simple handler to print the whole event
+%
 print_event(Event)->
     io:format("Event:~p~n",[Event]).
 
+%
+% matches "set_address" events
+% extracts the IP address and prints it
+%
 handle_new_ip(Event)->
     case Event of
 	#{ event := set_address,
@@ -29,6 +37,11 @@ handle_new_ip(Event)->
 	_ -> ignore_event
     end.
 
+%
+% matches "set address" events where 
+% alias (i.e. interface name) is "cin2"
+% and prints a message
+%
 configure_cin2(Event)->
     case Event of
 	#{ event := set_address,
