@@ -4,7 +4,8 @@
 -on_load(install_iso8601/0).
 -endif.
 
--export([import_cens/2]).
+-export([import_cens/2,
+         update_cens/2]).
 
 -export([get_cen/1,
          get_cont/2,
@@ -24,9 +25,9 @@
 % import CENs
 
 import_cens(Host, CensMap) ->
-    ToPublish = [container_from_censmap(Host, CensMap),
-                 cens_from_censmap(Host, CensMap),
-                 wires_from_censmap(Host, CensMap)],
+    ToPublish = [container_from_lm(Host, CensMap),
+                 cens_from_lm(Host, CensMap),
+                 wires_from_lm(Host, CensMap)],
     ok = dby:publish(?PUBLISHER, lists:flatten(ToPublish), [persistent]).
 
 % getters
@@ -64,6 +65,14 @@ get_wires(Cen) ->
              ipaddr_for_wireend(WireEnd2, IpAddrMap)]
         end, Wires).
 
+% update
+
+update_cens(Host, Instructions) ->
+    ToPublish = lists:map(
+        fun(Instruction) -> update_instruction(Host, Instruction) end,
+        Instructions),
+    ok = dby:publish(?PUBLISHER, lists:flatten(ToPublish), [persistent]).
+
 % status
 set_cen_status(CenId, Status) ->
     set_status(dby_cen_id(CenId), Status).
@@ -73,13 +82,38 @@ set_cen_status(CenId, Status) ->
 % Internal functions
 %
 % -----------------------------------------------------------------------------
-
-set_status(DbyId, Status) ->
-    dby:publish(?PUBLISHER, {DbyId, [status_md(Status)]}, [persistent]).
     
 install_iso8601() ->
     {module, _} = dby:install(iso8601),
     ok.
+
+% incremental dobby update
+
+update_instruction(Host, {add, cen, Cen}) ->
+    pub_cen(Host, Cen);
+update_instruction(Host, {add, cont, Cont}) ->
+    pub_cont(Host, Cont);
+update_instruction(Host, {add, wire, Wire}) ->
+    pub_wire(Host, Wire);
+update_instruction(Host, {add, cont_in_cen, {ContId, CenId}}) ->
+    pub_cont_in_cen(Host, ContId, CenId);
+update_instruction(Host, {add, bridge, {Cen, IpAddr}}) ->
+    pub_bridge(Host, Cen, IpAddr);
+update_instruction(Host, {destroy, cen, Cen}) ->
+    pub_destroy_cen(Host, Cen);
+update_instruction(Host, {destroy, cont, Cont}) ->
+    pub_destroy_cont(Host, Cont);
+update_instruction(Host, {destroy, wire, Wire}) ->
+    pub_destroy_wire(Host, Wire);
+update_instruction(Host, {destroy, cont_in_cen, {ContId, CenId}}) ->
+    pub_destroy_cont_in_cen(Host, ContId, CenId);
+update_instruction(Host, {destroy, bridge, Cen}) ->
+    pub_destroy_bridge(Host, Cen);
+update_instruction(_, {set, wire_type, {CenId, WireType}}) ->
+    pub_set_wire_type(CenId, WireType).
+
+set_status(DbyId, Status) ->
+    dby:publish(?PUBLISHER, {DbyId, [status_md(Status)]}, [persistent]).
 
 % format for dobby
 
@@ -123,7 +157,7 @@ dby_endpoint(Host, EndID, Side, Metadata) when is_binary(EndID) ->
                                       endpoint_side_md(Side),
                                      {<<"endID">>, EndID}] ++ Metadata}.
 
-dby_ipaddr(IpAddr) ->
+dby_ipaddr(IpAddr) when is_binary(IpAddr) ->
     {dby_ipaddr_id(IpAddr), [{<<"type">>, <<"ipaddr">>},
                              {<<"ipaddr">>, IpAddr}]}.
 
@@ -156,54 +190,80 @@ dby_link(E1, E2, Type) ->
     {E1, E2, [{<<"type">>, Type}]}.
 
 % prepare to publish the list of containers
-container_from_censmap(Host, #{contsmap := #{conts := Conts}}) ->
-    lists:map(
-        fun(#{contID := ContId}) ->
-            dby_cont(Host, ContId, [status_md(pending)])
-        end, Conts).
+container_from_lm(Host, #{contsmap := #{conts := Conts}}) ->
+    lists:map(fun(Cont) -> pub_cont(Host, Cont) end, Conts).
+
+% prepare to publish one container
+pub_cont(Host, #{contID := ContId}) ->
+    [dby_cont(Host, list_to_binary(ContId), [status_md(pending)])].
+
+% prepare to delete one container
+pub_destroy_cont(Host, #{contID := ContId}) ->
+    [{dby_cont_id(Host, list_to_binary(ContId)), delete}].
 
 % prepare to publish cens
-cens_from_censmap(Host, #{censmap := #{cens := Cens}}) ->
-    lists:map(
-        fun(#{cenID := CenId,
-              wire_type := bus,
-              contIDs := ContIds,
-              ipaddr := BridgeIpAddr}) ->
-            [
-                link_cen_to_containers(Host, CenId, ContIds, bus),
-                dby_bridge(Host, CenId, [status_md(pending),
-                                         cen_ip_addr_md(BridgeIpAddr)]),
-                dby_bridge_to_cen(Host, CenId, CenId)
-            ];
-           (#{cenID := CenId,
-              wire_type := WireType,
-              contIDs := ContIds}) ->
-            link_cen_to_containers(Host, CenId, ContIds, WireType)
-        end, Cens).
+cens_from_lm(Host, #{censmap := #{cens := Cens}}) ->
+    lists:map(fun(Cen) -> pub_cen(Host, Cen) end, Cens).
 
+% prepare to publish one cen
+pub_cen(Host, #{cenID := CenId,
+          wire_type := bus,
+          contIDs := ContIds,
+          ipaddr := BridgeIpAddr}) ->
+    [
+        link_cen_to_containers(Host, CenId, ContIds, bus),
+        dby_bridge(Host, list_to_binary(CenId),
+            [status_md(pending),
+             cen_ip_addr_md(list_to_binary(BridgeIpAddr))]),
+        dby_bridge_to_cen(Host, list_to_binary(CenId), list_to_binary(CenId))
+    ];
+pub_cen(Host, #{cenID := CenId,
+          wire_type := WireType,
+          contIDs := ContIds}) ->
+    link_cen_to_containers(Host, CenId, ContIds, WireType).
+
+% prepare to delete one cen
+pub_destroy_cen(Host, #{cenID := CenId, wire_type := bus}) ->
+    [{dby_cen_id(CenId), delete},
+     {dby_bridge_id(Host, CenId), delete}];
+pub_destroy_cen(_Host, #{cenID := CenId}) ->
+    [{dby_cen_id(CenId), delete}].
+
+% link CEN to containers
 link_cen_to_containers(Host, CenId, ContIds, WireType) ->
     [
-        dby_cen(CenId, [wire_type_md(WireType), status_md(pending)]),
+        dby_cen(list_to_binary(CenId), [wire_type_md(WireType), status_md(pending)]),
         lists:map(
             fun(ContId) ->
-                dby_cen_to_container(Host, CenId, ContId)
+                dby_cen_to_container(Host, list_to_binary(CenId), list_to_binary(ContId))
             end, ContIds)
     ].
 
 % prepare to publish wires
-wires_from_censmap(Host, #{wiremap := #{wires := Wires}}) ->
+wires_from_lm(Host, #{wiremap := #{wires := Wires}}) ->
     lists:foldl(
-        fun([EndMap1, EndMap2], Acc) ->
-            [wire_cen(Host, EndMap1, EndMap2) | Acc]
+        fun(Wire, Acc) ->
+            [pub_wire(Host, Wire) | Acc]
         end, [], Wires).
 
-wire_cen(Host, Endpoint1 = #{endID := EndId1},
-               Endpoint2 = #{endID := EndId2}) ->
+% prepare to publish one wire
+pub_wire(Host, [Endpoint1 = #{endID := EndId1},
+                Endpoint2 = #{endID := EndId2}]) ->
     [
         endpoint(Host, Endpoint1),
         endpoint(Host, Endpoint2),
-        dby_endpoint_to_endpoint(Host, EndId1, EndId2,
-                endpoint_to_endpoint_type(Endpoint1, Endpoint2))
+        dby_endpoint_to_endpoint(Host,
+            list_to_binary(EndId1),
+            list_to_binary(EndId2),
+            endpoint_to_endpoint_type(Endpoint1, Endpoint2))
+    ].
+
+% prepare to delete one wire
+pub_destroy_wire(Host, [#{endID := EndId1}, #{endID := EndId2}]) ->
+    [
+        {dby_endpoint_id(Host, list_to_binary(EndId1)), delete},
+        {dby_endpoint_id(Host, list_to_binary(EndId2)), delete}
+        % XXX delete IP addresses?
     ].
 
 endpoint(Host, #{endID := EndId,
@@ -213,18 +273,18 @@ endpoint(Host, #{endID := EndId,
                            alias := Eth,
                            ip_address := IpAddr}}) ->
     [
-        dby_endpoint(Host, EndId, Side, [alias_md(Eth), status_md(pending)]),
-        dby_ipaddr(IpAddr),
-        dby_endpoint_to_ipaddr(Host, EndId, IpAddr),
-        dby_endpoint_to_container(Host, EndId, ContId)
+        dby_endpoint(Host, list_to_binary(EndId), Side, [alias_md(list_to_binary(Eth)), status_md(pending)]),
+        dby_ipaddr(list_to_binary(IpAddr)),
+        dby_endpoint_to_ipaddr(Host, list_to_binary(EndId), list_to_binary(IpAddr)),
+        dby_endpoint_to_container(Host, list_to_binary(EndId), list_to_binary(ContId))
     ];
 endpoint(Host, #{endID := EndId,
                  side := Side,
                  dest := #{type := cen,
                            id := CenId}}) ->
     [
-        dby_endpoint(Host, EndId, Side, [status_md(pending)]),
-        dby_endpoint_to_bridge(Host, EndId, CenId)
+        dby_endpoint(Host, list_to_binary(EndId), Side, [status_md(pending)]),
+        dby_endpoint_to_bridge(Host, list_to_binary(EndId), list_to_binary(CenId))
     ].
 
 endpoint_to_endpoint_type(#{dest := #{type := cont, id := ContId1}},
@@ -233,6 +293,37 @@ endpoint_to_endpoint_type(#{dest := #{type := cont, id := ContId1}},
     <<"connected_to">>;
 endpoint_to_endpoint_type(_,_) ->
     <<"veth_peer">>.
+
+% prepare to add container to cen
+pub_cont_in_cen(Host, ContId, CenId) ->
+    [dby_cen_to_container(Host, list_to_binary(CenId),
+                                list_to_binary(ContId))].
+
+% prepare to destroy container to cen
+pub_destroy_cont_in_cen(Host, ContId, CenId) ->
+    [{dby_cen_id(list_to_binary(CenId)),
+      dby_cont_id(Host, list_to_binary(ContId)),
+      delete}].
+
+% set wiretype in cen
+pub_set_wire_type(CenId, WireType) ->
+    [{dby_cen_id(list_to_binary(CenId)), [wire_type_md(WireType)]}].
+
+% publish bridge
+pub_bridge(Host, CenId, BridgeIpAddr) ->
+    [
+        dby_bridge(Host, list_to_binary(CenId),
+            [status_md(pending),
+             cen_ip_addr_md(list_to_binary(BridgeIpAddr))]),
+        dby_bridge_to_cen(Host, list_to_binary(CenId), list_to_binary(CenId))
+    ].
+
+% publish destroy bridge
+pub_destroy_bridge(Host, BridgeId) ->
+    [
+        {dby_bridge_id(Host, BridgeId), delete}
+    ].
+
 
 status_md(pending) ->
     {<<"status">>, <<"pending">>};
@@ -277,7 +368,7 @@ md_wire_type(<<"bus">>) ->
 -define(MATCH_CONTAINER(ContId), #{?MDTYPE(<<"container">>),
                                    ?MDVALUE(<<"contID">>, ContId)}).
 
--define(MATCH_BRIDGE(BridgeId), #{?MDTYPE(<<"bridge">>),
+-define(MATCH_BRIDGE(BridgeId, IPAddress), #{?MDTYPE(<<"bridge">>),
                                   ?MDVALUE(<<"bridgeID">>, BridgeId),
 				  ?MDVALUE(<<"ipaddr">>, IPAddress)}).
 
@@ -300,7 +391,7 @@ md_wire_type(<<"bus">>) ->
 -define(MATCH_IPADDR(IpAddr), #{?MDTYPE(<<"ipaddr">>),
                                 ?MDVALUE(<<"ipaddr">>, IpAddr)}).
 
-bridge(_,?MATCH_BRIDGE(BridgeId),[], Acc)-> 
+bridge(_,?MATCH_BRIDGE(BridgeId, IPAddress),[], Acc)-> 
     {continue, Acc#{bridgeID := binary_to_list(BridgeId),
                     ipaddr := binary_to_list(IPAddress)}};
 bridge(_, _, _, Acc) ->
@@ -325,7 +416,7 @@ linked_cens(_, _, _, Acc) ->
     {continue, Acc}.
 
 wire_search(#{wire_type := null}) ->
-    [];
+    #{wires => [], ipaddrmap => #{}};
 wire_search(#{cenID := CenId, wire_type := bus}) ->
     % bus data model in dobby benefits from searching breadth first.
     % This makes it easy to find the paths that form the wires.
@@ -358,7 +449,11 @@ wires(_, _, _, Acc) ->
     {continue, Acc}.
 
 %   bridge <-> endpoint (outside) <-> endpoint (inside) <-> cont
-wires_bus(_, ?MATCH_BRIDGE(BridgeId),
+wires_bus(_, ?MATCH_BRIDGE(_, _), [_], Acc) ->
+    % don't follow links from Bridge
+    % we want to approach the bridge from the other direction of the loop
+    {skip, Acc};
+wires_bus(_, ?MATCH_BRIDGE(BridgeId, _),
                 [{_, ?MATCH_OUT_ENDPOINT(OutEndId), _},
                  {_, ?MATCH_IN_ENDPOINT(InEndId, Alias), _},
                  {_, ?MATCH_CONTAINER(ContId), _} | _],
