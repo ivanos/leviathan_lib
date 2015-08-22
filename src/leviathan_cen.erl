@@ -34,17 +34,15 @@ decode_binary(Binary) ->
 
 % Add a container to a CEN
 add_container_to_cen(HostId, ContainerId, CenId) ->
-    % XXX not implemented
     ?INFO("Add container to cen: Container(~s, ~s), Cen(~s)",
                                             [HostId, ContainerId, CenId]),
-    ok.
+    lm_update_cens(HostId, CenId, ContainerId, fun lm_add_container/3).
 
 % Remove a container from a CEN
 remove_container_from_cen(HostId, ContainerId, CenId) ->
-    % XXX not implemented
     ?INFO("Remove container from cen: Container(~s, ~s), Cen(~s)",
                                             [HostId, ContainerId, CenId]),
-    ok.
+    lm_update_cens(HostId, CenId, ContainerId, fun lm_remove_container/3).
 
 % Create new CEN
 new_cen(CenId) ->
@@ -111,9 +109,42 @@ contids_from_cens(Cens) ->
 prepare(CenIds) ->
     prepare_lev(get_levmap(CenIds)).
 
+prepare_deltas(Deltas) ->
+    ok = lists:foreach(fun prepare_instruction/1, Deltas).
+
+prepare_instruction({add, cen, _}) ->
+    % no-op
+    ok;
+prepare_instruction({add, cont, #{contID := ContId}}) ->
+    prepare_cont(ContId);
+prepare_instruction({add, wire, Wire}) ->
+    prepare_wire(Wire);
+prepare_instruction({add, cont_in_cen, _}) ->
+    % no-op
+    ok;
+prepare_instruction({add, bridge, {CenId, IpAddr}}) ->
+    prepare_bus(CenId, IpAddr);
+prepare_instruction({destroy, cen, _}) ->
+    % no-op
+    ok;
+prepare_instruction({destroy, cont, _}) ->
+    % no-op
+    ok;
+prepare_instruction({destroy, wire, Wire}) ->
+    destroy_wire(Wire);
+prepare_instruction({destroy, cont_in_cen, _}) ->
+    % no-op
+    ok;
+prepare_instruction({destroy, bridge, CenId}) ->
+    destroy_bus(CenId);
+prepare_instruction({set, wire_type, _}) ->
+    % no-op
+    ok.
+
 %
 % Top Level Processor
 %
+
 prepare_lev(#{censmap := CensMap, contsmap := ContsMap, wiremap := WireMap}) ->
     % mark cens as preparing
     cens_status(CensMap, preparing),
@@ -133,23 +164,34 @@ prepare_cens(#{cens := Cens}) ->
     %%     make any necessary Ethernet buses
     %%     if a Cen has more than 2 containers, we'll create a bus
     %%
-    lists:foreach(fun(CenMap)->
-			  #{wire_type := CenType, 
-			    ipaddr := IPAddress} = CenMap,
-			  case CenType of
-			      bus ->
-				  #{cenID := CenId} = CenMap,
-				  CmdBundle = leviathan_linux:new_bus(CenId,IPAddress),
-				  leviathan_linux:eval(CmdBundle);
-			      _ -> ok %% don't create a bus
-			  end
-		  end, Cens).
+    lists:foreach(
+        fun(CenMap)->
+            #{cenID := CenId,
+             wire_type := CenType,
+             ipaddr := IpAddress} = CenMap,
+            case CenType of
+                bus ->
+                    prepare_bus(CenId, IpAddress);
+                _ ->
+                    ok %% don't create a bus
+            end
+        end, Cens).
+
+prepare_bus(CenId, IPAddress) ->
+    CmdBundle = leviathan_linux:new_bus(CenId, IPAddress),
+    leviathan_linux:eval(CmdBundle),
+    ok.
 
 prepare_conts(#{conts := Conts}) ->
-    lists:foreach(fun(#{contID := ContId})->
-			  CmdBundle = leviathan_linux:set_netns(ContId),
-			  leviathan_linux:eval(CmdBundle)
-		  end,Conts).
+    lists:foreach(
+        fun(#{contID := ContId}) ->
+            prepare_cont(ContId)
+        end, Conts).
+
+prepare_cont(ContId) ->
+    CmdBundle = leviathan_linux:set_netns(ContId),
+    leviathan_linux:eval(CmdBundle),
+    ok.
 
 prepare_wires(WireMap)->
     #{wires := Wires} = WireMap,
@@ -173,8 +215,6 @@ prepare_wire_end(#{endID := EndId,
 	    leviathan_cin:prepare_wire_end(Dest);
 	_ -> ok  %% No IP Address
     end.
-	
-
 
 %% === DESTROY ===== %%%
 
@@ -195,16 +235,22 @@ destroy_cens(#{cens := Cens}) ->
     %%     make any necessary Ethernet buses
     %%     if a Cen has more than 2 containers, we'll create a bus
     %%
-    lists:foreach(fun(CenMap)->
-			  #{wire_type := CenType} = CenMap,
-			  case CenType of
-			      bus ->
-				  #{cenID := CenId} = CenMap,
-				  CmdBundle = leviathan_linux:delete_bus(CenId),
-				  leviathan_linux:eval(CmdBundle);
-			      _ -> ok %% don't create a bus
-			  end
-		  end, Cens).
+    lists:foreach(
+        fun(CenMap)->
+            #{wire_type := CenType} = CenMap,
+                case CenType of
+                    bus ->
+                        #{cenID := CenId} = CenMap,
+                        destroy_bus(CenId);
+                    _ ->
+                        ok %% don't create a bus
+                end
+            end, Cens).
+
+destroy_bus(CenId) ->
+    CmdBundle = leviathan_linux:delete_bus(CenId),
+    leviathan_linux:eval(CmdBundle),
+    ok.
 
 destroy_wires(WireMap)->
     #{wires := Wires} = WireMap,
@@ -235,6 +281,14 @@ destroy_wire_end(#{dest := #{type := cont, id := ContId, alias := Alias}}) ->
 -define(LM_SET_CENS(Value), ?LM_SET(censmap, cens, Value)).
 -define(LM_SET_CONTS(Value), ?LM_SET(contsmap, conts, Value)).
 -define(LM_SET_WIRES(Value), ?LM_SET(wiremap, wires, Value)).
+
+% Update a Cen with Fn.
+lm_update_cens(HostId, CenId, ContId, Fn) ->
+    LM0 = get_levmap([CenId]),
+    LM1 = Fn(CenId, ContId, LM0),
+    Deltas = lm_compare(LM0, LM1),
+    ok = leviathan_dby:update_cens(HostId, Deltas),
+    ok = prepare_deltas(Deltas).
 
 % Add container to LM
 lm_add_container(CenId, ContId, LM0) ->
