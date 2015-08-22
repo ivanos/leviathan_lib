@@ -33,7 +33,7 @@ namespace for the container.
 
 ## CENs
 
-Lucet provides an utility to publish CENs. See example [CEN config file](cen.json).
+Lucet provides utility functions to publish CENs. See example [CEN config file](cen.json).
 
 To test it:
 
@@ -80,9 +80,20 @@ Where:
 * `cenID` is the CEN identifier
 * `containerIDs` is a list of container identifiers
 
+## Top level API
+Function | Args | Description
+-------- | ---- | -----------
+`leviathan_cen:import_file/2` | Hostname, Filename | imports CEN JSON file into Dobby
+`leviathan_cen:decode_file/1` | Filename | creates a Leviathan Map from CEN JSON file
+`leviathan_cen:lm_compare/2` | OldLeviathanMap1, NewLeviathanMap2 | generates a delta list to transition from the old map to the new map
+`leviathan_cen:add_container_to_cen/3` | Hostname, ContainerId, CenId | add a container to the CEN in Dobby and reconfigure the host
+`leviathan_cen:remove_container_from_cen/3` | Hostname, ContainerId, CenId | remove a container from a CEN in Dobby and reconfigure the host
+`leviathan_dby:import_cens/2` | Hostname, Filename | imports a Leviathan Map into Dobby
+`leviathan_dby:update_cens/2` | Hostname, Delta | applies deltas from `leviathan_den:lm_compare/2` to Dobby
+
 ## Leviathan Erlang Data Structures
 
-The top level structure:
+Leviathan Map: The top level structure:
 
 Key | Value | Description
 --- | ----- | -----------
