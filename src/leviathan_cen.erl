@@ -135,7 +135,7 @@ prepare_cens(#{cens := Cens}) ->
     %%
     lists:foreach(fun(CenMap)->
 			  #{wire_type := CenType, 
-			    ip_address := IPAddress} = CenMap,
+			    ipaddr := IPAddress} = CenMap,
 			  case CenType of
 			      bus ->
 				  #{cenID := CenId} = CenMap,
@@ -250,7 +250,7 @@ add_cen(CenId, LM = ?LM_CENS(Cens)) ->
         true ->
             LM;
         false ->
-            LM?LM_SET_CENS([new_cen_map(CenId) | Cens])
+            LM?LM_SET_CENS([cen(length(Cens) +1, CenId, null, []) | Cens])
     end.
 
 % returns filter function matching CenId
@@ -258,9 +258,6 @@ cenid_is(MatchCenId) ->
     fun(#{cenID := CenId}) ->
         MatchCenId == CenId
     end.
-
-new_cen_map(CenId) ->
-    #{cenID => CenId, wire_type => null, contIDs => []}.
 
 %add container to Cont maps
 add_container(ContId, LM = ?LM_CONTS(Conts)) ->
@@ -336,10 +333,12 @@ lm_wire_cens(LM = ?LM_CENS(Cens)) ->
 % - {add, cont, ContMap}
 % - {add, wire, Wire}
 % - {add, cont_in_cen, {ContId, CenId}}
+% - {add, bridge, {CenId, IpAddr}}
 % - {destroy, cen, CenMap}
 % - {destroy, cont, ContMap}
 % - {destroy, wire, Wire}
 % - {destroy, cont_in_cen, {ContId, CenId}}
+% - {destroy, bridge, CenId}
 % - {set, wire_type, {CenId, WireType}}
 lm_compare(Old, New) ->
     lists:flatten([
@@ -360,6 +359,7 @@ compare_cens_containers(?LM_CENS(OldCens), ?LM_CENS(NewCens)) ->
         fun(CenId) ->
             #{contIDs := OldList} = maps:get(CenId, OldMap),
             #{contIDs := NewList} = maps:get(CenId, NewMap),
+            Ipaddr = maps:get(ipaddr, maps:get(CenId, NewMap), null),
             {ToRemove, ToAdd} = compare_lists(OldList, NewList),
             [
                 instructions(destroy, cont_in_cen,
@@ -367,7 +367,9 @@ compare_cens_containers(?LM_CENS(OldCens), ?LM_CENS(NewCens)) ->
                 instructions(add, cont_in_cen,
                     [{ContId, CenId} || ContId <- ToAdd]),
                 set_wiretype(CenId, wire_type(OldList),
-                                    wire_type(NewList))
+                                    wire_type(NewList)),
+                set_bridge(CenId, Ipaddr,
+                                    wire_type(OldList), wire_type(NewList))
             ]
         end, CommonKeys).
 
@@ -384,6 +386,19 @@ set_wiretype(_, Wiretype, Wiretype) ->
     [];
 set_wiretype(CenId, _, NewWiretype) ->
     {set, wire_type, {CenId, NewWiretype}}.
+
+set_bridge(_, _, WireType, WireType) ->
+    % nothing changed
+    [];
+set_bridge(CenId, Ipaddr, _, bus) ->
+    % add bridge
+    {add, bridge, {CenId, Ipaddr}};
+set_bridge(CenId, _, bus, _) ->
+    % remove bridge
+    {destroy, bridge, CenId};
+set_bridge(_, _, _, _) ->
+    % ignore any other transition
+    [].
 
 compare_wires(?LM_WIRES(OldWires), ?LM_WIRES(NewWires)) ->
     delta_instructions(wire, wires_map(OldWires), wires_map(NewWires)).
@@ -472,7 +487,7 @@ cens_from_jiffy(CensJson) ->
     {_, Cens} = lists:foldl(
         fun(#{<<"cenID">> := Cen, <<"containerIDs">> := Conts}, {Count, Acc}) ->
             {Count + 1, [cen(Count,
-                         Cen,
+                         binary_to_list(Cen),
                          wire_type(Conts),
                          Conts) | Acc]}
         end, {1, []}, CensJson),
@@ -485,15 +500,11 @@ wire_type(Conts) when length(Conts)  == 2 ->
 wire_type(Conts) when length(Conts)  > 2 ->
     bus.
 
-cen(Count, Cen, bus, Conts) ->
-     #{cenID => binary_to_list(Cen),
-       wire_type => bus,
-       contIDs => list_binary_to_list(Conts),
-       ipaddr => cen_ip_addr(Count)};
-cen(_, Cen, WireType, Conts) ->
-     #{cenID => binary_to_list(Cen),
+cen(Count, Cen, WireType, Conts) ->
+     #{cenID => Cen,
        wire_type => WireType,
-       contIDs => list_binary_to_list(Conts)}.
+       contIDs => list_binary_to_list(Conts),
+       ipaddr => cen_ip_addr(Count)}.
 
 % conts
 conts_from_jiffy(CensJson) ->

@@ -97,6 +97,8 @@ update_instruction(Host, {add, wire, Wire}) ->
     pub_wire(Host, Wire);
 update_instruction(Host, {add, cont_in_cen, {ContId, CenId}}) ->
     pub_cont_in_cen(Host, ContId, CenId);
+update_instruction(Host, {add, bridge, {Cen, IpAddr}}) ->
+    pub_bridge(Host, Cen, IpAddr);
 update_instruction(Host, {destroy, cen, Cen}) ->
     pub_destroy_cen(Host, Cen);
 update_instruction(Host, {destroy, cont, Cont}) ->
@@ -105,6 +107,8 @@ update_instruction(Host, {destroy, wire, Wire}) ->
     pub_destroy_wire(Host, Wire);
 update_instruction(Host, {destroy, cont_in_cen, {ContId, CenId}}) ->
     pub_destroy_cont_in_cen(Host, ContId, CenId);
+update_instruction(Host, {destroy, bridge, Cen}) ->
+    pub_destroy_bridge(Host, Cen);
 update_instruction(_, {set, wire_type, {CenId, WireType}}) ->
     pub_set_wire_type(CenId, WireType).
 
@@ -208,8 +212,9 @@ pub_cen(Host, #{cenID := CenId,
           ipaddr := BridgeIpAddr}) ->
     [
         link_cen_to_containers(Host, CenId, ContIds, bus),
-        dby_bridge(Host, list_to_binary(CenId), [status_md(pending),
-                                         cen_ip_addr_md(BridgeIpAddr)]),
+        dby_bridge(Host, list_to_binary(CenId),
+            [status_md(pending),
+             cen_ip_addr_md(list_to_binary(BridgeIpAddr))]),
         dby_bridge_to_cen(Host, list_to_binary(CenId), list_to_binary(CenId))
     ];
 pub_cen(Host, #{cenID := CenId,
@@ -247,8 +252,10 @@ pub_wire(Host, [Endpoint1 = #{endID := EndId1},
     [
         endpoint(Host, Endpoint1),
         endpoint(Host, Endpoint2),
-        dby_endpoint_to_endpoint(Host, list_to_binary(EndId1), list_to_binary(EndId2),
-                endpoint_to_endpoint_type(Endpoint1, Endpoint2))
+        dby_endpoint_to_endpoint(Host,
+            list_to_binary(EndId1),
+            list_to_binary(EndId2),
+            endpoint_to_endpoint_type(Endpoint1, Endpoint2))
     ].
 
 % prepare to delete one wire
@@ -267,7 +274,7 @@ endpoint(Host, #{endID := EndId,
                            ip_address := IpAddr}}) ->
     [
         dby_endpoint(Host, list_to_binary(EndId), Side, [alias_md(list_to_binary(Eth)), status_md(pending)]),
-       dby_ipaddr(list_to_binary(IpAddr)),
+        dby_ipaddr(list_to_binary(IpAddr)),
         dby_endpoint_to_ipaddr(Host, list_to_binary(EndId), list_to_binary(IpAddr)),
         dby_endpoint_to_container(Host, list_to_binary(EndId), list_to_binary(ContId))
     ];
@@ -301,6 +308,22 @@ pub_destroy_cont_in_cen(Host, ContId, CenId) ->
 % set wiretype in cen
 pub_set_wire_type(CenId, WireType) ->
     [{dby_cen_id(list_to_binary(CenId)), [wire_type_md(WireType)]}].
+
+% publish bridge
+pub_bridge(Host, CenId, BridgeIpAddr) ->
+    [
+        dby_bridge(Host, list_to_binary(CenId),
+            [status_md(pending),
+             cen_ip_addr_md(list_to_binary(BridgeIpAddr))]),
+        dby_bridge_to_cen(Host, list_to_binary(CenId), list_to_binary(CenId))
+    ].
+
+% publish destroy bridge
+pub_destroy_bridge(Host, BridgeId) ->
+    [
+        {dby_bridge_id(Host, BridgeId), delete}
+    ].
+
 
 status_md(pending) ->
     {<<"status">>, <<"pending">>};
@@ -345,7 +368,7 @@ md_wire_type(<<"bus">>) ->
 -define(MATCH_CONTAINER(ContId), #{?MDTYPE(<<"container">>),
                                    ?MDVALUE(<<"contID">>, ContId)}).
 
--define(MATCH_BRIDGE(BridgeId), #{?MDTYPE(<<"bridge">>),
+-define(MATCH_BRIDGE(BridgeId, IPAddress), #{?MDTYPE(<<"bridge">>),
                                   ?MDVALUE(<<"bridgeID">>, BridgeId),
 				  ?MDVALUE(<<"ipaddr">>, IPAddress)}).
 
@@ -368,7 +391,7 @@ md_wire_type(<<"bus">>) ->
 -define(MATCH_IPADDR(IpAddr), #{?MDTYPE(<<"ipaddr">>),
                                 ?MDVALUE(<<"ipaddr">>, IpAddr)}).
 
-bridge(_,?MATCH_BRIDGE(BridgeId),[], Acc)-> 
+bridge(_,?MATCH_BRIDGE(BridgeId, IPAddress),[], Acc)-> 
     {continue, Acc#{bridgeID := binary_to_list(BridgeId),
                     ipaddr := binary_to_list(IPAddress)}};
 bridge(_, _, _, Acc) ->
@@ -426,7 +449,11 @@ wires(_, _, _, Acc) ->
     {continue, Acc}.
 
 %   bridge <-> endpoint (outside) <-> endpoint (inside) <-> cont
-wires_bus(_, ?MATCH_BRIDGE(BridgeId),
+wires_bus(_, ?MATCH_BRIDGE(_, _), [_], Acc) ->
+    % don't follow links from Bridge
+    % we want to approach the bridge from the other direction of the loop
+    {skip, Acc};
+wires_bus(_, ?MATCH_BRIDGE(BridgeId, _),
                 [{_, ?MATCH_OUT_ENDPOINT(OutEndId), _},
                  {_, ?MATCH_IN_ENDPOINT(InEndId, Alias), _},
                  {_, ?MATCH_CONTAINER(ContId), _} | _],
