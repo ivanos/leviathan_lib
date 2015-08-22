@@ -19,6 +19,7 @@ loop(Port) ->
 	    io:format("parsed: ~p~n",[Parsed]),
 	    Mapped = event2map(Parsed),
 	    io:format("mapped: ~p~n",[Mapped]),
+	    handle_event(Mapped),
 	    loop(Port);
 	{'EXIT', Port, Reason} ->
 	    exit({port_terminated,Reason})
@@ -35,6 +36,14 @@ parse_event(EventString)->
 event2map(ParsedEvent)->
 	[Timestamp,Cid,"from",Tag,Event]= ParsedEvent,
 	#{ event => list_to_atom(Event), cid => Cid, tag => Tag, time => Timestamp }.
+
+
+handle_event(#{ event := create, cid := Cid})->
+    Cins = leviathan_utils:container_get_cins(Cid),
+    io:format("~p cins =~p~n",[Cid,Cins]);
+handle_event(#{ cid := Cid}) ->
+    io:format("~p ignored~n",[Cid]).
+
 				  		 
 	
 		       
