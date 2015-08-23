@@ -49,7 +49,10 @@ handle_event(#{ event := create, cid := Cid})->
 			  leviathan_cen:add_container_to_cen("host1",Cid,binary_to_list(Cin)) end,
 		  Cins);
 handle_event(#{ cid := Cid}) ->
-    io:format("~p ignored~n",[Cid]).
+    io:format("~p ignored~n",[Cid]);
+handle_event(Event) ->
+    io:format("~p undefined~n",[Event]).
+
 
 				  		 
 	
