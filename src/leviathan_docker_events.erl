@@ -33,9 +33,12 @@ parse_event(EventString)->
 	                      string:strip(T2,left,$() end,
 			      Tokens).
 
-event2map(ParsedEvent)->
-	[Timestamp,Cid,"from",Tag,Event]= ParsedEvent,
-	#{ event => list_to_atom(Event), cid => string:substr(Cid,1,12), tag => Tag, time => Timestamp }.
+event2map([Timestamp,Cid,"from",Tag,Event])->
+    #{ event => list_to_atom(Event), cid => string:substr(Cid,1,12), tag => Tag, time => Timestamp };
+event2map(_) ->
+    #{ event => undefined }.
+	     
+
 
 
 handle_event(#{ event := create, cid := Cid})->
