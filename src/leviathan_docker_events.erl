@@ -35,12 +35,16 @@ parse_event(EventString)->
 
 event2map(ParsedEvent)->
 	[Timestamp,Cid,"from",Tag,Event]= ParsedEvent,
-	#{ event => list_to_atom(Event), cid => Cid, tag => Tag, time => Timestamp }.
+	#{ event => list_to_atom(Event), cid => string:substr(Cid,1,12), tag => Tag, time => Timestamp }.
 
 
 handle_event(#{ event := create, cid := Cid})->
     Cins = leviathan_utils:container_get_cins(Cid),
-    io:format("~p cins =~p~n",[Cid,Cins]);
+    io:format("~p cins =~p~n",[Cid,Cins]),
+    lists:foreach(fun(Cin)->
+			  io:format("adding cid = ~p to cin =~p~n",[Cid,Cin]),
+			  leviathan_cen:add_container_to_cen("host1",Cid,binary_to_list(Cin)) end,
+		  Cins);
 handle_event(#{ cid := Cid}) ->
     io:format("~p ignored~n",[Cid]).
 
