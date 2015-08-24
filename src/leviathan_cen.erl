@@ -606,35 +606,35 @@ wire_cen(Context, _, []) ->
     Context;
 wire_cen(Context, _, [_]) ->
     Context;
-wire_cen(Context0, CenId, [ContId1, ContId2]) ->
-    % wire the containers directly if there are two containers in the CEN
-    Context1 = count_cont(Context0, CenId),
-    {Context2, ContId1InEndpoint} = next_in_endpoint(Context1, ContId1),
-    Cont1IpAddr = ip_addr(Context2, CenId),
-    Context3 = count_cont(Context2, CenId),
-    {Context4, ContId2InEndpoint} = next_in_endpoint(Context3, ContId2),
-    Cont2IpAddr = ip_addr(Context4, CenId),
-    maps_append(wires, [#{
-        endID => ContId1InEndpoint,
-        side => in,
-        dest => #{
-                    type => cont,
-                    id => ContId1,
-                    alias => CenId,
-                    ip_address => Cont1IpAddr
-                }
-     },
-     #{
-        endID => ContId2InEndpoint,
-        side => in,
-        dest => #{
-                    type => cont,
-                    id => ContId2,
-                    alias => CenId,
-                    ip_address => Cont2IpAddr
-                }
-     }
-    ], Context4);
+%wire_cen(Context0, CenId, [ContId1, ContId2]) ->
+%    % wire the containers directly if there are two containers in the CEN
+%    Context1 = count_cont(Context0, CenId),
+%    {Context2, ContId1InEndpoint} = next_in_endpoint(Context1, ContId1),
+%    Cont1IpAddr = ip_addr(Context2, CenId),
+%    Context3 = count_cont(Context2, CenId),
+%    {Context4, ContId2InEndpoint} = next_in_endpoint(Context3, ContId2),
+%    Cont2IpAddr = ip_addr(Context4, CenId),
+%    maps_append(wires, [#{
+%        endID => ContId1InEndpoint,
+%        side => in,
+%        dest => #{
+%                    type => cont,
+%                    id => ContId1,
+%                    alias => CenId,
+%                    ip_address => Cont1IpAddr
+%                }
+%     },
+%     #{
+%        endID => ContId2InEndpoint,
+%        side => in,
+%        dest => #{
+%                    type => cont,
+%                    id => ContId2,
+%                    alias => CenId,
+%                    ip_address => Cont2IpAddr
+%                }
+%     }
+%    ], Context4);
 wire_cen(Context, CenId, ContainerIds) ->
     lists:foldl(wire_cen_to_container(CenId), Context, ContainerIds).
 
