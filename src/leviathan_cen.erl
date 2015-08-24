@@ -168,7 +168,7 @@ prepare_cens(#{cens := Cens}) ->
         fun(CenMap)->
             #{cenID := CenId,
              wire_type := CenType,
-             ipaddr := IpAddress} = CenMap,
+             ip_address := IpAddress} = CenMap,
             case CenType of
                 bus ->
                     prepare_bus(CenId, IpAddress);
