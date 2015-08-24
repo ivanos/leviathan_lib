@@ -36,7 +36,7 @@ import_binary(Binary)->
     CinListBin = dict:fetch_keys(NewCinDicts),
     NewCinMap = lists:foldl(fun(CinID,Acc)->Acc++[#{<<"cenID">> => CinID,<<"containerIDs">> =>dict:fetch(CinID,NewCinDicts)}] end,[],CinListBin),
     io:format("NewCinMap:~n~p~n",[NewCinMap]),
-    LM = leviathan_cen:decode_binary(NewCinMap),
+    LM = #{<<"cenList">> => NewCinMap},
     leviathan_dby:import_cens(<<"host1">>,LM),
     leviathan_cen:prepare(lists:map(fun(CinId)->
 					    binary:bin_to_list(CinId) end,CinListBin)).
