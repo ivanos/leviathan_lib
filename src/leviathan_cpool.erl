@@ -40,7 +40,7 @@ import_binary(Binary)->
     io:format("LM:~n~p~n",[LM]),
     leviathan_dby:import_cens(<<"host1">>,LM),
     leviathan_cen:prepare(lists:map(fun(CinId)->
-					    binary:bin_to_list(CinId) end,CinListBin)).
+					    binary_to_list(CinId) end,CinListBin)).
 
 cin2list(BinList)->
     lists:map(fun(Elem)->

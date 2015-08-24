@@ -548,9 +548,11 @@ cens_from_jiffy(CensJson) ->
     Cens.
 
 wire_type(Conts) when length(Conts) < 2 ->
-    null;
+    bus;
+    %null;
 wire_type(Conts) when length(Conts)  == 2 ->
-    wire;
+    bus;
+    %wire
 wire_type(Conts) when length(Conts)  > 2 ->
     bus.
 
