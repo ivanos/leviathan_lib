@@ -599,7 +599,7 @@ maps_append_unique(Key, Value, Map) ->
 
 wire_cens(Cens) ->
     #{wires := Wires} = lists:foldl(
-        fun(#{cenID := CenId, contIDs := ContIds, ipaddr := IpAddr}, Context) ->
+        fun(#{cenID := CenId, contIDs := ContIds, ip_address := IpAddr}, Context) ->
             wire_cen(Context, cen_b(IpAddr), CenId, ContIds)
         end, #{cen_b => undefined, count => #{}, wires => []}, Cens),
     Wires.
