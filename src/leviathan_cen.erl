@@ -413,7 +413,7 @@ compare_cens_containers(?LM_CENS(OldCens), ?LM_CENS(NewCens)) ->
         fun(CenId) ->
             #{contIDs := OldList} = maps:get(CenId, OldMap),
             #{contIDs := NewList} = maps:get(CenId, NewMap),
-            Ipaddr = maps:get(ipaddr, maps:get(CenId, NewMap), null),
+            Ipaddr = maps:get(ip_address, maps:get(CenId, NewMap), null),
             {ToRemove, ToAdd} = compare_lists(OldList, NewList),
             [
                 instructions(destroy, cont_in_cen,
@@ -560,7 +560,7 @@ cen(Count, Cen, WireType, Conts) ->
      #{cenID => Cen,
        wire_type => WireType,
        contIDs => list_binary_to_list(Conts),
-       ipaddr => cen_ip_addr(Count)}.
+       ip_address => cen_ip_addr(Count)}.
 
 % conts
 conts_from_jiffy(CensJson) ->
