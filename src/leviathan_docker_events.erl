@@ -48,6 +48,13 @@ handle_event(#{ event := create, cid := Cid})->
 			  io:format("adding cid = ~p to cin =~p~n",[Cid,Cin]),
 			  leviathan_cen:add_container_to_cen("host1",Cid,binary_to_list(Cin)) end,
 		  Cins);
+handle_event(#{ event := die, cid := Cid})->
+    Cins = leviathan_utils:container_get_cins(Cid),
+    io:format("~p cins =~p~n",[Cid,Cins]),
+    lists:foreach(fun(Cin)->
+			  io:format("removing cid = ~p to cin =~p~n",[Cid,Cin]) end,
+			  %leviathan_cen:remove_container_from_cen("host1",Cid,binary_to_list(Cin)) end,
+		  Cins);
 handle_event(#{ cid := Cid}) ->
     io:format("~p ignored~n",[Cid]);
 handle_event(Event) ->

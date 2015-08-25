@@ -361,7 +361,7 @@ remove_container_from_censmap(CenId, ContId, LM = ?LM_CENS(Cens0)) ->
     Cens1 = update_censmap(CenId, Cens0,
         fun(Cen = #{contIDs := ContIds0}) ->
             ContIds1 = lists:delete(ContId, ContIds0),
-            [Cen#{contIDs := ContIds1, wire_type := wire_type(ContIds1)}]
+            [Cen#{contIDs := ContIds1, wire_type := wire_type(ContIds0)}]
         end),
     LM?LM_SET_CENS(Cens1).
 
