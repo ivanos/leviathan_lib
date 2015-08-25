@@ -321,7 +321,7 @@ add_container(ContId, LM = ?LM_CONTS(Conts)) ->
         true ->
             LM;
         false ->
-            LM?LM_SET_CONTS(Conts ++ [new_cont_map(ContId)])
+            LM?LM_SET_CONTS([new_cont_map(ContId)|Conts])
     end.
 
 % returns filter function matching ContId
@@ -724,7 +724,7 @@ list_binary_to_list(List) ->
 list_add_unique(Element, List) ->
     case lists:member(Element, List) of
         false ->
-            [Element | List];
+            List ++ [Element];
         true ->
             List
     end.
