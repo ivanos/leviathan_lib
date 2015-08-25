@@ -16,7 +16,7 @@ check_wires(Cens, Wires) ->
 
 map_cen_to_ipaddr(Cens) ->
     lists:foldl(
-        fun(#{cenID := CenId, ipaddr := IpAddr}, Acc) ->
+        fun(#{cenID := CenId, ip_address := IpAddr}, Acc) ->
             maps:put(CenId, IpAddr, Acc)
         end, #{}, Cens).
 

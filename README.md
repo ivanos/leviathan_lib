@@ -91,6 +91,13 @@ Function | Args | Description
 `leviathan_dby:import_cens/2` | Hostname, Filename | imports a Leviathan Map into Dobby
 `leviathan_dby:update_cens/2` | Hostname, Delta | applies deltas from `leviathan_den:lm_compare/2` to Dobby
 
+## Environment Variables
+Variable | Value | Description
+-------- | ----- | -----------
+docker_bin | `/usr/bin/docker events --util=""` | command line to read docker events
+
+Set `docker_bin` to some other Unix utility (e.g., `cat`) if you do not have docker installed and want to experiment with this application.
+
 ## Leviathan Erlang Data Structures
 
 Leviathan Map: The top level structure:

@@ -105,7 +105,7 @@ lm_add_container2() ->
     LM1 = leviathan_cen:lm_add_container("cen1", "c2", LM0),
     LM2 = leviathan_cen:lm_add_container("cen1", "c3", LM1),
     {Cens, Conts, Wires} = decompose_lm(LM2),
-    ?assertEqual([cen_map("cen1", ["c3", "c2", "c1"], bus, "10.7.0.1")], Cens),
+    ?assertEqual([cen_map("cen1", ["c1", "c2", "c3"], bus, "10.7.0.1")], Cens),
     ?assertEqualLists([cont_map("c1", ["cen1"]),
                        cont_map("c2", ["cen1"]),
                        cont_map("c3", ["cen1"])],
@@ -122,12 +122,12 @@ lm_add_container3() ->
     LM5 = leviathan_cen:lm_add_container("cen2", "c3", LM4),
     LM6 = leviathan_cen:lm_add_container("cen2", "c4", LM5),
     {Cens, Conts, Wires} = decompose_lm(LM6),
-    ?assertEqualLists([cen_map("cen1", ["c3", "c2", "c1"], bus, "10.7.0.1"),
-                       cen_map("cen2", ["c4", "c3", "c2", "c1"], bus, "10.8.0.1")],
+    ?assertEqualLists([cen_map("cen1", ["c1", "c2", "c3"], bus, "10.7.0.1"),
+                       cen_map("cen2", ["c1", "c2", "c3", "c4"], bus, "10.8.0.1")],
                       Cens),
-    ?assertEqualLists([cont_map("c1", ["cen2", "cen1"]),
-                       cont_map("c2", ["cen2", "cen1"]),
-                       cont_map("c3", ["cen2", "cen1"]),
+    ?assertEqualLists([cont_map("c1", ["cen1", "cen2"]),
+                       cont_map("c2", ["cen1", "cen2"]),
+                       cont_map("c3", ["cen1", "cen2"]),
                        cont_map("c4", ["cen2"])],
                       Conts),
     ?assertEqual(7, length(Wires)),
@@ -230,7 +230,7 @@ cen_map(CenId, ContIds, WireType, IpAddr) ->
     #{cenID => CenId,
       wire_type => WireType,
       contIDs => ContIds,
-      ipaddr => IpAddr}.
+      ip_address => IpAddr}.
 
 cont_map(ContId, CenIds) ->
     #{contID => ContId,
