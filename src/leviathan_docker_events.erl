@@ -1,10 +1,29 @@
 -module(leviathan_docker_events).
 
+-behaviour(application).
+
 -compile(export_all).
 
 -include("leviathan_logger.hrl").
 
+%% Application callbacks
+-export([start/2, stop/1]).
 
+%% ===================================================================
+%% Application callbacks
+%% ===================================================================
+
+start(_StartType, _StartArgs) ->
+    leviathan_docker_events_sup:start_link().
+
+
+stop(_State) ->
+    ok.
+
+start_docker_event_listener()->
+    DockerEventsBin = "/usr/bin/docker events --until=\"\"",
+    Port = open_port({spawn, DockerEventsBin}, []),
+    loop(Port).
 
 event_listener() ->
     DockerEventsBin = "/usr/bin/docker events --until=\"\"",

@@ -5,10 +5,11 @@
   {registered, []},
   {applications, [
                   kernel,
-                  stdlib,
-                  lager,
-                  jiffy,
-                  dobby_clib
+                  stdlib
+%                  lager,
+%                  jiffy,
+%                  dobby_clib
                  ]},
+  {mod, {leviathan_docker_events, []}},
   {env, []}
  ]}.
