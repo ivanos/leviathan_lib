@@ -285,7 +285,9 @@ destroy_wire_end(#{dest := #{type := cont, id := ContId, alias := Alias}}) ->
 % Update a Cen with Fn.
 lm_update_cens(HostId, CenId, ContId, Fn) ->
     LM0 = get_levmap([CenId]),
+    io:format("lm_udpate_cens: LM0 = ~p~n",[LM0]),
     LM1 = Fn(CenId, ContId, LM0),
+    io:format("lm_udpate_cens: LM1 = ~p~n",[LM1]),
     Deltas = lm_compare(LM0, LM1),
     ok = leviathan_dby:update_cens(HostId, Deltas),
     ok = prepare_deltas(Deltas).
