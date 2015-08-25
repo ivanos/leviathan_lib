@@ -321,7 +321,7 @@ add_container(ContId, LM = ?LM_CONTS(Conts)) ->
         true ->
             LM;
         false ->
-            LM?LM_SET_CONTS([new_cont_map(ContId) | Conts])
+            LM?LM_SET_CONTS([Conts] ++ [new_cont_map(ContId)])
     end.
 
 % returns filter function matching ContId
