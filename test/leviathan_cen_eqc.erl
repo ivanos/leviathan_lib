@@ -1,6 +1,7 @@
 -module(leviathan_cen_eqc).
 
 -include_lib("eqc/include/eqc.hrl").
+-include_lib("eunit/include/eunit.hrl").
 
 -compile(export_all).
 
@@ -31,13 +32,52 @@ prop_wires() ->
             gen_instructions(),
             begin
                 % make LM
-                {Cens, _, Wires} = decompose_lm(new_lm(Instructions)),
+                LM = new_lm(Instructions),
+                {Cens, _, _} = decompose_lm(LM),
 
                 % check wires
-                collect(length(Cens),
-                            leviathan_test_utils:check_wires(Cens, Wires))
+                collect(length(Cens), check_lm(LM))
             end
         )).
+
+check_lm(LM) ->
+    {Cens, Conts, Wires} = decompose_lm(LM),
+    leviathan_test_utils:check_wires(Cens, Wires),
+    check_cens_conts(Cens, Conts),
+    check_wire_count(Cens, Wires),
+    true.
+
+check_cens_conts(Cens, Conts) ->
+    CensContsFromCens = cens_conts_from_cens(Cens),
+    CensContsFromConts = cens_conts_from_conts(Conts),
+    ?assertEqual(CensContsFromCens, CensContsFromConts).
+
+cens_conts_from_cens(Cens) ->
+    lists:sort(lists:flatten(lists:map(
+        fun(#{cenID := CenId, contIDs := ContIds}) ->
+            [{CenId, ContId} || ContId <- ContIds]
+        end, Cens))).
+
+cens_conts_from_conts(Conts) ->
+    lists:sort(lists:flatten(lists:map(
+        fun(#{contID := ContId, cens := CenIds}) ->
+            [{CenId, ContId} || CenId <- CenIds]
+        end, Conts))).
+
+check_wire_count(Cens, Wires) ->
+    ExpectedWireCount = expected_wire_count(Cens),
+    ?assertEqual(ExpectedWireCount, length(Wires)).
+
+expected_wire_count(Cens) ->
+    lists:foldl(
+        fun(#{contIDs := ContIds}, Count) when length(ContIds) < 2 ->
+            Count;
+           (#{contIDs := ContIds}, Count) when length(ContIds) == 2 ->
+            % when wire enabled, this is +1
+            Count + 2;
+           (#{contIDs := ContIds}, Count) ->
+            Count + length(ContIds)
+        end, 0, Cens).
 
 prop_lm_dby() ->
     numtests(1000,
