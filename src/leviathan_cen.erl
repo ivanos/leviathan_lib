@@ -595,16 +595,16 @@ maps_append(Key, Value, Map) ->
 
 wire_cens(Cens) ->
     #{wires := Wires} = lists:foldl(
-        fun(#{cenID := CenId, contIDs := ContIds}, Context) ->
-            wire_cen(count_cen(Context), CenId, ContIds)
-        end, #{count => #{}, wires => []}, Cens),
+        fun(#{cenID := CenId, contIDs := ContIds, ipaddr := IpAddr}, Context) ->
+            wire_cen(Context, cen_b(IpAddr), CenId, ContIds)
+        end, #{cen_b => undefined, count => #{}, wires => []}, Cens),
     Wires.
 
 % wiring helpers
 
-wire_cen(Context, _, []) ->
+wire_cen(Context, _, _, []) ->
     Context;
-wire_cen(Context, _, [_]) ->
+wire_cen(Context, _, _, [_]) ->
     Context;
 %wire_cen(Context0, CenId, [ContId1, ContId2]) ->
 %    % wire the containers directly if there are two containers in the CEN
@@ -635,15 +635,15 @@ wire_cen(Context, _, [_]) ->
 %                }
 %     }
 %    ], Context4);
-wire_cen(Context, CenId, ContainerIds) ->
-    lists:foldl(wire_cen_to_container(CenId), Context, ContainerIds).
+wire_cen(Context, CenB, CenId, ContainerIds) ->
+    lists:foldl(wire_cen_to_container(CenId, CenB), Context, ContainerIds).
 
-wire_cen_to_container(CenId) ->
+wire_cen_to_container(CenId, CenB) ->
     fun(ContId, Context0) ->
         Context1 = count_cont(Context0, CenId),
         {Context2, InEndpoint} = next_in_endpoint(Context1, ContId),
         {Context3, OutEndpoint} = next_out_endpoint(Context2, ContId),
-        IpAddr = ip_addr(Context3, CenId),
+        IpAddr = ip_addr(Context3, CenB, CenId),
         maps_append(wires, [#{
             endID => InEndpoint,
             side => in,
@@ -667,10 +667,10 @@ wire_cen_to_container(CenId) ->
 
 % publish context helpers
 
-% mark the next cen
-count_cen(Context) ->
-    {Context1, _} = next_count(Context, cen, fun(_) -> ok end),
-    Context1.
+% set B network for Cen
+cen_b(IpAddr) ->
+    {ok, {_, CenB, _, _}} = inet:parse_address(IpAddr),
+    CenB.
 
 % mark next container in cen
 count_cont(Context, CenId) ->
@@ -694,10 +694,9 @@ next_count(Context = #{count := CountMap}, Key, FormatFn) ->
      FormatFn(N)}.
 
 % format ip addr
-ip_addr(#{count := CountMap}, CenId) ->
-    CenCount = maps:get(cen, CountMap),
+ip_addr(#{count := CountMap}, CenB, CenId) ->
     ContCount = maps:get({conts, CenId}, CountMap),
-    binary_to_list(leviathan_cin:ip_address(CenCount, ContCount)).
+    binary_to_list(leviathan_cin:ip_address(CenB, ContCount)).
 
 % format ip addr for cens
 cen_ip_addr(CenCount) ->
