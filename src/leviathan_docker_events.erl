@@ -8,8 +8,11 @@
 
 event_listener() ->
     DockerEventsBin = "/usr/bin/docker events --until=\"\"",
-    spawn(fun()->Port = open_port({spawn, DockerEventsBin}, []),
-    		      loop(Port) end).
+    Pid = spawn(fun()->Port = open_port({spawn, DockerEventsBin}, []),
+		 loop(Port) end),
+    io:format("docker event listener = ~p~n",[Pid]),
+    ok.
+
 
 loop(Port) ->
     receive
@@ -22,6 +25,7 @@ loop(Port) ->
 	    handle_event(Mapped),
 	    loop(Port);
 	{'EXIT', Port, Reason} ->
+	    io:format("docker event listener TERMINATED ~p~n",[Reason]),
 	    exit({port_terminated,Reason})
     end.
 
