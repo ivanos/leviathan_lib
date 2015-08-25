@@ -10,7 +10,7 @@
 inspect_pid
 (Cid)->
     Cmd = "docker inspect -f '{{.State.Pid}}' " ++ Cid,
-    Result = os:cmd(Cmd),
+    Result = leviathan_os:cmd(Cmd),
     %%Result = "justtesting",
     Stripped = string:strip(Result,right,$\n),
     ?DEBUG("leviathan:inspect_pid(~p) Stripped = ~p!",[Cid,Stripped]),
@@ -34,5 +34,3 @@ ps()->
 
 inspect(ContainerID)->
     "docker inspect " ++ ContainerID.
-
-

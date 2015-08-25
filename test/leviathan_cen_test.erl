@@ -6,21 +6,23 @@
 
 leviathan_cen_test_() ->
     [
-        {"decode_jiffy 0 containers", fun decode_jiffy1/0}
-       ,{"decode_jiffy 1 container", fun decode_jiffy2/0}
-       ,{"decode_jiffy 2 containers", fun decode_jiffy3/0}
-       ,{"decode_jiffy 3 containers", fun decode_jiffy4/0}
-       ,{"lm_add_container test 0", fun lm_add_container0/0}
-       ,{"lm_add_container test 1", fun lm_add_container1/0}
-       ,{"lm_add_container test 1", fun lm_add_container2/0}
-       ,{"lm_remove_container test 0", fun lm_remove_container0/0}
-       ,{"lm_remove_container test 1", fun lm_remove_container1/0}
-       ,{"lm_remove_container test 2", fun lm_remove_container2/0}
-       ,{"lm_compare 0", fun lm_compare0/0}
-       ,{"lm_compare 1", fun lm_compare1/0}
-       ,{"lm_compare 2", fun lm_compare2/0}
-       ,{"lm_compare 3", fun lm_compare3/0}
-       ,{"lm_compare 4", fun lm_compare4/0}
+% tests that use wire/null cen wire type. wire not used for now.
+%       {"decode_jiffy 0 containers", fun decode_jiffy1/0}
+%      ,{"decode_jiffy 1 container", fun decode_jiffy2/0}
+%      ,{"decode_jiffy 2 containers", fun decode_jiffy3/0}
+        {"decode_jiffy 3 containers", fun decode_jiffy4/0}
+%      ,{"lm_add_container test 0", fun lm_add_container0/0}
+%      ,{"lm_add_container test 1", fun lm_add_container1/0}
+       ,{"lm_add_container test 2", fun lm_add_container2/0}
+       ,{"lm_add_container test 3", fun lm_add_container3/0}
+%      ,{"lm_remove_container test 0", fun lm_remove_container0/0}
+%      ,{"lm_remove_container test 1", fun lm_remove_container1/0}
+%      ,{"lm_remove_container test 2", fun lm_remove_container2/0}
+%      ,{"lm_compare 0", fun lm_compare0/0}
+%      ,{"lm_compare 1", fun lm_compare1/0}
+%      ,{"lm_compare 2", fun lm_compare2/0}
+%      ,{"lm_compare 3", fun lm_compare3/0}
+%      ,{"lm_compare 4", fun lm_compare4/0}
     ].
 
 decode_jiffy1() ->
@@ -104,10 +106,32 @@ lm_add_container2() ->
     LM2 = leviathan_cen:lm_add_container("cen1", "c3", LM1),
     {Cens, Conts, Wires} = decompose_lm(LM2),
     ?assertEqual([cen_map("cen1", ["c3", "c2", "c1"], bus, "10.7.0.1")], Cens),
-    ?assertEqualLists(Conts, [cont_map("c1", ["cen1"]),
-                              cont_map("c2", ["cen1"]),
-                              cont_map("c3", ["cen1"])]),
+    ?assertEqualLists([cont_map("c1", ["cen1"]),
+                       cont_map("c2", ["cen1"]),
+                       cont_map("c3", ["cen1"])],
+                      Conts),
     ?assertEqual(3, length(Wires)),
+    assert_bus_wires(Wires).
+
+lm_add_container3() ->
+    LM0 = leviathan_cen:lm_add_container("cen1", "c1", new_lm()),
+    LM1 = leviathan_cen:lm_add_container("cen1", "c2", LM0),
+    LM2 = leviathan_cen:lm_add_container("cen1", "c3", LM1),
+    LM3 = leviathan_cen:lm_add_container("cen2", "c1", LM2),
+    LM4 = leviathan_cen:lm_add_container("cen2", "c2", LM3),
+    LM5 = leviathan_cen:lm_add_container("cen2", "c3", LM4),
+    LM6 = leviathan_cen:lm_add_container("cen2", "c4", LM5),
+    {Cens, Conts, Wires} = decompose_lm(LM6),
+    ?assertEqualLists([cen_map("cen1", ["c3", "c2", "c1"], bus, "10.7.0.1"),
+                       cen_map("cen2", ["c4", "c3", "c2", "c1"], bus, "10.8.0.1")],
+                      Cens),
+    ?assertEqualLists([cont_map("c1", ["cen2", "cen1"]),
+                       cont_map("c2", ["cen2", "cen1"]),
+                       cont_map("c3", ["cen2", "cen1"]),
+                       cont_map("c4", ["cen2"])],
+                      Conts),
+    ?assertEqual(7, length(Wires)),
+    leviathan_test_utils:check_wires(Cens, Wires),
     assert_bus_wires(Wires).
 
 lm_remove_container0() ->
