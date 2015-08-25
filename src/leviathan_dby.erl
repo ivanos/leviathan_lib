@@ -36,12 +36,12 @@ import_cens(Host, CensMap) ->
 get_bridge(BridgeId) ->
     dby:search(fun bridge/4,
 	       #{bridgeID => null,
-		 ipaddr => null}, 
+		 ip_address => null}, 
 	       dby_bridge_id("host1",BridgeId), [{max_depth, 0}]).
 
 -spec get_cen(string()) -> #{}.
 get_cen(CenId) ->
-    #{ipaddr := IPAddress} = get_bridge(CenId),
+    #{ip_address := IPAddress} = get_bridge(CenId),
     dby:search(fun linked_containers/4,
         #{cenID => null,
          wire_type => null,
@@ -209,7 +209,7 @@ cens_from_lm(Host, #{censmap := #{cens := Cens}}) ->
 pub_cen(Host, #{cenID := CenId,
           wire_type := bus,
           contIDs := ContIds,
-          ipaddr := BridgeIpAddr}) ->
+          ip_address := BridgeIpAddr}) ->
     [
         link_cen_to_containers(Host, CenId, ContIds, bus),
         dby_bridge(Host, list_to_binary(CenId),
@@ -393,7 +393,7 @@ md_wire_type(<<"bus">>) ->
 
 bridge(_,?MATCH_BRIDGE(BridgeId, IPAddress),[], Acc)-> 
     {continue, Acc#{bridgeID := binary_to_list(BridgeId),
-                    ipaddr := binary_to_list(IPAddress)}};
+                    ip_address := binary_to_list(IPAddress)}};
 bridge(_, _, _, Acc) ->
     {continue, Acc}.
     
