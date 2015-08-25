@@ -344,7 +344,7 @@ add_container_to_censmap(CenId, ContId, LM = ?LM_CENS(Cens0)) ->
 add_container_to_contsmap(ContId, CenId, LM = ?LM_CONTS(Conts0)) ->
     Conts1 = update_contsmap(ContId, Conts0,
         fun(Cont) ->
-            [maps_append(cens, CenId, Cont)]
+            [maps_append_unique(cens, CenId, Cont)]
         end),
     LM?LM_SET_CONTS(Conts1).
 
@@ -592,6 +592,10 @@ make_pair(Const, List, Acc) ->
 maps_append(Key, Value, Map) ->
     Old = maps:get(Key, Map, []),
     maps:put(Key, [Value | Old], Map).
+
+maps_append_unique(Key, Value, Map) ->
+    Old = maps:get(Key, Map, []),
+    maps:put(Key, list_add_unique(Value, Old), Map).
 
 wire_cens(Cens) ->
     #{wires := Wires} = lists:foldl(
