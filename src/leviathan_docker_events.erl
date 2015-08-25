@@ -41,7 +41,7 @@ now_secs({MegaSecs,Secs,_}) ->
 
 init([]) ->
     DockerBin = application:get_env(leviathan_lib, docker_bin,
-                                "/usr/bin/docker events --util=\"\""),
+                                "/usr/bin/docker events --until=\"\""),
     gen_server:cast(self(), start),
     {ok, #{port => undefined, docker_bin => DockerBin}}.
 
