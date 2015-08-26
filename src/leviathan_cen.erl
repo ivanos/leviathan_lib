@@ -8,7 +8,7 @@
          remove_container_from_cen/3,
          add_container_to_cen/3,
          destroy_cen/1,
-         new_cen/1]).
+         new_cen/2]).
 
 -ifdef(TEST).
 -export([decode_jiffy/1]).
@@ -45,9 +45,9 @@ remove_container_from_cen(HostId, ContainerId, CenId) ->
     lm_update_cens(HostId, CenId, ContainerId, fun lm_remove_container/3).
 
 % Create new CEN
-new_cen(CenId) ->
+new_cen(HostId, CenId) ->
     ?INFO("Create cen: Cen(~s)", [CenId]),
-    ok.
+    lm_add_cen(HostId, CenId).
     
 % Destroy CEN
 destroy_cen(CenId) ->
@@ -306,6 +306,14 @@ lm_add_container(CenId, ContId, LM0) ->
     LM3 = add_container(ContId, LM2),
     LM4 = add_container_to_contsmap(ContId, CenId, LM3),
     lm_wire_cens(LM4).
+
+% add cen
+lm_add_cen(HostId, CenId) ->
+    LM0 = get_levmap([CenId]),
+    LM1 = add_cen(CenId, LM0),
+    Deltas = lm_compare(LM0, LM1),
+    ok = leviathan_dby:update_cens(HostId, Deltas),
+    ok = prepare_deltas(Deltas).
 
 % add cen to CEN maps
 add_cen(CenId, LM = ?LM_CENS(Cens)) ->
