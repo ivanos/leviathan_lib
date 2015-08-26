@@ -46,7 +46,6 @@ remove_container_from_cen(HostId, ContainerId, CenId) ->
 
 % Create new CEN
 new_cen(CenId) ->
-    % XXX not implemented
     ?INFO("Create cen: Cen(~s)", [CenId]),
     ok.
     
@@ -79,12 +78,20 @@ test_local_prepare_lev(CenIds)->
 get_levmap(CenIds) ->
     Cens = get_cens(CenIds),
     #{censmap => #{cens => Cens},
-     contsmap => #{conts => get_conts(Cens)},
-     wiremap => #{wires => get_wiremaps(Cens)}
+      contsmap => #{conts => get_conts(Cens)},
+      wiremap => #{wires => get_wiremaps(Cens)}
     }.
 
 get_cens(CenIds) ->
-    [leviathan_dby:get_cen(CenId) || CenId <- CenIds].
+    lists:foldl(
+        fun(CenId, Acc) ->
+            case leviathan_dby:get_cen(CenId) of
+                #{cenID := null} ->
+                    Acc;
+                Cen ->
+                    [Cen | Acc]
+            end
+        end, [], CenIds).
 
 % XXX host is hardcoded
 get_conts(Cens) ->

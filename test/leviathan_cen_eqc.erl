@@ -131,6 +131,7 @@ prop_lm_dby() ->
 start_dobby() ->
     ok = application:set_env(erl_mnesia, options, [persistent]),
     application:ensure_all_started(dobby),
+    lager:set_loglevel(lager_console_backend, warning),
     mnesia:wait_for_tables([identifiers], 5000).
 
 stop_dobby() ->

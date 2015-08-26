@@ -38,7 +38,8 @@ cleanup(ok) ->
 
 each_setup() ->
     ok = meck:expect(leviathan_dby, get_next_cin_ip, 0,
-                                        meck:seq(["10.7.0.1","10.8.0.1"])),
+                                        meck:seq([<<"10.7.0.1">>,
+                                                  <<"10.8.0.1">>])),
     ok = meck:reset(leviathan_dby).
 
 decode_jiffy1() ->
