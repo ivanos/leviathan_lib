@@ -27,10 +27,17 @@ gen_instructions() ->
 
 prop_wires() ->
     numtests(1000,
+        ?SETUP(
+            fun() ->
+                start_dobby(),
+                fun() -> stop_dobby() end
+            end,
         ?FORALL(
             Instructions,
             gen_instructions(),
             begin
+                cleanup(),
+
                 % make LM
                 LM = new_lm(Instructions),
                 {Cens, _, _} = decompose_lm(LM),
@@ -38,7 +45,7 @@ prop_wires() ->
                 % check wires
                 collect(length(Cens), check_lm(LM))
             end
-        )).
+        ))).
 
 check_lm(LM) ->
     {Cens, Conts, Wires} = decompose_lm(LM),

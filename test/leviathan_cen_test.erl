@@ -5,7 +5,12 @@
 -define(assertEqualLists(A,B), ?assertEqual(lists:sort(A), lists:sort(B))).
 
 leviathan_cen_test_() ->
-    [
+    {setup,
+     fun setup/0,
+     fun cleanup/1,
+     {foreach,
+       fun each_setup/0,
+       [
 % tests that use wire/null cen wire type. wire not used for now.
 %       {"decode_jiffy 0 containers", fun decode_jiffy1/0}
 %      ,{"decode_jiffy 1 container", fun decode_jiffy2/0}
@@ -23,7 +28,18 @@ leviathan_cen_test_() ->
 %      ,{"lm_compare 2", fun lm_compare2/0}
 %      ,{"lm_compare 3", fun lm_compare3/0}
 %      ,{"lm_compare 4", fun lm_compare4/0}
-    ].
+       ]}}.
+
+setup() ->
+    ok = meck:new(leviathan_dby).
+
+cleanup(ok) ->
+    ok = meck:unload(leviathan_dby).
+
+each_setup() ->
+    ok = meck:expect(leviathan_dby, get_next_cin_ip, 0,
+                                        meck:seq(["10.7.0.1","10.8.0.1"])),
+    ok = meck:reset(leviathan_dby).
 
 decode_jiffy1() ->
     Json = [json_cen(<<"cen1">>, [])],

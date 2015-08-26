@@ -10,9 +10,12 @@
 -export([get_cen/1,
          get_cont/2,
          get_wires/1,
-         set_cen_status/2]).
+         set_cen_status/2,
+         get_next_cin_ip/0]).
 
 -define(PUBLISHER, atom_to_binary(?MODULE, utf8)).
+-define(REGISTRY, <<"lev_registry">>).
+-define(CIN_COUNT, <<"cin_count">>).
 
 -include("leviathan_logger.hrl").
 
@@ -76,6 +79,20 @@ update_cens(Host, Instructions) ->
 % status
 set_cen_status(CenId, Status) ->
     set_status(dby_cen_id(CenId), Status).
+
+% compute the next cin ip address
+% XXX doesn't reuse addresses of delete CINs
+get_next_cin_ip() ->
+    CinCount = case dby:identifier(?REGISTRY) of
+        [] ->
+            % no registry
+            1;
+        #{?CIN_COUNT := #{value := V}} ->
+            V
+    end,
+    % increment count
+    ok = dby:publish(?PUBLISHER, {?REGISTRY, [{?CIN_COUNT, CinCount + 1}]}, [persistent]),
+    leviathan_cin:cen_ip_address(CinCount).
 
 % -----------------------------------------------------------------------------
 %
