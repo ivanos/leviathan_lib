@@ -84,7 +84,9 @@ set_ip_address(Cid, Alias, IPAddress)->
     %% Use /0 as netmask, since the concept of "local network" doesn't
     %% make sense anymore.  Since the entire world is now our local
     %% network, we don't need a gateway either.
-    [leviathan_ip:netns_exec_ip_addr_add_dev(CPid,IPAddress ++ "/0",Alias)].
+    [leviathan_ip:netns_exec_ip_addr_add_dev(CPid,IPAddress ++ "/0",Alias),
+     %% Add a route to send everything out through the network interface.
+     leviathan_ip:netns_exec_ip_route_add_default_dev(CPid,Alias)].
 
 eval(CmdBundle)->
     EvalBundle = lists:map(fun(X)->Result = leviathan_os:cmd(X), {X,Result} end,CmdBundle),
