@@ -62,7 +62,7 @@ handle_info({Port, {data, Data}}, State = #{port := Port}) ->
     Parsed = parse_event(Data),
     Mapped = event2map(Parsed),
     handle_event(Mapped),
-    {norpely, State};
+    {noreply, State};
 handle_info(Message, State) ->
     {stop, {not_implemtned, Message}, State}.
 
