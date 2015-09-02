@@ -41,7 +41,7 @@ now_secs({MegaSecs,Secs,_}) ->
 
 init([]) ->
     DockerBin = application:get_env(leviathan_lib, docker_bin,
-                                "/usr/bin/docker events --util=\"\""),
+                                "/usr/bin/docker events --until=\"\""),
     gen_server:cast(self(), start),
     {ok, #{port => undefined, docker_bin => DockerBin}}.
 
@@ -62,7 +62,7 @@ handle_info({Port, {data, Data}}, State = #{port := Port}) ->
     Parsed = parse_event(Data),
     Mapped = event2map(Parsed),
     handle_event(Mapped),
-    {norpely, State};
+    {noreply, State};
 handle_info(Message, State) ->
     {stop, {not_implemtned, Message}, State}.
 
