@@ -321,7 +321,10 @@ add_cen(CenId, LM = ?LM_CENS(Cens)) ->
         true ->
             LM;
         false ->
-            LM?LM_SET_CENS([cen(CenId, null, []) | Cens])
+            LM?LM_SET_CENS([cen(CenId,
+                                null,
+                                [],
+                                leviathan_dby:get_next_cin_ip()) | Cens])
     end.
 
 % returns filter function matching CenId
@@ -557,7 +560,10 @@ decode_jiffy(CensJson) ->
 cens_from_jiffy(CensJson) ->
     Cens = lists:foldl(
         fun(#{<<"cenID">> := Cen, <<"containerIDs">> := Conts}, Acc) ->
-            [cen(binary_to_list(Cen), wire_type(Conts), Conts) | Acc]
+            [cen(binary_to_list(Cen),
+                 wire_type(Conts),
+                 Conts,
+                 leviathan_dby:get_next_cin_ip()) | Acc]
         end, [], CensJson),
     Cens.
 
@@ -570,11 +576,13 @@ wire_type(Conts) when length(Conts)  == 2 ->
 wire_type(Conts) when length(Conts)  > 2 ->
     bus.
 
-cen(Cen, WireType, Conts) ->
+% XXX ignore wiretype for now and always use bus
+cen(Cen, _WireType, Conts, IpAddr) ->
      #{cenID => Cen,
-       wire_type => WireType,
+%      wire_type => WireType,
+       wire_type => bus,
        contIDs => list_binary_to_list(Conts),
-       ip_address => binary_to_list(leviathan_dby:get_next_cin_ip())}.
+       ip_address => binary_to_list(IpAddr)}.
 
 % conts
 conts_from_jiffy(CensJson) ->
@@ -715,10 +723,6 @@ next_count(Context = #{count := CountMap}, Key, FormatFn) ->
 ip_addr(#{count := CountMap}, CenB, CenId) ->
     ContCount = maps:get({conts, CenId}, CountMap),
     binary_to_list(leviathan_cin:ip_address(CenB, ContCount)).
-
-% format ip addr for cens
-cen_ip_addr(CenCount) ->
-    binary_to_list(leviathan_cin:cen_ip_address(CenCount)).
 
 % name formatters
 in_endpoint_name(ContId, N) ->

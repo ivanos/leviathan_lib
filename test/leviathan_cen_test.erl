@@ -20,6 +20,7 @@ leviathan_cen_test_() ->
 %      ,{"lm_add_container test 1", fun lm_add_container1/0}
        ,{"lm_add_container test 2", fun lm_add_container2/0}
        ,{"lm_add_container test 3", fun lm_add_container3/0}
+       ,{"lm_add_container test 4", fun lm_add_container4/0}
 %      ,{"lm_remove_container test 0", fun lm_remove_container0/0}
 %      ,{"lm_remove_container test 1", fun lm_remove_container1/0}
 %      ,{"lm_remove_container test 2", fun lm_remove_container2/0}
@@ -28,6 +29,8 @@ leviathan_cen_test_() ->
 %      ,{"lm_compare 2", fun lm_compare2/0}
 %      ,{"lm_compare 3", fun lm_compare3/0}
 %      ,{"lm_compare 4", fun lm_compare4/0}
+       ,{"lm_compare 5", fun lm_compare5/0}
+       ,{"lm_add_cen 0", fun lm_add_cen0/0}
        ]}}.
 
 setup() ->
@@ -118,10 +121,12 @@ lm_add_container1() ->
     ], Wires).
 
 lm_add_container2() ->
-    LM0 = leviathan_cen:lm_add_container("cen1", "c1", new_lm()),
-    LM1 = leviathan_cen:lm_add_container("cen1", "c2", LM0),
-    LM2 = leviathan_cen:lm_add_container("cen1", "c3", LM1),
-    {Cens, Conts, Wires} = decompose_lm(LM2),
+    {Cens, Conts, Wires} = foldcalls(new_lm(), [
+        fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end,
+        fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c2", Acc) end,
+        fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c3", Acc) end,
+        fun decompose_lm/1
+    ]),
     ?assertEqual([cen_map("cen1", ["c1", "c2", "c3"], bus, "10.7.0.1")], Cens),
     ?assertEqualLists([cont_map("c1", ["cen1"]),
                        cont_map("c2", ["cen1"]),
@@ -131,14 +136,16 @@ lm_add_container2() ->
     assert_bus_wires(Wires).
 
 lm_add_container3() ->
-    LM0 = leviathan_cen:lm_add_container("cen1", "c1", new_lm()),
-    LM1 = leviathan_cen:lm_add_container("cen1", "c2", LM0),
-    LM2 = leviathan_cen:lm_add_container("cen1", "c3", LM1),
-    LM3 = leviathan_cen:lm_add_container("cen2", "c1", LM2),
-    LM4 = leviathan_cen:lm_add_container("cen2", "c2", LM3),
-    LM5 = leviathan_cen:lm_add_container("cen2", "c3", LM4),
-    LM6 = leviathan_cen:lm_add_container("cen2", "c4", LM5),
-    {Cens, Conts, Wires} = decompose_lm(LM6),
+    {Cens, Conts, Wires} = foldcalls(new_lm(), [
+        fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end,
+        fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c2", Acc) end,
+        fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c3", Acc) end,
+        fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c1", Acc) end,
+        fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c2", Acc) end,
+        fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c3", Acc) end,
+        fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c4", Acc) end,
+        fun decompose_lm/1
+    ]),
     ?assertEqualLists([cen_map("cen1", ["c1", "c2", "c3"], bus, "10.7.0.1"),
                        cen_map("cen2", ["c1", "c2", "c3", "c4"], bus, "10.8.0.1")],
                       Cens),
@@ -150,6 +157,18 @@ lm_add_container3() ->
     ?assertEqual(7, length(Wires)),
     leviathan_test_utils:check_wires(Cens, Wires),
     assert_bus_wires(Wires).
+
+lm_add_container4() ->
+    {Cens, Conts, Wires} = decompose_lm(
+        foldcalls(new_lm(), [
+            fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
+            fun(Acc) -> leviathan_cen:add_cen("cen2", Acc) end,
+            fun(Acc) -> leviathan_cen:lm_add_container("cen1", "cA", Acc) end,
+            fun(Acc) -> leviathan_cen:lm_add_container("cen2", "cA", Acc) end,
+            fun(Acc) -> leviathan_cen:lm_add_container("cen1", "cB", Acc) end,
+            fun(Acc) -> leviathan_cen:lm_add_container("cen2", "cB", Acc) end
+        ])),
+    leviathan_test_utils:check_wires(Cens, Wires).
 
 lm_remove_container0() ->
     LM = leviathan_cen:lm_remove_container("cen1", "c1", new_lm()),
@@ -224,6 +243,38 @@ lm_compare4() ->
     ],
     ?assertEqual(Instructions, leviathan_cen:lm_compare(OldLM, NewLM)).
 
+lm_compare5() ->
+    LM0 = foldcalls(new_lm(), [
+        fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
+        fun(Acc) -> leviathan_cen:add_cen("cen2", Acc) end,
+        fun(Acc) -> leviathan_cen:lm_add_container("cen1", "cA", Acc) end,
+        fun(Acc) -> leviathan_cen:lm_add_container("cen2", "cA", Acc) end,
+        fun(Acc) -> leviathan_cen:lm_add_container("cen1", "cB", Acc) end
+    ]),
+    LM1 = leviathan_cen:lm_add_container("cen2", "cB", LM0),
+    Instructions = [
+        {add, wire, [
+            endpoint("cB", "cB.0i", in, "cen2", "10.8.0.11"),
+            endpoint("cen2", "cB.0o", out)
+         ]},
+        {add, wire, [
+            endpoint("cA", "cA.0i", in, "cen2", "10.8.0.10"),
+            endpoint("cen2", "cA.0o", out)
+        ]}],
+    ?debugVal(LM0),
+    ?debugVal(leviathan_cen:lm_compare(LM0, LM1)),
+    ?debugVal(LM1),
+    ?assertEqual(Instructions, leviathan_cen:lm_compare(LM0, LM1)).
+
+lm_add_cen0() ->
+    OldLM = new_lm(),
+    NewLM = leviathan_cen:add_cen("cen1", OldLM),
+    Instructions = [{add, cen, #{cenID => "cen1",
+                                 contIDs => [],
+                                 ip_address => "10.7.0.1",
+                                 wire_type => bus}}],
+    ?assertEqual(Instructions, leviathan_cen:lm_compare(OldLM, NewLM)).
+
 %-------------------------------------------------------------------------------
 % helpers
 %-------------------------------------------------------------------------------
@@ -278,6 +329,21 @@ is_cen_endpoint(#{dest := #{type := cen}}) ->
     true;
 is_cen_endpoint(_) ->
     false.
+
+foldcalls(Starting, Fns) ->
+    lists:foldl(fun(Fn, Acc) -> Fn(Acc) end, Starting, Fns).
+
+foldcalls2(Starting, CompareFn, Fns) ->
+    lists:foldl(
+        fun(Fn, Acc0) ->
+            Acc1 = Fn(Acc0),
+            CompareFn(Acc0, Acc1),
+            Acc1
+        end, Starting, Fns).
+
+lm_compare(Old, New) ->
+    ?debugVal(leviathan_cen:lm_compare(Old, New)),
+    ?debugVal(New).
 
 tr() ->
     dbg:start(),

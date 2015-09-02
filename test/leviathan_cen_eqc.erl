@@ -10,17 +10,14 @@
 make_id(Base, I) ->
     Base ++ integer_to_list(I).
 
-pos_int() ->
-    ?SUCHTHAT(I, int(), I >= 0).
-
 gen_cen_id() ->
-    ?LET(I, pos_int(), make_id("cen-", I)).
+    ?LET(I, choose(1,4), make_id("cen-", I)).
 
 gen_cont_id() ->
-    ?LET(I, pos_int(), make_id("cont-", I)).
+    ?LET(I, choose(1,100), make_id("cont-", I)).
 
 gen_op() ->
-    elements([add, destroy]).
+    frequency([{3, add}, {0, destroy}]).
 
 gen_instructions() ->
     list({gen_op(), gen_cen_id(), gen_cont_id()}).
@@ -32,20 +29,20 @@ prop_wires() ->
                 start_dobby(),
                 fun() -> stop_dobby() end
             end,
-        ?FORALL(
-            Instructions,
-            gen_instructions(),
-            begin
-                cleanup(),
+            ?FORALL(
+                Instructions,
+                gen_instructions(),
+                begin
+                    cleanup(),
 
-                % make LM
-                LM = new_lm(Instructions),
-                {Cens, _, _} = decompose_lm(LM),
+                    % make LM
+                    LM = new_lm(Instructions),
+                    {Cens, _, _} = decompose_lm(LM),
 
-                % check wires
-                collect(length(Cens), check_lm(LM))
-            end
-        ))).
+                    % check wires
+                    collect(length(Cens), check_lm(LM))
+                end
+            ))).
 
 check_lm(LM) ->
     {Cens, Conts, Wires} = decompose_lm(LM),
@@ -128,6 +125,41 @@ prop_lm_dby() ->
                 end
             ))).
 
+prop_deltas() ->
+    numtests(1000,
+        ?SETUP(
+            fun() ->
+                start_dobby(),
+                fun() -> stop_dobby() end
+            end,
+            ?FORALL(
+                Instructions,
+                gen_instructions(),
+                begin
+                    cleanup(),
+
+                    % make LM
+                    {LM, Deltas} = deltas(Instructions),
+
+                    % apply Deltas to dobby one by one
+                    lists:foreach(
+                        fun(Delta) ->
+                            ok = leviathan_dby:update_cens(?HOST, [Delta])
+                        end, Deltas),
+
+                    % pull LM from dobby
+                    CenIds = cenids_from_lm(LM),
+                    DobbyLM = leviathan_cen:get_levmap(CenIds),
+
+                    % compute delta between new dobby and new LM
+                    % (should be no difference)
+                    Difference = leviathan_cen:lm_compare(LM, DobbyLM),
+
+                    collect(length(Deltas),
+                        equals([], Difference))
+                end
+            ))).
+
 start_dobby() ->
     ok = application:set_env(erl_mnesia, options, [persistent]),
     application:ensure_all_started(dobby),
@@ -160,6 +192,16 @@ run_op({add, CenId, ContId}, LM) ->
     leviathan_cen:lm_add_container(CenId, ContId, LM);
 run_op({destroy, CenId, ContId}, LM) ->
     leviathan_cen:lm_remove_container(CenId, ContId, LM).
+
+deltas(Instructions) ->
+    deltas(Instructions, [], new_lm()).
+
+deltas([], Deltas, LM) ->
+    {LM, lists:flatten(Deltas)};
+deltas([Op | Rest], Deltas, LM) ->
+    NewLM = run_op(Op, LM),
+    Delta = leviathan_cen:lm_compare(LM, NewLM),
+    deltas(Rest, [Deltas, Delta], NewLM).
 
 cenids_from_lm(#{censmap := #{cens := Cens}}) ->
     [CenId || #{cenID := CenId} <- Cens].
