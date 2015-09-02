@@ -76,6 +76,8 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal functions
 %% ===================================================================
 
+% example event:
+% 2015-08-25T15:35:18.000000000-07:00 984610c0e2a2c04968e567baa2f9ecb5a660c32e31a23cb35ec57e9fbb62a22c: (from ubuntu:14.04) create
 parse_event(EventString)->
     Stripped = string:strip(EventString, right, $\n),
     Tokens = string:tokens(Stripped," "),

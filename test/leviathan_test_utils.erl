@@ -5,6 +5,9 @@
 -include_lib("eunit/include/eunit.hrl").
 
 check_wires(Cens, Wires) ->
+    % matching cens in wire ends
+    same_cen_endpoints(Wires),
+
     % map CEN to ipaddr
     IpAddrByCen = map_cen_to_ipaddr(Cens),
     
@@ -13,6 +16,23 @@ check_wires(Cens, Wires) ->
 
     % validate
     cen_ipaddrs_in_cen(CenEndpointIpAddrs, IpAddrByCen).
+
+same_cen_endpoints([]) ->
+    ok;
+same_cen_endpoints([Wire | Wires]) ->
+    same_cen_endpoints_wire(Wire),
+    same_cen_endpoints(Wires).
+
+same_cen_endpoints_wire([CenEnd  = #{dest := #{type := cen}},
+                         ContEnd = #{dest := #{type := cont}}]) ->
+    same_cen_endpoints_wire(CenEnd, ContEnd);
+same_cen_endpoints_wire([ContEnd = #{dest := #{type := cont}},
+                         CenEnd  = #{dest := #{type := cen}}]) ->
+    same_cen_endpoints_wire(CenEnd, ContEnd).
+
+same_cen_endpoints_wire(#{dest := #{id := CenId}},
+                        #{dest := #{alias := Alias}}) ->
+    ?assertEqual(CenId, Alias).
 
 map_cen_to_ipaddr(Cens) ->
     lists:foldl(
