@@ -7,7 +7,8 @@
 -export([import_cens/2,
          update_cens/2]).
 
--export([get_cen/1,
+-export([dby_cen_id/1,
+         get_cen/1,
          get_cont/2,
          get_wires/1,
          set_cen_status/2,
@@ -18,6 +19,7 @@
 -define(CIN_COUNT, <<"cin_count">>).
 
 -include("leviathan_logger.hrl").
+-include_lib("leviathan_lib/include/leviathan_lib.hrl").
 
 % -----------------------------------------------------------------------------
 %
@@ -94,6 +96,11 @@ get_next_cin_ip() ->
     ok = dby:publish(?PUBLISHER, {?REGISTRY, [{?CIN_COUNT, CinCount + 1}]}, [persistent]),
     leviathan_cin:cen_ip_address(CinCount).
 
+% formatters
+
+dby_cen_id(CenId) ->
+    dby_id([<<"lev_cen">>, CenId]).
+
 % -----------------------------------------------------------------------------
 %
 % Internal functions
@@ -141,9 +148,6 @@ dby_id([E], Acc) ->
     iolist_to_binary([Acc, E]);
 dby_id([E | Rest], Acc) ->
     dby_id(Rest, [Acc, E, ">"]).
-
-dby_cen_id(CenId) ->
-    dby_id([<<"lev_cen">>, CenId]).
 
 dby_bridge_id(Host, BridgeId) ->
     dby_id([<<"lev_bridge">>, Host, BridgeId]).
@@ -377,36 +381,6 @@ md_wire_type(<<"bus">>) ->
     bus.
 
 % search
-
--define(MDVALUE(Key, Var), Key := #{value := Var}).
-
--define(MDTYPE(Type), ?MDVALUE(<<"type">>, Type)).
-
--define(MATCH_CONTAINER(ContId), #{?MDTYPE(<<"container">>),
-                                   ?MDVALUE(<<"contID">>, ContId)}).
-
--define(MATCH_BRIDGE(BridgeId, IPAddress), #{?MDTYPE(<<"bridge">>),
-                                  ?MDVALUE(<<"bridgeID">>, BridgeId),
-				  ?MDVALUE(<<"ipaddr">>, IPAddress)}).
-
--define(MATCH_CEN(CenId, WireType), #{?MDTYPE(<<"cen">>),
-                                       ?MDVALUE(<<"cenID">>, CenId),
-                                       ?MDVALUE(<<"wire_type">>, WireType)}).
-
--define(MATCH_ENDPOINT(EndId), #{?MDTYPE(<<"endpoint">>),
-                                 ?MDVALUE(<<"endID">>, EndId)}).
-
--define(MATCH_IN_ENDPOINT(EndId, Alias), #{?MDTYPE(<<"endpoint">>),
-                                          ?MDVALUE(<<"side">>, <<"in">>),
-                                          ?MDVALUE(<<"endID">>, EndId),
-                                          ?MDVALUE(<<"alias">>, Alias)}).
-
--define(MATCH_OUT_ENDPOINT(EndId), #{?MDTYPE(<<"endpoint">>),
-                                     ?MDVALUE(<<"side">>, <<"out">>),
-                                     ?MDVALUE(<<"endID">>, EndId)}).
-
--define(MATCH_IPADDR(IpAddr), #{?MDTYPE(<<"ipaddr">>),
-                                ?MDVALUE(<<"ipaddr">>, IpAddr)}).
 
 bridge(_,?MATCH_BRIDGE(BridgeId, IPAddress),[], Acc)-> 
     {continue, Acc#{bridgeID := binary_to_list(BridgeId),
