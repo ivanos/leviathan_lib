@@ -8,7 +8,7 @@
          remove_container_from_cen/3,
          add_container_to_cen/3,
          destroy_cen/1,
-         new_cen/1]).
+         new_cen/2]).
 
 -ifdef(TEST).
 -export([decode_jiffy/1]).
@@ -45,10 +45,9 @@ remove_container_from_cen(HostId, ContainerId, CenId) ->
     lm_update_cens(HostId, CenId, ContainerId, fun lm_remove_container/3).
 
 % Create new CEN
-new_cen(CenId) ->
-    % XXX not implemented
+new_cen(HostId, CenId) ->
     ?INFO("Create cen: Cen(~s)", [CenId]),
-    ok.
+    lm_add_cen(HostId, CenId).
     
 % Destroy CEN
 destroy_cen(CenId) ->
@@ -79,12 +78,20 @@ test_local_prepare_lev(CenIds)->
 get_levmap(CenIds) ->
     Cens = get_cens(CenIds),
     #{censmap => #{cens => Cens},
-     contsmap => #{conts => get_conts(Cens)},
-     wiremap => #{wires => get_wiremaps(Cens)}
+      contsmap => #{conts => get_conts(Cens)},
+      wiremap => #{wires => get_wiremaps(Cens)}
     }.
 
 get_cens(CenIds) ->
-    [leviathan_dby:get_cen(CenId) || CenId <- CenIds].
+    lists:foldl(
+        fun(CenId, Acc) ->
+            case leviathan_dby:get_cen(CenId) of
+                #{cenID := null} ->
+                    Acc;
+                Cen ->
+                    [Cen | Acc]
+            end
+        end, [], CenIds).
 
 % XXX host is hardcoded
 get_conts(Cens) ->
@@ -285,9 +292,7 @@ destroy_wire_end(#{dest := #{type := cont, id := ContId, alias := Alias}}) ->
 % Update a Cen with Fn.
 lm_update_cens(HostId, CenId, ContId, Fn) ->
     LM0 = get_levmap([CenId]),
-    io:format("lm_udpate_cens: LM0 = ~p~n",[LM0]),
     LM1 = Fn(CenId, ContId, LM0),
-    io:format("lm_udpate_cens: LM1 = ~p~n",[LM1]),
     Deltas = lm_compare(LM0, LM1),
     ok = leviathan_dby:update_cens(HostId, Deltas),
     ok = prepare_deltas(Deltas).
@@ -300,13 +305,24 @@ lm_add_container(CenId, ContId, LM0) ->
     LM4 = add_container_to_contsmap(ContId, CenId, LM3),
     lm_wire_cens(LM4).
 
+% add cen
+lm_add_cen(HostId, CenId) ->
+    LM0 = get_levmap([CenId]),
+    LM1 = add_cen(CenId, LM0),
+    Deltas = lm_compare(LM0, LM1),
+    ok = leviathan_dby:update_cens(HostId, Deltas),
+    ok = prepare_deltas(Deltas).
+
 % add cen to CEN maps
 add_cen(CenId, LM = ?LM_CENS(Cens)) ->
     case lists:any(cenid_is(CenId), Cens) of
         true ->
             LM;
         false ->
-            LM?LM_SET_CENS([cen(length(Cens) +1, CenId, null, []) | Cens])
+            LM?LM_SET_CENS([cen(CenId,
+                                null,
+                                [],
+                                leviathan_dby:get_next_cin_ip()) | Cens])
     end.
 
 % returns filter function matching CenId
@@ -540,13 +556,13 @@ decode_jiffy(CensJson) ->
 
 % cens
 cens_from_jiffy(CensJson) ->
-    {_, Cens} = lists:foldl(
-        fun(#{<<"cenID">> := Cen, <<"containerIDs">> := Conts}, {Count, Acc}) ->
-            {Count + 1, [cen(Count,
-                         binary_to_list(Cen),
-                         wire_type(Conts),
-                         Conts) | Acc]}
-        end, {1, []}, CensJson),
+    Cens = lists:foldl(
+        fun(#{<<"cenID">> := Cen, <<"containerIDs">> := Conts}, Acc) ->
+            [cen(binary_to_list(Cen),
+                 wire_type(Conts),
+                 Conts,
+                 leviathan_dby:get_next_cin_ip()) | Acc]
+        end, [], CensJson),
     Cens.
 
 wire_type(Conts) when length(Conts) < 2 ->
@@ -558,11 +574,13 @@ wire_type(Conts) when length(Conts)  == 2 ->
 wire_type(Conts) when length(Conts)  > 2 ->
     bus.
 
-cen(Count, Cen, WireType, Conts) ->
+% XXX ignore wiretype for now and always use bus
+cen(Cen, _WireType, Conts, IpAddr) ->
      #{cenID => Cen,
-       wire_type => WireType,
+%      wire_type => WireType,
+       wire_type => bus,
        contIDs => list_binary_to_list(Conts),
-       ip_address => cen_ip_addr(Count)}.
+       ip_address => binary_to_list(IpAddr)}.
 
 % conts
 conts_from_jiffy(CensJson) ->
@@ -703,10 +721,6 @@ next_count(Context = #{count := CountMap}, Key, FormatFn) ->
 ip_addr(#{count := CountMap}, CenB, CenId) ->
     ContCount = maps:get({conts, CenId}, CountMap),
     binary_to_list(leviathan_cin:ip_address(CenB, ContCount)).
-
-% format ip addr for cens
-cen_ip_addr(CenCount) ->
-    binary_to_list(leviathan_cin:cen_ip_address(CenCount)).
 
 % name formatters
 in_endpoint_name(ContId, N) ->

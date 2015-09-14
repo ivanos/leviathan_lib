@@ -197,7 +197,7 @@ CEN | lev_cen>CEN | lev_cen>cen1
 container | lev_cont>Host>Container | lev_cen>4c01db0b339c
 endpoint | lev_endpoint>Host>Endpoint | lev_endpiont>host1>4c01db0b339c.0i
 bridge | lev_bridge>Host>Bridge | lev_bridge>host1>cen1
-ip_address | lev_ip>IpAddress | lev_ip>10.9.2.14
+ipaddr | lev_ip>IpAddress | lev_ip>10.9.2.14
 
 Endpoints may be inside the container (in) or outside the container (out).
 
@@ -210,7 +210,7 @@ status | pending, preparing, ready | Status of the CEN
 
 There is no Container metadata.
 
-Endpiont metadata:
+Endpoint metadata:
 
 Key | Value | Description
 --- | ----- | -----------
