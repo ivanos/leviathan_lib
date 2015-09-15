@@ -18,7 +18,11 @@ import_json(#{<<"type">> := CTypeBin,
     CType = binary_to_list(CTypeBin),
     Interfaces = lists:map(fun binary_to_list/1, InterfacesBin),
     {ok, ContainerId} = run_switch(CType, Interfaces),
-    leviathan_dby:import_switch(<<"host1">>, Switch#{<<"contID">> => ContainerId}).
+    %% XXX: get the datapath id!
+    DatapathId = <<"this-is-not-the-datapath-id-", ContainerId/binary>>,
+    NewSwitch = Switch#{<<"contID">> => ContainerId,
+                        <<"datapath_id">> => DatapathId},
+    leviathan_dby:import_switch(<<"host1">>, NewSwitch).
 
 run_switch(CType, Interfaces) ->
     CmdBundle = [leviathan_docker:run(CType, "--net=host --privileged=true", string:join(Interfaces, " "))],

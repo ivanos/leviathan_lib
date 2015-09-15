@@ -201,10 +201,11 @@ dby_ipaddr(IpAddr) when is_binary(IpAddr) ->
     {dby_ipaddr_id(IpAddr), [{<<"type">>, <<"ipaddr">>},
                              {<<"ipaddr">>, IpAddr}]}.
 
-dby_switch(Host, #{<<"contID">> := ContId}) ->
+dby_switch(Host, #{<<"contID">> := ContId, <<"datapath_id">> := DatapathId}) ->
     {dby_switch_id(Host, ContId),
      [{<<"contID">>, ContId},
-      {<<"type">>, <<"of_switch">>}]}.
+      {<<"type">>, <<"of_switch">>},
+      {<<"datapath_id">>, DatapathId}]}.
 
 dby_of_port(SwitchId, N) ->
     {dby_of_port_id(SwitchId, N),
