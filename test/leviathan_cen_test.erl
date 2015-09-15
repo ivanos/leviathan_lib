@@ -4,7 +4,7 @@
 
 -define(assertEqualLists(A,B), ?assertEqual(lists:sort(A), lists:sort(B))).
 
-leviathan_cen_test_() ->
+leviathan_cen_test_ign() ->
     {setup,
      fun setup/0,
      fun cleanup/1,
@@ -32,6 +32,15 @@ leviathan_cen_test_() ->
        ,{"lm_compare 5", fun lm_compare5/0}
        ,{"lm_add_cen 0", fun lm_add_cen0/0}
        ]}}.
+
+leviathan_cen2_test_() ->
+    {setup,
+     fun setup/0,
+     fun cleanup/1,
+     {foreach,
+       fun each_setup/0,
+          %% [fun lm_compare6/0,
+           [fun lm_add_container_to_new_cen/0]}}.
 
 setup() ->
     ok = meck:new(leviathan_dby).
@@ -265,6 +274,58 @@ lm_compare5() ->
     ?debugVal(leviathan_cen:lm_compare(LM0, LM1)),
     ?debugVal(LM1),
     ?assertEqual(Instructions, leviathan_cen:lm_compare(LM0, LM1)).
+
+lm_compare6() ->
+    LM0 = foldcalls(new_lm(), 
+                    [
+                     fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c2", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c3", Acc) end
+                    ]),
+    LM1 = foldcalls(LM0, 
+                    [
+                     fun(Acc) -> leviathan_cen:add_cen("cen2", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c3", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c4", Acc) end
+                    ]),
+    Instructions = 
+        [
+         {add,cont,#{cens => ["cen2"], contID => "c4"}},
+         {add, wire, [
+                      endpoint("c3", "c3.1i", in, "cen2", "10.8.0.10"),
+                      endpoint("cen2", "c3.1o", out)
+                     ]},
+         {add, wire, [
+                      endpoint("c4", "c4.0i", in, "cen2", "10.8.0.11"),
+                      endpoint("cen2", "c4.0o", out)
+                     ]}],
+    ?debugVal(LM0),
+    ?debugFmt("~p", [leviathan_cen:lm_compare(LM0, LM1)]),
+    ?debugFmt("~p", [LM1]),
+    ?assertEqual(lists:sort(Instructions),
+                 lists:sort(leviathan_cen:lm_compare(LM0, LM1))).
+
+lm_add_container_to_new_cen() ->
+    LM0 = foldcalls(new_lm(), 
+                    [
+                     fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c2", Acc) end
+                    ]),
+    LM1 = foldcalls(LM0, 
+                    [
+                     fun(Acc) -> leviathan_cen:add_cen("cen2", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c2", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c3", Acc) end
+                    ]),
+    ?debugFmt("~p", [LM0]),
+    ?debugFmt("~p", [LM1]),
+    #{wiremap := #{wires := LM0Wires}} = LM0,
+    #{wiremap := #{wires := LM1Wires}} = LM1,
+    lists:foreach(fun(Wire) ->
+                          ?assert(lists:member(Wire, LM1Wires))
+                  end, LM0Wires).
 
 lm_add_cen0() ->
     OldLM = new_lm(),
