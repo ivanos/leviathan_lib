@@ -664,29 +664,36 @@ wire_cen(Context, CenB, CenId, ContainerIds) ->
 
 wire_cen_to_container(CenId, CenB) ->
     fun(ContId, Context0) ->
-        Context1 = count_cont(Context0, CenId),
-        {Context2, InEndpoint} = next_in_endpoint(Context1, ContId),
-        {Context3, OutEndpoint} = next_out_endpoint(Context2, ContId),
-        IpAddr = ip_addr(Context3, CenB, CenId),
-        maps_append(wires, [#{
-            endID => InEndpoint,
-            side => in,
-            dest => #{
-                        type => cont,
-                        id => ContId,
-                        alias => CenId,
-                        ip_address => IpAddr
-                    }
-         },
-         #{
-            endID => OutEndpoint,
-            side => out,
-            dest => #{
-                        type => cen,
-                        id => CenId
-                    }
-         }
-        ], Context3)
+            %% case wire(CenId, ContId) in old_wires(Context0) of
+            %%     true ->
+            %%         maps_append(wires, wire(CenId, ContId)),
+            %%         update_counters(Context0, CenId, ContId);
+            %%     false ->
+            %%         continue_with_the_code_below
+            %% end,
+            Context1 = count_cont(Context0, CenId),
+            {Context2, InEndpoint} = next_in_endpoint(Context1, ContId),
+            {Context3, OutEndpoint} = next_out_endpoint(Context2, ContId),
+            IpAddr = ip_addr(Context3, CenB, CenId),
+            maps_append(wires, [#{
+                                   endID => InEndpoint,
+                                   side => in,
+                                   dest => #{
+                                     type => cont,
+                                     id => ContId,
+                                     alias => CenId,
+                                     ip_address => IpAddr
+                                    }
+                                 },
+                                #{
+                                   endID => OutEndpoint,
+                                   side => out,
+                                   dest => #{
+                                     type => cen,
+                                     id => CenId
+                                    }
+                                 }
+                               ], Context3)
     end.
 
 % publish context helpers
