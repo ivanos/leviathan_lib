@@ -37,15 +37,16 @@ run_switch(CType, Interfaces) ->
     {ok, ContainerId, DatapathId}.
 
 wait_for_new_connection(AlreadyConnected) ->
-    wait_for_new_connection(AlreadyConnected, 100).
+    wait_for_new_connection(AlreadyConnected, 10000).
 
-wait_for_new_connection(_, 0) ->
+wait_for_new_connection(_, N) when N =< 0 ->
     error(switch_connection_timeout);
 wait_for_new_connection(AlreadyConnected, N) when N > 0 ->
     case weave_ofsh:all_connected() -- AlreadyConnected of
         [] ->
-            timer:sleep(10),
-            wait_for_new_connection(AlreadyConnected, N - 1);
+            Sleep = 10,
+            timer:sleep(Sleep),
+            wait_for_new_connection(AlreadyConnected, N - Sleep);
         [DatapathId] ->
             list_to_binary(DatapathId)
     end.
