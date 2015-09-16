@@ -307,6 +307,9 @@ lm_compare6() ->
                  lists:sort(leviathan_cen:lm_compare(LM0, LM1))).
 
 lm_add_container_to_new_cen() ->
+    mnesia:start(),
+    {atomic, ok} = mnesia:create_table(leviathan_cen, [{attributes, [cen, data]}]),
+    {atomic, ok} = mnesia:create_table(leviathan_cont, [{attributes, [cont, cen, data]}]),
     LM0 = foldcalls(new_lm(), 
                     [
                      fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
@@ -321,6 +324,9 @@ lm_add_container_to_new_cen() ->
                     ]),
     ?debugFmt("~p", [LM0]),
     ?debugFmt("~p", [LM1]),
+    ?debugFmt("~p~n", [ets:tab2list(leviathan_cont)]),
+    ?debugFmt("~p~n", [ets:tab2list(leviathan_cen)]),
+
     #{wiremap := #{wires := LM0Wires}} = LM0,
     #{wiremap := #{wires := LM1Wires}} = LM1,
     lists:foreach(fun(Wire) ->

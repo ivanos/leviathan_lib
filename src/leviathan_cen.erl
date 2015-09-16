@@ -305,6 +305,22 @@ lm_add_container(CenId, ContId, LM0) ->
     LM4 = add_container_to_contsmap(ContId, CenId, LM3),
     lm_wire_cens(LM4).
 
+-record(leviathan_cen, {cen :: string(),
+                        data :: #{
+                          contIDs => [string()],
+                          wire_type => atom(),
+                          ipaddr => string()
+                         }}).
+
+%% connection betgween cen and container
+-record(leviathan_cont, {cont :: string(),
+                         cen :: string(),
+                         data :: #{
+                           idnumber => integer(),
+                           ip_address => string()
+                          }}).
+        
+
 % add cen
 lm_add_cen(HostId, CenId) ->
     LM0 = get_levmap([CenId]),
@@ -319,10 +335,10 @@ add_cen(CenId, LM = ?LM_CENS(Cens)) ->
         true ->
             LM;
         false ->
-            LM?LM_SET_CENS([cen(CenId,
-                                null,
-                                [],
-                                leviathan_dby:get_next_cin_ip()) | Cens])
+            Ip = leviathan_dby:get_next_cin_ip(),
+            ad_add_cen(CenId, Ip),
+            LM?LM_SET_CENS([cen(CenId, null, [],Ip) | Cens])
+            
     end.
 
 % returns filter function matching CenId
@@ -356,6 +372,7 @@ add_container_to_censmap(CenId, ContId, LM = ?LM_CENS(Cens0)) ->
             ContIds1 = list_add_unique(ContId, ContIds0),
             [Cen#{contIDs := ContIds1, wire_type := wire_type(ContIds1)}]
         end),
+    ad_add_container(CenId, ContId),
     LM?LM_SET_CENS(Cens1).
 
 % add container to Cont map
@@ -664,13 +681,7 @@ wire_cen(Context, CenB, CenId, ContainerIds) ->
 
 wire_cen_to_container(CenId, CenB) ->
     fun(ContId, Context0) ->
-            %% case wire(CenId, ContId) in old_wires(Context0) of
-            %%     true ->
-            %%         maps_append(wires, wire(CenId, ContId)),
-            %%         update_counters(Context0, CenId, ContId);
-            %%     false ->
-            %%         continue_with_the_code_below
-            %% end,
+            %% if ContId wired with CenId then skip
             Context1 = count_cont(Context0, CenId),
             {Context2, InEndpoint} = next_in_endpoint(Context1, ContId),
             {Context3, OutEndpoint} = next_out_endpoint(Context2, ContId),
@@ -749,3 +760,28 @@ list_add_unique(Element, List) ->
         true ->
             List
     end.
+
+%%% Authoritative data
+
+%% add cen to authoritative data
+ad_add_cen(CenId, Ip) ->
+    Fn = fun() ->
+                 CenData = #{contIDs => [], wirte_type => bus,
+                             ipaddr => binary_to_list(Ip)},
+                 Cen = #leviathan_cen{cen = CenId, data = CenData},
+                 mnesia:write(Cen)
+         end,
+    {atomic, ok} = mnesia:transaction(Fn).
+
+
+%% add container to authoritative data
+ad_add_container(CenId, ContId) ->
+    io:format("SIEMA ~p", [eloooooooo]),
+    Fn = fun() ->
+                 ContData = #{idnumber => undefined, ip_address => undefined},
+                 Cont = #leviathan_cont{cont = ContId, cen = CenId,
+                                        data = ContData},
+                 mnesia:write(Cont)
+         end,
+    {atomic, ok} = mnesia:transaction(Fn).
+
