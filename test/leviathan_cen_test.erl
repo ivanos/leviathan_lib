@@ -39,8 +39,9 @@ leviathan_cen2_test_() ->
      fun cleanup/1,
      {foreach,
        fun each_setup/0,
-          %% [fun lm_compare6/0,
-           [fun lm_add_container_to_new_cen/0]}}.
+      [fun lm_compare5/0,
+       fun lm_add_container_to_new_cen/0]
+     }}.
 
 setup() ->
     ok = meck:new(leviathan_dby).
@@ -253,39 +254,54 @@ lm_compare4() ->
     ?assertEqual(Instructions, leviathan_cen:lm_compare(OldLM, NewLM)).
 
 lm_compare5() ->
+    mnesia:start(),
+    {atomic, ok} = mnesia:create_table(leviathan_cen, [{attributes, [cen, data]}]),
+    {atomic, ok} = mnesia:create_table(leviathan_cont, [{type, bag},
+                                                        {attributes, [cont, cen, data]}]),
     LM0 = foldcalls(new_lm(), [
-        fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
-        fun(Acc) -> leviathan_cen:add_cen("cen2", Acc) end,
-        fun(Acc) -> leviathan_cen:lm_add_container("cen1", "cA", Acc) end,
-        fun(Acc) -> leviathan_cen:lm_add_container("cen2", "cA", Acc) end,
-        fun(Acc) -> leviathan_cen:lm_add_container("cen1", "cB", Acc) end
-    ]),
+                               fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
+                               fun(Acc) -> leviathan_cen:add_cen("cen2", Acc) end,
+                               fun(Acc) -> leviathan_cen:lm_add_container("cen1", "cA", Acc) end,
+                               fun(Acc) -> leviathan_cen:lm_add_container("cen2", "cA", Acc) end,
+                               fun(Acc) -> leviathan_cen:lm_add_container("cen1", "cB", Acc) end
+                              ]),
     LM1 = leviathan_cen:lm_add_container("cen2", "cB", LM0),
+    ?debugFmt("CENS TAB ~p~n", [ets:tab2list(leviathan_cen)]),
+    ?debugFmt("CONT TAB ~p~n", [ets:tab2list(leviathan_cont)]),
     Instructions = [
-        {add, wire, [
-            endpoint("cB", "cB.0i", in, "cen2", "10.8.0.11"),
-            endpoint("cen2", "cB.0o", out)
-         ]},
-        {add, wire, [
-            endpoint("cA", "cA.0i", in, "cen2", "10.8.0.10"),
-            endpoint("cen2", "cA.0o", out)
-        ]}],
-    ?debugVal(LM0),
-    ?debugVal(leviathan_cen:lm_compare(LM0, LM1)),
-    ?debugVal(LM1),
-    ?assertEqual(Instructions, leviathan_cen:lm_compare(LM0, LM1)).
+                    {add,cont_in_cen,{"cB","cen2"}},
+                    {add, wire, [
+                                 endpoint("cB", "cB.0i", in, "cen2", "10.8.0.11"),
+                                 endpoint("cen2", "cB.0o", out)
+                                ]},
+                    {add, wire, [
+                                 endpoint("cA", "cA.0i", in, "cen2", "10.8.0.10"),
+                                 endpoint("cen2", "cA.0o", out)
+                                ]}],
+    ?debugFmt("~p", [leviathan_cen:lm_compare(LM0, LM1)]),
+    ?debugFmt("~p", [Instructions]),
+    ?debugFmt("~p", [LM0]),
+    ?debugFmt("~p", [LM1]),
+    ?assertEqual(Instructions, leviathan_cen:lm_compare(LM0, LM1)),
+    {atomic, ok} = mnesia:clear_table(leviathan_cen),
+    {atomic, ok} = mnesia:clear_table(leviathan_cont),
+    mnesia:stop().
 
 lm_compare6() ->
+    mnesia:start(),
+    {atomic, ok} = mnesia:create_table(leviathan_cen, [{attributes, [cen, data]}]),
+    {atomic, ok} = mnesia:create_table(leviathan_cont, [{type, bag},
+                                                        {attributes, [cont, cen, data]}]),
     LM0 = foldcalls(new_lm(), 
                     [
                      fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
+                     fun(Acc) -> leviathan_cen:add_cen("cen2", Acc) end,
                      fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end,
                      fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c2", Acc) end,
                      fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c3", Acc) end
                     ]),
     LM1 = foldcalls(LM0, 
                     [
-                     fun(Acc) -> leviathan_cen:add_cen("cen2", Acc) end,
                      fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c3", Acc) end,
                      fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c4", Acc) end
                     ]),
@@ -309,7 +325,8 @@ lm_compare6() ->
 lm_add_container_to_new_cen() ->
     mnesia:start(),
     {atomic, ok} = mnesia:create_table(leviathan_cen, [{attributes, [cen, data]}]),
-    {atomic, ok} = mnesia:create_table(leviathan_cont, [{attributes, [cont, cen, data]}]),
+    {atomic, ok} = mnesia:create_table(leviathan_cont, [{type, bag},
+                                                        {attributes, [cont, cen, data]}]),
     LM0 = foldcalls(new_lm(), 
                     [
                      fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
@@ -322,16 +339,18 @@ lm_add_container_to_new_cen() ->
                      fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c2", Acc) end,
                      fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c3", Acc) end
                     ]),
-    ?debugFmt("~p", [LM0]),
-    ?debugFmt("~p", [LM1]),
-    ?debugFmt("~p~n", [ets:tab2list(leviathan_cont)]),
-    ?debugFmt("~p~n", [ets:tab2list(leviathan_cen)]),
-
+    %% ?debugFmt("~p", [LM0]),
+    %% ?debugFmt("~p", [LM1]),
+    %% ?debugFmt("~p~n", [ets:tab2list(leviathan_cont)]),
+    %% ?debugFmt("~p~n", [ets:tab2list(leviathan_cen)]),
     #{wiremap := #{wires := LM0Wires}} = LM0,
     #{wiremap := #{wires := LM1Wires}} = LM1,
     lists:foreach(fun(Wire) ->
                           ?assert(lists:member(Wire, LM1Wires))
-                  end, LM0Wires).
+                  end, LM0Wires),
+    {atomic, ok} = mnesia:clear_table(leviathan_cen),
+    {atomic, ok} = mnesia:clear_table(leviathan_cont),
+    mnesia:stop().
 
 lm_add_cen0() ->
     OldLM = new_lm(),

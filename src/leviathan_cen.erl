@@ -16,6 +16,21 @@
 
 -include("leviathan_logger.hrl").
 
+-record(leviathan_cen, {cen :: string(),
+                        data :: #{
+                          contIDs => [string()],
+                          wire_type => atom(),
+                          ipaddr => string()
+                         }}).
+
+%% connection between cen and container
+-record(leviathan_cont, {cont :: string(),
+                         cen :: string(),
+                         data :: #{
+                           idnumber => integer(),
+                           ip_address => string()
+                          }}).
+
 %-------------------------------------------------------------------------------
 % API
 %-------------------------------------------------------------------------------
@@ -303,23 +318,8 @@ lm_add_container(CenId, ContId, LM0) ->
     LM2 = add_container_to_censmap(CenId, ContId, LM1),
     LM3 = add_container(ContId, LM2),
     LM4 = add_container_to_contsmap(ContId, CenId, LM3),
+    ad_add_container(CenId, ContId),
     lm_wire_cens(LM4).
-
--record(leviathan_cen, {cen :: string(),
-                        data :: #{
-                          contIDs => [string()],
-                          wire_type => atom(),
-                          ipaddr => string()
-                         }}).
-
-%% connection betgween cen and container
--record(leviathan_cont, {cont :: string(),
-                         cen :: string(),
-                         data :: #{
-                           idnumber => integer(),
-                           ip_address => string()
-                          }}).
-        
 
 % add cen
 lm_add_cen(HostId, CenId) ->
@@ -372,7 +372,6 @@ add_container_to_censmap(CenId, ContId, LM = ?LM_CENS(Cens0)) ->
             ContIds1 = list_add_unique(ContId, ContIds0),
             [Cen#{contIDs := ContIds1, wire_type := wire_type(ContIds1)}]
         end),
-    ad_add_container(CenId, ContId),
     LM?LM_SET_CENS(Cens1).
 
 % add container to Cont map
@@ -635,11 +634,43 @@ maps_append_unique(Key, Value, Map) ->
     maps:put(Key, list_add_unique(Value, Old), Map).
 
 wire_cens(Cens) ->
-    #{wires := Wires} = lists:foldl(
-        fun(#{cenID := CenId, contIDs := ContIds, ip_address := IpAddr}, Context) ->
-            wire_cen(Context, cen_b(IpAddr), CenId, ContIds)
-        end, #{cen_b => undefined, count => #{}, wires => []}, Cens),
+    Fun = fun(#leviathan_cont{cont = ContId, cen = CenId, data = Data},
+              Acc) ->
+                  case wire_container_in_cen(ContId, CenId, Data, Cens) of
+                      no_wire  ->
+                          Acc;
+                      Wire ->
+                          [Wire | Acc]    
+                  end
+          end,
+    {atomic, Wires} =
+        mnesia:transaction(fun() -> mnesia:foldl(Fun, [], leviathan_cont) end),
     Wires.
+%% #{wires := Wires} = lists:foldl(
+%%         fun(#{cenID := CenId, contIDs := ContIds, ip_address := IpAddr}, Context) ->
+%%             wire_cen(Context, cen_b(IpAddr), CenId, ContIds)
+%%         end, #{cen_b => undefined, count => #{}, wires => []}, Cens),
+%%     Wires.
+
+wire_container_in_cen(ContId, CenId, #{idnumber := Id, ip_address := Ip}, Cens) ->
+    case cen_has_more_than_one_container(CenId, Cens) of
+        true ->
+            [#{endID => in_endpoint_name(ContId, Id),
+               side => in,
+               dest => #{type => cont,
+                         id => ContId,
+                         alias => CenId,
+                         ip_address => Ip}
+              },
+             #{endID => out_endpoint_name(ContId, Id),
+               side => out,
+               dest => #{type => cen,
+                         id => CenId}
+              }];
+        false ->
+            no_wire
+    end.
+    
 
 % wiring helpers
 
@@ -681,7 +712,6 @@ wire_cen(Context, CenB, CenId, ContainerIds) ->
 
 wire_cen_to_container(CenId, CenB) ->
     fun(ContId, Context0) ->
-            %% if ContId wired with CenId then skip
             Context1 = count_cont(Context0, CenId),
             {Context2, InEndpoint} = next_in_endpoint(Context1, ContId),
             {Context3, OutEndpoint} = next_out_endpoint(Context2, ContId),
@@ -776,12 +806,62 @@ ad_add_cen(CenId, Ip) ->
 
 %% add container to authoritative data
 ad_add_container(CenId, ContId) ->
-    io:format("SIEMA ~p", [eloooooooo]),
+    CenIp = ad_get_cen_ip(CenId),
+    UsedIps = ad_get_ips_from_cen(CenId),
+    Ip = leviathan_cin:ip_address(cen_b(CenIp), UsedIps),
+    UsedIds = ad_get_ids_from_cont(ContId),
+    Id = gen_container_id_number(ContId, UsedIds),
     Fn = fun() ->
-                 ContData = #{idnumber => undefined, ip_address => undefined},
+                 ContData = #{idnumber => Id, ip_address => Ip},
                  Cont = #leviathan_cont{cont = ContId, cen = CenId,
                                         data = ContData},
-                 mnesia:write(Cont)
+                 ok = mnesia:write(Cont)
          end,
     {atomic, ok} = mnesia:transaction(Fn).
 
+ad_get_cen_ip(CenId) ->
+    MatchHead = #leviathan_cen{cen = CenId, data = '$1', _ = '_'},
+    MatchSpec = [{MatchHead, _Guard = [], _Result = ['$1']}],
+    [#{ipaddr := Ip}] = mnesia:dirty_select(leviathan_cen, MatchSpec),
+    Ip.
+
+
+ad_get_ips_from_cen(CenId) ->
+    MatchHead = #leviathan_cont{cen = CenId, data = '$1', _ = '_'},
+    MatchSpec = [{MatchHead, _Guard = [], _Result = ['$1']}],
+    {atomic, CenContsData} = mnesia:transaction(
+                               fun() -> mnesia:select(leviathan_cont, MatchSpec) end),
+    lists:foldl(fun(#{ip_address := Ip}, Acc) ->
+                        [Ip | Acc]
+                end, [], CenContsData).
+
+ad_get_ids_from_cont(ContId) ->
+    MatchHead = #leviathan_cont{cont = ContId, data = '$1', _ = '_'},
+    MatchSpec = [{MatchHead, _Guard = [], _Result = ['$1']}],
+    {atomic, ContsData} = mnesia:transaction(
+                            fun() -> mnesia:select(leviathan_cont, MatchSpec) end),
+    lists:foldl(fun(#{idnumber := Id}, Acc) ->
+                        [Id | Acc];
+                   (_, Acc) ->
+                        Acc
+                end, [], ContsData).
+
+cen_has_more_than_one_container(CenId, Cens) ->
+    lists:any(fun(#{cenID := CenId, contIDs := ContIds}) ->
+                      length(ContIds) > 1;
+                 (_) ->
+                      false
+              end, Cens).
+
+gen_container_id_number(ContId, UsedIds) ->
+    gen_container_id_number(ContId, UsedIds, length(UsedIds)).
+
+gen_container_id_number(ContId, UsedIds, N) ->
+    case lists:member(N, UsedIds) of
+        false ->
+            N;
+        true ->
+            gen_container_id_number(ContId,
+                                    UsedIds,
+                                    (N+1) rem (_DummyInterfacesLimit = 1000))
+    end.
