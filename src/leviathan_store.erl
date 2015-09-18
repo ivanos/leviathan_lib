@@ -3,7 +3,7 @@
 -export([import_cens/2,
          get_levmap/1,
          update_cens/2,
-         get_next_cim_ip/0]).
+         get_next_cin_ip/0]).
 
 -include("leviathan.hrl").
 
@@ -33,7 +33,7 @@ update_cens(Host, Instructions) ->
     end,
     ok = leviathan_db:transaction(Fn).
 
-get_next_cim_ip() ->
+get_next_cin_ip() ->
     % XXX not implemented.
     ok.
 
