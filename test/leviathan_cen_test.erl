@@ -33,6 +33,8 @@ leviathan_cen_test_ign() ->
        ,{"lm_add_cen 0", fun lm_add_cen0/0}
        ]}}.
 
+%% Those are tests for dealing with a bug that occured when dynamically
+%% adding containers to cen and the rewiring had been done wrong
 leviathan_cen2_test_() ->
     {setup,
      fun setup/0,
@@ -265,25 +267,25 @@ lm_compare5() ->
                                fun(Acc) -> leviathan_cen:lm_add_container("cen1", "cB", Acc) end
                               ]),
     LM1 = leviathan_cen:lm_add_container("cen2", "cB", LM0),
-    ?debugFmt("CENS TAB ~p~n", [ets:tab2list(leviathan_cen)]),
-    ?debugFmt("CONT TAB ~p~n", [ets:tab2list(leviathan_cont)]),
+    %% ?debugFmt("CENS TAB ~p~n", [ets:tab2list(leviathan_cen)]),
+    %% ?debugFmt("CONT TAB ~p~n", [ets:tab2list(leviathan_cont)]),
     Instructions = [
                     {add,cont_in_cen,{"cB","cen2"}},
                     {add, wire, [
-                                 endpoint("cB", "cB.0i", in, "cen2", "10.8.0.11"),
-                                 endpoint("cen2", "cB.0o", out)
+                                 endpoint("cB", "cB.1i", in, "cen2", "10.8.0.11"),
+                                 endpoint("cen2", "cB.1o", out)
                                 ]},
                     {add, wire, [
-                                 endpoint("cA", "cA.0i", in, "cen2", "10.8.0.10"),
-                                 endpoint("cen2", "cA.0o", out)
+                                 endpoint("cA", "cA.1i", in, "cen2", "10.8.0.10"),
+                                 endpoint("cen2", "cA.1o", out)
                                 ]}],
-    ?debugFmt("~p", [leviathan_cen:lm_compare(LM0, LM1)]),
-    ?debugFmt("~p", [Instructions]),
+    %% ?debugFmt("~p", [leviathan_cen:lm_compare(LM0, LM1)]),
+    %% ?debugFmt("~p", [Instructions]),
     ?debugFmt("~p", [LM0]),
     ?debugFmt("~p", [LM1]),
-    ?assertEqual(Instructions, leviathan_cen:lm_compare(LM0, LM1)),
-    {atomic, ok} = mnesia:clear_table(leviathan_cen),
-    {atomic, ok} = mnesia:clear_table(leviathan_cont),
+    ?assertEqualLists(Instructions, leviathan_cen:lm_compare(LM0, LM1)),
+    {atomic, ok} = mnesia:delete_table(leviathan_cen),
+    {atomic, ok} = mnesia:delete_table(leviathan_cont),
     mnesia:stop().
 
 lm_compare6() ->
