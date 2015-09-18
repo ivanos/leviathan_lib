@@ -5,6 +5,7 @@
          abort/1,
          write/1,
          read/1,
+         select/2,
          exists/1,
          delete/1,
          foldl/3,
@@ -32,6 +33,9 @@ write(Record) ->
 
 read(Key) ->
     mnesia:read(Key).
+
+select(Table, MatchSpec) ->
+    mnesia:select(Table, MatchSpec).
 
 exists(Key) ->
     [] /= mnesia:read(Key).
