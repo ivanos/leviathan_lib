@@ -599,46 +599,37 @@ maps_append_unique(Key, Value, Map) ->
     Old = maps:get(Key, Map, []),
     maps:put(Key, list_add_unique(Value, Old), Map).
 
+
+%% wiring helpers
+
 wire_cens(Cens) ->
-    Fun = fun(#leviathan_cont{cont = ContId, cen = CenId, data = Data},
-              Acc) ->
-                  case wire_container_in_cen(ContId, CenId, Data, Cens) of
-                      no_wire  ->
-                          Acc;
-                      Wire ->
-                          [Wire | Acc]    
-                  end
-          end,
-    {atomic, Wires} =
-        mnesia:transaction(fun() -> mnesia:foldl(Fun, [], leviathan_cont) end),
-    Wires.
-%% #{wires := Wires} = lists:foldl(
-%%         fun(#{cenID := CenId, contIDs := ContIds, ip_address := IpAddr}, Context) ->
-%%             wire_cen(Context, cen_b(IpAddr), CenId, ContIds)
-%%         end, #{cen_b => undefined, count => #{}, wires => []}, Cens),
-%%     Wires.
+    Fn = fun(#{cenID := CenId, contIDs := ContIds}, Acc) when length(ContIds) > 1 ->
+                 wire_cen(CenId, ContIds) ++ Acc;
+            (_, Acc) ->
+                 Acc
+         end,
+    lists:foldl(Fn, [], Cens).
 
-wire_container_in_cen(ContId, CenId, #{idnumber := Id, ip_address := Ip}, Cens) ->
-    case cen_has_more_than_one_container(CenId, Cens) of
-        true ->
-            [#{endID => in_endpoint_name(ContId, Id),
-               side => in,
-               dest => #{type => cont,
-                         id => ContId,
-                         alias => CenId,
-                         ip_address => Ip}
-              },
-             #{endID => out_endpoint_name(ContId, Id),
-               side => out,
-               dest => #{type => cen,
-                         id => CenId}
-              }];
-        false ->
-            no_wire
-    end.
-    
 
-% wiring helpers
+wire_cen(CenId, ContIds) ->
+    Fn = fun(ContId, Acc) ->
+                 #{idnumber := Id, ip_address := Ip} = ad_get_wire_data(CenId, ContId),
+                 [
+                  [#{endID => in_endpoint_name(ContId, Id),
+                     side => in,
+                     dest => #{type => cont,
+                               id => ContId,
+                               alias => CenId,
+                               ip_address => binary_to_list(Ip)}
+                    },
+                   #{endID => out_endpoint_name(ContId, Id),
+                     side => out,
+                     dest => #{type => cen,
+                               id => CenId}
+                    }]
+                  | Acc]
+         end,
+    lists:foldl(Fn, [], ContIds).
 
 wire_cen(Context, _, _, []) ->
     Context;
@@ -812,12 +803,12 @@ ad_get_ids_from_cont(ContId) ->
                         Acc
                 end, [], ContsData).
 
-cen_has_more_than_one_container(CenId, Cens) ->
-    lists:any(fun(#{cenID := CenId, contIDs := ContIds}) ->
-                      length(ContIds) > 1;
-                 (_) ->
-                      false
-              end, Cens).
+ad_get_wire_data(CenId, ContId) ->
+    MatchHead = #leviathan_cont{cen = CenId, cont = ContId, data = '$1', _ = '_'},
+    MatchSpec = [{MatchHead, _Guard = [], _Result = ['$1']}],
+    {atomic, [Data]} = mnesia:transaction(
+                       fun() -> mnesia:select(leviathan_cont, MatchSpec) end),
+    Data.
 
 gen_container_id_number(ContId, UsedIds) ->
     gen_container_id_number(ContId, UsedIds, length(UsedIds)).
