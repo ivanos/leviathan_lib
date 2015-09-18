@@ -44,16 +44,15 @@ leviathan_cen2_test_() ->
      }}.
 
 setup() ->
-    ok = meck:new(leviathan_dby).
+    ok = meck:new(leviathan_store).
 
 cleanup(ok) ->
-    ok = meck:unload(leviathan_dby).
+    ok = meck:unload(leviathan_store).
 
 each_setup() ->
-    ok = meck:expect(leviathan_dby, get_next_cin_ip, 0,
-                                        meck:seq([<<"10.7.0.1">>,
-                                                  <<"10.8.0.1">>])),
-    ok = meck:reset(leviathan_dby).
+    ok = meck:expect(leviathan_store, get_next_cin_ip, 0,
+                     meck:seq([<<"10.7.0.1">>, <<"10.8.0.1">>])),
+    ok = meck:reset(leviathan_store).
 
 decode_jiffy1() ->
     Json = [json_cen(<<"cen1">>, [])],
