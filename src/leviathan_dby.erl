@@ -29,10 +29,10 @@
 
 % import CENs
 
-import_cens(Host, CensMap) ->
-    ToPublish = [container_from_lm(Host, CensMap),
-                 cens_from_lm(Host, CensMap),
-                 wires_from_lm(Host, CensMap)],
+import_cens(Host, LM) ->
+    ToPublish = [container_from_lm(Host, LM),
+                 cens_from_lm(Host, LM),
+                 wires_from_lm(Host, LM)],
     ok = dby:publish(?PUBLISHER, lists:flatten(ToPublish), [persistent]).
 
 % getters
