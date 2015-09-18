@@ -3,7 +3,13 @@
 -export([import_cens/2,
          get_levmap/1,
          update_cens/2,
-         get_next_cin_ip/0]).
+         get_next_cin_ip/0,
+         add_cen/2,
+         add_container/2,
+         get_cen_ip/1,
+         get_ips_from_cen/1,
+         get_ids_from_cont/1,
+         get_wire_data/2]).
 
 -include("leviathan.hrl").
 
@@ -36,6 +42,79 @@ update_cens(Host, Instructions) ->
 get_next_cin_ip() ->
     % XXX not implemented.
     ok.
+
+add_cen(CenId, Ip) ->
+    Fn = fun() ->
+                 CenData = #{contIDs => [], wirte_type => bus,
+                             ipaddr => binary_to_list(Ip)},
+                 Cen = #leviathan_cen{cen = CenId, data = CenData},
+                 ok = leviathan_db:write(Cen)
+         end,
+    ok = leviathan_db:transaction(Fn).
+
+
+%% add container to authoritative data
+add_container(CenId, ContId) ->
+    CenIp = get_cen_ip(CenId),
+    UsedIps = get_ips_from_cen(CenId),
+    Ip = leviathan_cin:ip_address(cen_b(CenIp), UsedIps),
+    UsedIds = get_ids_from_cont(ContId),
+    Id = gen_container_id_number(ContId, UsedIds),
+    Fn = fun() ->
+                 ContData = #{idnumber => Id, ip_address => Ip},
+                 Cont = #leviathan_cont{cont = ContId, cen = CenId,
+                                        data = ContData},
+                 ok = leviathan_db:write(Cont)
+         end,
+    ok = leviathan_db:transaction(Fn).
+
+get_cen_ip(CenId) ->
+    MatchHead = #leviathan_cen{cen = CenId, data = '$1', _ = '_'},
+    MatchSpec = [{MatchHead, _Guard = [], _Result = ['$1']}],
+    Fn = fun() ->
+                 [#{ipaddr := Ip}] = leviathan_db:select(leviathan_cen, MatchSpec),
+                 Ip
+         end,
+    leviathan_db:transaction(Fn).
+
+
+get_ips_from_cen(CenId) ->
+    MatchHead = #leviathan_cont{cen = CenId, data = '$1', _ = '_'},
+    MatchSpec = [{MatchHead,
+                  _Guard = [],
+                  _Result = [#{ip_address => '$1'}]
+                 }],
+    Fn = fun() ->
+                 leviathan_db:select(leviathan_cont, MatchSpec)
+         end,
+    lists:foldl(fun(#{ip_address := Ip}, Acc) ->
+                        [Ip | Acc]
+                end, [], leviathan_db:transaction(Fn)).
+
+get_ids_from_cont(ContId) ->
+    MatchHead = #leviathan_cont{cont = ContId, data = '$1', _ = '_'},
+    MatchSpec = [{MatchHead, _Guard = [], _Result = ['$1']}],
+    Fn = fun() ->
+                 leviathan_db:select(leviathan_cont, MatchSpec)
+         end,
+    lists:foldl(fun(#{idnumber := Id}, Acc) ->
+                        [Id | Acc];
+                   (_, Acc) ->
+                        Acc
+                end, [], leviathan_db:transaction(Fn)).
+
+get_wire_data(CenId, ContId) ->
+    MatchHead = #leviathan_cont{cen = CenId, cont = ContId, data = '$1', _ = '_'},
+    MatchSpec = [{MatchHead, _Guard = [], _Result = ['$1']}],
+    Fn = fun() ->
+                 [Data] =leviathan_db:select(leviathan_cont, MatchSpec),
+                 Data
+         end,
+    leviathan_db:transaction(Fn).
+
+
+
+
 
 % -----------------------------------------------------------------------------
 %
@@ -166,3 +245,21 @@ contids_from_cens(Cens) ->
         fun(#{contIDs := ContIds}, Acc) ->
             sets:union(Acc, sets:from_list(ContIds))
         end, sets:new(), Cens)).
+
+gen_container_id_number(ContId, UsedIds) ->
+    gen_container_id_number(ContId, UsedIds, length(UsedIds)).
+
+gen_container_id_number(ContId, UsedIds, N) ->
+    case lists:member(N, UsedIds) of
+        false ->
+            N;
+        true ->
+            gen_container_id_number(ContId,
+                                    UsedIds,
+                                    (N+1) rem (_DummyInterfacesLimit = 1000))
+    end.
+
+                                                % set B network for Cen
+cen_b(IpAddr) ->
+    {ok, {_, CenB, _, _}} = inet:parse_address(IpAddr),
+    CenB.
