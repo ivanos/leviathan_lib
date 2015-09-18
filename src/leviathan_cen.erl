@@ -37,6 +37,7 @@
 
 import_file(Host, Filename) ->
     LM = decode_file(Filename),
+    ok = leviathan_store:import_cens(Host, LM),
     ok = leviathan_dby:import_cens(Host, LM).
 
 decode_file(Filename) ->
@@ -71,13 +72,13 @@ destroy_cen(CenId) ->
     ok.
 
 % To test:
-% 1. load the cen.json file in this repo via leviathan_cen:import_file/2
+                                                % 1. load the cen.json file in this repo via leviathan_cen:import_file/2
 %    or use curl and the REST interface (see leviathan_rest_lib).
 %    The host name must be "host1"
 % 2. test_cens/0 returns the cen IDs of the cens in the .json file, so
 %    you can use that to save typing
 % 3. (optional) inspect the levmap:
-%       leviathan_cen:get_levmap(leviathan_cen:test_cens()).
+%       leviathan_store:get_levmap(leviathan_cen:test_cens()).
 % 4. test prepare:
 %       leviathan_cen:test_local_prepare_lev(leviathan_cen:test_cens()).
 
@@ -87,49 +88,11 @@ test_cens() ->
 
 % call main entry point to run prepare
 test_local_prepare_lev(CenIds)->
-    prepare_lev(get_levmap(CenIds)).
-
-% build the top level data structure for prepare; pulls data from dobby
-get_levmap(CenIds) ->
-    Cens = get_cens(CenIds),
-    #{censmap => #{cens => Cens},
-      contsmap => #{conts => get_conts(Cens)},
-      wiremap => #{wires => get_wiremaps(Cens)}
-    }.
-
-get_cens(CenIds) ->
-    lists:foldl(
-        fun(CenId, Acc) ->
-            case leviathan_dby:get_cen(CenId) of
-                #{cenID := null} ->
-                    Acc;
-                Cen ->
-                    [Cen | Acc]
-            end
-        end, [], CenIds).
-
-% XXX host is hardcoded
-get_conts(Cens) ->
-    ContIds = contids_from_cens(Cens),
-    [leviathan_dby:get_cont("host1", ContId) || ContId <- ContIds].
-
-% XXX host is hardcoded
-% leviathan_dby:get_wires/1 returns the list of wires per Cen. Flatten
-% the list with lists:append/1 rather than with lists:flatten/1 because
-% the wires themselves are lists.
-get_wiremaps(Cens) ->
-    lists:append([leviathan_dby:get_wires(Cen) || Cen <- Cens]).
-
-% make a list of unique container ids by inspecting the cens
-contids_from_cens(Cens) ->
-    sets:to_list(lists:foldl(
-        fun(#{contIDs := ContIds}, Acc) ->
-            sets:union(Acc, sets:from_list(ContIds))
-        end, sets:new(), Cens)).
+    prepare_lev(leviathan_store:get_levmap(CenIds)).
 
 % prepare cens from a list of cen ids
 prepare(CenIds) ->
-    prepare_lev(get_levmap(CenIds)).
+    prepare_lev(leviathan_store:get_levmap(CenIds)).
 
 prepare_deltas(Deltas) ->
     ok = lists:foreach(fun prepare_instruction/1, Deltas).
@@ -242,7 +205,7 @@ prepare_wire_end(#{endID := EndId,
 
 % destroy cens from a list of cen ids
 destroy(CenIds) ->
-    destroy_lev(get_levmap(CenIds)).
+    destroy_lev(leviathan_store:get_levmap(CenIds)).
 
 %
 % Top Level Processor
@@ -306,9 +269,10 @@ destroy_wire_end(#{dest := #{type := cont, id := ContId, alias := Alias}}) ->
 
 % Update a Cen with Fn.
 lm_update_cens(HostId, CenId, ContId, Fn) ->
-    LM0 = get_levmap([CenId]),
+    LM0 = leviathan_store:get_levmap([CenId]),
     LM1 = Fn(CenId, ContId, LM0),
     Deltas = lm_compare(LM0, LM1),
+    ok = leviathan_store:update_cens(HostId, Deltas),
     ok = leviathan_dby:update_cens(HostId, Deltas),
     ok = prepare_deltas(Deltas).
 
@@ -323,9 +287,10 @@ lm_add_container(CenId, ContId, LM0) ->
 
 % add cen
 lm_add_cen(HostId, CenId) ->
-    LM0 = get_levmap([CenId]),
+    LM0 = leviathan_store:get_levmap([CenId]),
     LM1 = add_cen(CenId, LM0),
     Deltas = lm_compare(LM0, LM1),
+    ok = leviathan_store:update_cens(HostId, Deltas),
     ok = leviathan_dby:update_cens(HostId, Deltas),
     ok = prepare_deltas(Deltas).
 
@@ -335,10 +300,10 @@ add_cen(CenId, LM = ?LM_CENS(Cens)) ->
         true ->
             LM;
         false ->
-            Ip = leviathan_dby:get_next_cin_ip(),
-            ad_add_cen(CenId, Ip),
-            LM?LM_SET_CENS([cen(CenId, null, [],Ip) | Cens])
-            
+            LM?LM_SET_CENS([cen(CenId,
+                                null,
+                                [],
+                                leviathan_store:get_next_cin_ip()) | Cens])
     end.
 
 % returns filter function matching CenId
@@ -563,6 +528,7 @@ decode_jiffy(CensJson) ->
     ?DEBUG("CensJson:~n~p~n",[CensJson]),
     Cens = cens_from_jiffy(CensJson),
     Conts = conts_from_jiffy(CensJson),
+    % XXX wires may need to update the Conts with the counts
     Wires = wire_cens(Cens),
     #{
         censmap => #{cens => Cens},
@@ -577,7 +543,7 @@ cens_from_jiffy(CensJson) ->
             [cen(binary_to_list(Cen),
                  wire_type(Conts),
                  Conts,
-                 leviathan_dby:get_next_cin_ip()) | Acc]
+                 leviathan_store:get_next_cin_ip()) | Acc]
         end, [], CensJson),
     Cens.
 
