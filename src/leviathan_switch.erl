@@ -11,9 +11,10 @@
 %% '''
 %%
 %% The Docker image named in the `type' attribute will be started with
-%% the options `--net=host --privileged=true', and the interface names
-%% will be passed as command line arguments.  The Docker image should
-%% have an `ENTRYPOINT' appropriately set to accept those arguments.
+%% the options `--net=host --privileged=true', and the datapath id and
+%% the interface names will be passed as command line arguments.  The
+%% Docker image should have an `ENTRYPOINT' appropriately set to
+%% accept those arguments.
 -module(leviathan_switch).
 
 -export(
@@ -47,37 +48,31 @@ import_json(#{<<"type">> := CTypeBin,
               <<"interfaces">> := InterfacesBin} = Switch) ->
     CType = binary_to_list(CTypeBin),
     Interfaces = lists:map(fun binary_to_list/1, InterfacesBin),
-    {ok, ContainerId, DatapathId} = run_switch(CType, Interfaces),
+    %% Create a random datapath id.  In principle, we should base this
+    %% on a MAC address, but we currently don't extract MAC addresses
+    %% from our interfaces.
+    DatapathIdRaw = crypto:rand_bytes(8),
+    DatapathId = format_datapath_id(DatapathIdRaw),
+    DatapathIdBin = list_to_binary(DatapathId),
+    {ok, ContainerId} = run_switch(CType, DatapathId, Interfaces),
     NewSwitch = Switch#{<<"contID">> => ContainerId,
-                        <<"datapath_id">> => DatapathId},
+                        <<"datapath_id">> => DatapathIdBin},
     leviathan_dby:import_switch(<<"host1">>, NewSwitch).
 
 %% @doc Start a switch, without publishing anything to Dobby.
-run_switch(CType, Interfaces) ->
-    AlreadyConnected = weave_ofsh:all_connected(),
-
-    CmdBundle = [leviathan_docker:run(CType, "--net=host --privileged=true", string:join(Interfaces, " "))],
+run_switch(CType, DatapathId, Interfaces) ->
+    CmdBundle = [leviathan_docker:run(CType, "--net=host --privileged=true",
+                                      string:join([DatapathId] ++ Interfaces, " "))],
     [ContainerId] = leviathan_linux:eval(CmdBundle, output),
     io:format("switch results:~n~p~n", [ContainerId]),
 
-    %% XXX: Here we wait for a new incoming switch connection, and
-    %% assume that it's coming from the newly started container.  This
-    %% is a potential race condition.
-    DatapathId = wait_for_new_connection(AlreadyConnected),
+    {ok, ContainerId}.
 
-    {ok, ContainerId, DatapathId}.
+format_datapath_id(DatapathId) ->
+    string:join([integer_to_hex(D) || <<D>> <= DatapathId],":").
 
-wait_for_new_connection(AlreadyConnected) ->
-    wait_for_new_connection(AlreadyConnected, 10000).
-
-wait_for_new_connection(_, N) when N =< 0 ->
-    error(switch_connection_timeout);
-wait_for_new_connection(AlreadyConnected, N) when N > 0 ->
-    case weave_ofsh:all_connected() -- AlreadyConnected of
-        [] ->
-            Sleep = 10,
-            timer:sleep(Sleep),
-            wait_for_new_connection(AlreadyConnected, N - Sleep);
-        [DatapathId] ->
-            list_to_binary(DatapathId)
+integer_to_hex(I) ->
+    case integer_to_list(I, 16) of
+        [D] -> [$0, D];
+        DD  -> DD
     end.
