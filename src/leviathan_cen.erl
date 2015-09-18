@@ -16,20 +16,6 @@
 
 -include("leviathan_logger.hrl").
 
--record(leviathan_cen, {cen :: string(),
-                        data :: #{
-                          contIDs => [string()],
-                          wire_type => atom(),
-                          ipaddr => string()
-                         }}).
-
-%% connection between cen and container
--record(leviathan_cont, {cont :: string(),
-                         cen :: string(),
-                         data :: #{
-                           idnumber => integer(),
-                           ip_address => string()
-                          }}).
 
 %-------------------------------------------------------------------------------
 % API
@@ -82,7 +68,7 @@ destroy_cen(CenId) ->
 % 4. test prepare:
 %       leviathan_cen:test_local_prepare_lev(leviathan_cen:test_cens()).
 
-% return list of cens ids in the cen.json file
+                                                % return list of cens ids in the cen.json file
 test_cens() ->
     ["cen1","cen2", "cen3", "cen4","cen5"].
 
@@ -282,7 +268,7 @@ lm_add_container(CenId, ContId, LM0) ->
     LM2 = add_container_to_censmap(CenId, ContId, LM1),
     LM3 = add_container(ContId, LM2),
     LM4 = add_container_to_contsmap(ContId, CenId, LM3),
-    ad_add_container(CenId, ContId),
+    leviathan_store:add_container(CenId, ContId),
     lm_wire_cens(LM4).
 
 % add cen
@@ -613,7 +599,8 @@ wire_cens(Cens) ->
 
 wire_cen(CenId, ContIds) ->
     Fn = fun(ContId, Acc) ->
-                 #{idnumber := Id, ip_address := Ip} = ad_get_wire_data(CenId, ContId),
+                 #{idnumber := Id, ip_address := Ip} =
+                     leviathan_store:get_wire_data(CenId, ContId),
                  [
                   [#{endID => in_endpoint_name(ContId, Id),
                      side => in,
@@ -696,10 +683,7 @@ wire_cen_to_container(CenId, CenB) ->
 
 % publish context helpers
 
-% set B network for Cen
-cen_b(IpAddr) ->
-    {ok, {_, CenB, _, _}} = inet:parse_address(IpAddr),
-    CenB.
+
 
 % mark next container in cen
 count_cont(Context, CenId) ->
@@ -748,77 +732,3 @@ list_add_unique(Element, List) ->
             List
     end.
 
-%%% Authoritative data
-
-%% add cen to authoritative data
-ad_add_cen(CenId, Ip) ->
-    Fn = fun() ->
-                 CenData = #{contIDs => [], wirte_type => bus,
-                             ipaddr => binary_to_list(Ip)},
-                 Cen = #leviathan_cen{cen = CenId, data = CenData},
-                 mnesia:write(Cen)
-         end,
-    {atomic, ok} = mnesia:transaction(Fn).
-
-
-%% add container to authoritative data
-ad_add_container(CenId, ContId) ->
-    CenIp = ad_get_cen_ip(CenId),
-    UsedIps = ad_get_ips_from_cen(CenId),
-    Ip = leviathan_cin:ip_address(cen_b(CenIp), UsedIps),
-    UsedIds = ad_get_ids_from_cont(ContId),
-    Id = gen_container_id_number(ContId, UsedIds),
-    Fn = fun() ->
-                 ContData = #{idnumber => Id, ip_address => Ip},
-                 Cont = #leviathan_cont{cont = ContId, cen = CenId,
-                                        data = ContData},
-                 ok = mnesia:write(Cont)
-         end,
-    {atomic, ok} = mnesia:transaction(Fn).
-
-ad_get_cen_ip(CenId) ->
-    MatchHead = #leviathan_cen{cen = CenId, data = '$1', _ = '_'},
-    MatchSpec = [{MatchHead, _Guard = [], _Result = ['$1']}],
-    [#{ipaddr := Ip}] = mnesia:dirty_select(leviathan_cen, MatchSpec),
-    Ip.
-
-
-ad_get_ips_from_cen(CenId) ->
-    MatchHead = #leviathan_cont{cen = CenId, data = '$1', _ = '_'},
-    MatchSpec = [{MatchHead, _Guard = [], _Result = ['$1']}],
-    {atomic, CenContsData} = mnesia:transaction(
-                               fun() -> mnesia:select(leviathan_cont, MatchSpec) end),
-    lists:foldl(fun(#{ip_address := Ip}, Acc) ->
-                        [Ip | Acc]
-                end, [], CenContsData).
-
-ad_get_ids_from_cont(ContId) ->
-    MatchHead = #leviathan_cont{cont = ContId, data = '$1', _ = '_'},
-    MatchSpec = [{MatchHead, _Guard = [], _Result = ['$1']}],
-    {atomic, ContsData} = mnesia:transaction(
-                            fun() -> mnesia:select(leviathan_cont, MatchSpec) end),
-    lists:foldl(fun(#{idnumber := Id}, Acc) ->
-                        [Id | Acc];
-                   (_, Acc) ->
-                        Acc
-                end, [], ContsData).
-
-ad_get_wire_data(CenId, ContId) ->
-    MatchHead = #leviathan_cont{cen = CenId, cont = ContId, data = '$1', _ = '_'},
-    MatchSpec = [{MatchHead, _Guard = [], _Result = ['$1']}],
-    {atomic, [Data]} = mnesia:transaction(
-                       fun() -> mnesia:select(leviathan_cont, MatchSpec) end),
-    Data.
-
-gen_container_id_number(ContId, UsedIds) ->
-    gen_container_id_number(ContId, UsedIds, length(UsedIds)).
-
-gen_container_id_number(ContId, UsedIds, N) ->
-    case lists:member(N, UsedIds) of
-        false ->
-            N;
-        true ->
-            gen_container_id_number(ContId,
-                                    UsedIds,
-                                    (N+1) rem (_DummyInterfacesLimit = 1000))
-    end.

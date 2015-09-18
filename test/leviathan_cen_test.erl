@@ -46,7 +46,7 @@ leviathan_cen2_test_() ->
      }}.
 
 setup() ->
-    ok = meck:new(leviathan_store).
+    ok = meck:new(leviathan_store, [passthrough]).
 
 cleanup(ok) ->
     ok = meck:unload(leviathan_store).
@@ -256,7 +256,7 @@ lm_compare4() ->
 
 lm_compare5() ->
     mnesia:start(),
-    {atomic, ok} = mnesia:create_table(leviathan_cen, [{attributes, [cen, data]}]),
+    {atomic, ok} = mnesia:create_table(leviathan_cen, [{attributes, [cen, data, wires]}]),
     {atomic, ok} = mnesia:create_table(leviathan_cont, [{type, bag},
                                                         {attributes, [cont, cen, data]}]),
     LM0 = foldcalls(new_lm(), [
@@ -290,7 +290,7 @@ lm_compare5() ->
 
 lm_compare6() ->
     mnesia:start(),
-    {atomic, ok} = mnesia:create_table(leviathan_cen, [{attributes, [cen, data]}]),
+    {atomic, ok} = mnesia:create_table(leviathan_cen, [{attributes, [cen, data, wires]}]),
     {atomic, ok} = mnesia:create_table(leviathan_cont, [{type, bag},
                                                         {attributes, [cont, cen, data]}]),
     LM0 = foldcalls(new_lm(), 
@@ -325,7 +325,7 @@ lm_compare6() ->
 
 lm_add_container_to_new_cen() ->
     mnesia:start(),
-    {atomic, ok} = mnesia:create_table(leviathan_cen, [{attributes, [cen, data]}]),
+    {atomic, ok} = mnesia:create_table(leviathan_cen, [{attributes, [cen, data, wires]}]),
     {atomic, ok} = mnesia:create_table(leviathan_cont, [{type, bag},
                                                         {attributes, [cont, cen, data]}]),
     LM0 = foldcalls(new_lm(), 
