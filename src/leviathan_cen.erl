@@ -585,131 +585,38 @@ maps_append_unique(Key, Value, Map) ->
     Old = maps:get(Key, Map, []),
     maps:put(Key, list_add_unique(Value, Old), Map).
 
-
 %% wiring helpers
 
 wire_cens(Cens) ->
-    Fn = fun(#{cenID := CenId, contIDs := ContIds}, Acc) when length(ContIds) > 1 ->
-                 wire_cen(CenId, ContIds) ++ Acc;
-            (_, Acc) ->
-                 Acc
+    Fn =
+        fun(#{cenID := CenId,
+              contIDs := ContIds}, Acc) when length(ContIds) > 1 ->
+            wire_cen(CenId, ContIds) ++ Acc;
+           (_, Acc) ->
+            Acc
          end,
     lists:foldl(Fn, [], Cens).
 
-
 wire_cen(CenId, ContIds) ->
-    Fn = fun(ContId, Acc) ->
-                 #{idnumber := Id, ip_address := Ip} =
-                     leviathan_store:get_wire_data(CenId, ContId),
-                 [
-                  [#{endID => in_endpoint_name(ContId, Id),
-                     side => in,
-                     dest => #{type => cont,
-                               id => ContId,
-                               alias => CenId,
-                               ip_address => binary_to_list(Ip)}
-                    },
-                   #{endID => out_endpoint_name(ContId, Id),
-                     side => out,
-                     dest => #{type => cen,
-                               id => CenId}
-                    }]
-                  | Acc]
+    Fn =
+        fun(ContId, Acc) ->
+            #{idnumber := Id, ip_address := Ip} =
+                             leviathan_store:get_wire_data(CenId, ContId),
+            [
+                [#{endID => in_endpoint_name(ContId, Id),
+                   side => in,
+                   dest => #{type => cont,
+                             id => ContId,
+                             alias => CenId,
+                             ip_address => binary_to_list(Ip)}
+                   },
+                 #{endID => out_endpoint_name(ContId, Id),
+                   side => out,
+                   dest => #{type => cen,
+                             id => CenId}
+                  }] | Acc]
          end,
     lists:foldl(Fn, [], ContIds).
-
-wire_cen(Context, _, _, []) ->
-    Context;
-wire_cen(Context, _, _, [_]) ->
-    Context;
-%wire_cen(Context0, CenId, [ContId1, ContId2]) ->
-%    % wire the containers directly if there are two containers in the CEN
-%    Context1 = count_cont(Context0, CenId),
-%    {Context2, ContId1InEndpoint} = next_in_endpoint(Context1, ContId1),
-%    Cont1IpAddr = ip_addr(Context2, CenId),
-%    Context3 = count_cont(Context2, CenId),
-%    {Context4, ContId2InEndpoint} = next_in_endpoint(Context3, ContId2),
-%    Cont2IpAddr = ip_addr(Context4, CenId),
-%    maps_append(wires, [#{
-%        endID => ContId1InEndpoint,
-%        side => in,
-%        dest => #{
-%                    type => cont,
-%                    id => ContId1,
-%                    alias => CenId,
-%                    ip_address => Cont1IpAddr
-%                }
-%     },
-%     #{
-%        endID => ContId2InEndpoint,
-%        side => in,
-%        dest => #{
-%                    type => cont,
-%                    id => ContId2,
-%                    alias => CenId,
-%                    ip_address => Cont2IpAddr
-%                }
-%     }
-%    ], Context4);
-wire_cen(Context, CenB, CenId, ContainerIds) ->
-    lists:foldl(wire_cen_to_container(CenId, CenB), Context, ContainerIds).
-
-wire_cen_to_container(CenId, CenB) ->
-    fun(ContId, Context0) ->
-            Context1 = count_cont(Context0, CenId),
-            {Context2, InEndpoint} = next_in_endpoint(Context1, ContId),
-            {Context3, OutEndpoint} = next_out_endpoint(Context2, ContId),
-            IpAddr = ip_addr(Context3, CenB, CenId),
-            maps_append(wires, [#{
-                                   endID => InEndpoint,
-                                   side => in,
-                                   dest => #{
-                                     type => cont,
-                                     id => ContId,
-                                     alias => CenId,
-                                     ip_address => IpAddr
-                                    }
-                                 },
-                                #{
-                                   endID => OutEndpoint,
-                                   side => out,
-                                   dest => #{
-                                     type => cen,
-                                     id => CenId
-                                    }
-                                 }
-                               ], Context3)
-    end.
-
-% publish context helpers
-
-
-
-% mark next container in cen
-count_cont(Context, CenId) ->
-    {Context1, _} = next_count(Context, {conts, CenId}, fun(_) -> ok end),
-    Context1.
-
-% get next inside port for a container
-next_in_endpoint(Context, ContId) ->
-    FormatFn = fun(N) -> in_endpoint_name(ContId, N) end,
-    next_count(Context, {in_endpoint, ContId}, FormatFn).
-
-% get next outside port for a container
-next_out_endpoint(Context, ContId) ->
-    FormatFn = fun(N) -> out_endpoint_name(ContId, N) end,
-    next_count(Context, {out_endpoint, ContId}, FormatFn).
-
-% helper
-next_count(Context = #{count := CountMap}, Key, FormatFn) ->
-    N = maps:get(Key, CountMap, 0),
-    {maps:update(count, maps:put(Key, N + 1,  CountMap), Context),
-     FormatFn(N)}.
-
-% format ip addr
-ip_addr(#{count := CountMap}, CenB, CenId) ->
-    ContCount = maps:get({conts, CenId}, CountMap),
-    binary_to_list(leviathan_cin:ip_address(CenB, ContCount)).
 
 % name formatters
 in_endpoint_name(ContId, N) ->
@@ -731,4 +638,3 @@ list_add_unique(Element, List) ->
         true ->
             List
     end.
-
