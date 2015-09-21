@@ -9,7 +9,8 @@
          get_cen_ip/1,
          get_ips_from_cen/1,
          get_ids_from_cont/1,
-         get_wire_data/2]).
+         get_wire_data/2,
+         wire_cont_to_cen/3]).
 
 -include("leviathan.hrl").
 
@@ -112,7 +113,19 @@ get_wire_data(CenId, ContId) ->
          end,
     leviathan_db:transaction(Fn).
 
-
+wire_cont_to_cen(CenId, ContId, Wire) ->
+    Fn =
+        fun() ->
+                CenKey = {leviathan_cen, CenId},
+                [#leviathan_cen{data = Data0, wires = Wires0}] = leviathan_db:read(CenKey),
+                #{contIDs := ContIds} = Data0,
+                Wires1 = update_leviathan_cen_wires(Wire, Wires0),
+                Data1 = Data0#{contIDs => [ContId | ContIds]},
+                leviathan_db:write(#leviathan_cen{cen = CenId,
+                                                  data = Data1,
+                                                  wires = Wires1})
+        end,
+    ok = leviathan_db:transaction(Fn).
 
 
 
@@ -263,3 +276,8 @@ gen_container_id_number(ContId, UsedIds, N) ->
 cen_b(IpAddr) ->
     {ok, {_, CenB, _, _}} = inet:parse_address(IpAddr),
     CenB.
+
+update_leviathan_cen_wires(Wire, undefined) ->
+    [Wire];
+update_leviathan_cen_wires(Wire, Wires) ->
+    [Wire | Wires].

@@ -597,25 +597,33 @@ wire_cens(Cens) ->
     lists:foldl(Fn, [], Cens).
 
 wire_cen(CenId, ContIds) ->
-    Fn =
-        fun(ContId, Acc) ->
+    lists:foldl(mk_wire_cont_to_cen_fun(CenId), [], ContIds).
+
+mk_wire_cont_to_cen_fun(CenId) ->
+    fun(ContId, Acc) ->
             #{idnumber := Id, ip_address := Ip} =
-                             leviathan_store:get_wire_data(CenId, ContId),
-            [
-                [#{endID => in_endpoint_name(ContId, Id),
-                   side => in,
-                   dest => #{type => cont,
-                             id => ContId,
-                             alias => CenId,
-                             ip_address => binary_to_list(Ip)}
-                   },
-                 #{endID => out_endpoint_name(ContId, Id),
-                   side => out,
-                   dest => #{type => cen,
-                             id => CenId}
-                  }] | Acc]
-         end,
-    lists:foldl(Fn, [], ContIds).
+                leviathan_store:get_wire_data(CenId, ContId),
+            Wire = [mk_in_endpoint(CenId, ContId, Id, Ip),
+                    mk_out_endpoint(CenId, ContId, Id)],
+            leviathan_store:wire_cont_to_cen(CenId, ContId, Wire),
+            [Wire| Acc]
+    end.
+
+mk_in_endpoint(CenId, ContId, IdNumber, Ip) ->
+    #{endID => in_endpoint_name(ContId, IdNumber),
+      side => in,
+      dest => #{type => cont,
+                id => ContId,
+                alias => CenId,
+                ip_address => binary_to_list(Ip)}
+     }.
+
+mk_out_endpoint(CenId, ContId, IdNumber) ->
+    #{endID => out_endpoint_name(ContId, IdNumber),
+      side => out,
+      dest => #{type => cen,
+                id => CenId}
+     }.
 
 % name formatters
 in_endpoint_name(ContId, N) ->
