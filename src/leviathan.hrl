@@ -19,7 +19,7 @@
                                   ipaddr => string()},
                         wires :: [[in_endpoint() | out_endpoint()]]}).
 
-% connection betgween cen and container
+% connection between cen and container
 -record(leviathan_cont, {cont :: string(),
                          cen :: string(),
                          data :: #{idnumber => integer(),
