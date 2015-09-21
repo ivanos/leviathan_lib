@@ -46,15 +46,23 @@ leviathan_cen2_test_() ->
      }}.
 
 setup() ->
-    ok = meck:new(leviathan_store, [passthrough]).
+    ok = application:load(erl_mnesia),
+    ok = application:set_env(erl_mnesia, options, [persistent]),
+    Apps = application:ensure_all_started(erl_mnesia),
+    ok = mnesia:start(),
+    ok = leviathan_mnesia:start(),
+    ok = meck:new(leviathan_store, [passthrough]),
+    Apps.
 
-cleanup(ok) ->
-    ok = meck:unload(leviathan_store).
+cleanup({ok, Apps}) ->
+    ok = meck:unload(leviathan_store),
+    lists:foreach(fun application:stop/1, Apps).
 
 each_setup() ->
     ok = meck:expect(leviathan_store, get_next_cin_ip, 0,
                      meck:seq([<<"10.7.0.1">>, <<"10.8.0.1">>])),
-    ok = meck:reset(leviathan_store).
+    ok = meck:reset(leviathan_store),
+    ok = leviathan_mnesia:clear().
 
 decode_jiffy1() ->
     Json = [json_cen(<<"cen1">>, [])],
@@ -255,10 +263,6 @@ lm_compare4() ->
     ?assertEqual(Instructions, leviathan_cen:lm_compare(OldLM, NewLM)).
 
 lm_compare5() ->
-    mnesia:start(),
-    {atomic, ok} = mnesia:create_table(leviathan_cen, [{attributes, [cen, data, wires]}]),
-    {atomic, ok} = mnesia:create_table(leviathan_cont, [{type, bag},
-                                                        {attributes, [cont, cen, data]}]),
     LM0 = foldcalls(new_lm(), [
                                fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
                                fun(Acc) -> leviathan_cen:add_cen("cen2", Acc) end,
@@ -283,16 +287,9 @@ lm_compare5() ->
     %% ?debugFmt("~p", [Instructions]),
     ?debugFmt("~p", [LM0]),
     ?debugFmt("~p", [LM1]),
-    ?assertEqualLists(Instructions, leviathan_cen:lm_compare(LM0, LM1)),
-    {atomic, ok} = mnesia:delete_table(leviathan_cen),
-    {atomic, ok} = mnesia:delete_table(leviathan_cont),
-    mnesia:stop().
+    ?assertEqualLists(Instructions, leviathan_cen:lm_compare(LM0, LM1)).
 
 lm_compare6() ->
-    mnesia:start(),
-    {atomic, ok} = mnesia:create_table(leviathan_cen, [{attributes, [cen, data, wires]}]),
-    {atomic, ok} = mnesia:create_table(leviathan_cont, [{type, bag},
-                                                        {attributes, [cont, cen, data]}]),
     LM0 = foldcalls(new_lm(), 
                     [
                      fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
@@ -324,10 +321,6 @@ lm_compare6() ->
                  lists:sort(leviathan_cen:lm_compare(LM0, LM1))).
 
 lm_add_container_to_new_cen() ->
-    mnesia:start(),
-    {atomic, ok} = mnesia:create_table(leviathan_cen, [{attributes, [cen, data, wires]}]),
-    {atomic, ok} = mnesia:create_table(leviathan_cont, [{type, bag},
-                                                        {attributes, [cont, cen, data]}]),
     LM0 = foldcalls(new_lm(), 
                     [
                      fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
@@ -348,10 +341,7 @@ lm_add_container_to_new_cen() ->
     #{wiremap := #{wires := LM1Wires}} = LM1,
     lists:foreach(fun(Wire) ->
                           ?assert(lists:member(Wire, LM1Wires))
-                  end, LM0Wires),
-    {atomic, ok} = mnesia:clear_table(leviathan_cen),
-    {atomic, ok} = mnesia:clear_table(leviathan_cont),
-    mnesia:stop().
+                  end, LM0Wires).
 
 lm_add_cen0() ->
     OldLM = new_lm(),
