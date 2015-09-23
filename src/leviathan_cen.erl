@@ -268,7 +268,7 @@ lm_add_container(CenId, ContId, LM0) ->
     LM2 = add_container_to_censmap(CenId, ContId, LM1),
     LM3 = add_container(ContId, LM2),
     LM4 = add_container_to_contsmap(ContId, CenId, LM3),
-    leviathan_store:add_container(CenId, ContId),
+    %% leviathan_store:add_container(CenId, ContId),
     lm_wire_cens(LM4).
 
 % add cen
@@ -312,24 +312,62 @@ contid_is(MatchContId) ->
     end.
 
 new_cont_map(ContId) ->
-    #{contID => ContId, cens => []}.
+    #{contID => ContId, cens => [], reservedIdNums => []}.
 
 % add container to CEN map
 add_container_to_censmap(CenId, ContId, LM = ?LM_CENS(Cens0)) ->
-    Cens1 = update_censmap(CenId, Cens0,
-        fun(Cen = #{contIDs := ContIds0}) ->
-            ContIds1 = list_add_unique(ContId, ContIds0),
-            [Cen#{contIDs := ContIds1}]
-        end),
+    Cens1 = update_censmap(CenId, Cens0, mk_add_container_to_censmap_fun(ContId)),
     LM?LM_SET_CENS(Cens1).
 
-% add container to Cont map
+mk_add_container_to_censmap_fun(ContId) ->
+    fun(Cen = #{contIDs := ContIds0,
+                ipaddr_b := IpB,
+                reservedIps := ReservedIps0}) ->
+            case lists:member(ContId, ContIds0) of
+                true ->
+                    [Cen];
+                false ->
+                    ContIds1 = ContIds0 ++ [ContId],
+                    ReservedIps1 = ReservedIps0
+                        ++ [next_ip_in_cen(IpB, ReservedIps0)],
+                    [Cen#{contIDs := ContIds1, reservedIps := ReservedIps1}]
+            end
+    end.
+
+next_ip_in_cen(IpB, ReservedIps0) ->
+    binary_to_list(leviathan_cin:ip_address(IpB, ReservedIps0)).
+
+%% add container to Cont map
 add_container_to_contsmap(ContId, CenId, LM = ?LM_CONTS(Conts0)) ->
-    Conts1 = update_contsmap(ContId, Conts0,
-        fun(Cont) ->
-            [maps_append_unique(cens, CenId, Cont)]
-        end),
+    Conts1 = update_contsmap(ContId, Conts0, mk_add_container_to_contsmap_fun(CenId)),
     LM?LM_SET_CONTS(Conts1).
+
+mk_add_container_to_contsmap_fun(CenId) ->
+    fun(Cont = #{cens := Cens0, reservedIdNums := ReserverdIdNums0}) ->
+            case lists:member(CenId, Cens0) of
+                true ->
+                    [Cont];
+                false ->
+                    ReserverdIdNums1 = ReserverdIdNums0
+                        ++ [next_cont_id_num(ReserverdIdNums0)],
+                    Cens1 = Cens0 ++ [CenId],
+                    [Cont#{cens := Cens1, reservedIdNums := ReserverdIdNums1}]
+            end
+    end.
+
+next_cont_id_num(ReservedIds) ->
+    %% TODO: throw an exception when there're no IPs left
+    next_cont_id_number(ReservedIds, length(ReservedIds)).
+
+next_cont_id_number(ReservedIds, IdCandidate) ->
+    %% TODO: throw an exception when there're no id numbers left
+    case lists:member(IdCandidate, ReservedIds) of
+        false ->
+            IdCandidate;
+        true ->
+            next_cont_id_number(ReservedIds,
+                                (IdCandidate+1) rem (_DummyInterfacesLimit = 1000))
+    end.
 
 % Remove container from CEN
 lm_remove_container(CenId, ContId, LM) ->
@@ -567,14 +605,14 @@ maps_append(Key, Value, Map) ->
 
 maps_append_unique(Key, Value, Map) ->
     Old = maps:get(Key, Map, []),
-    maps:put(Key, list_add_unique(Value, Old), Map).
+    maps:put(Key, list_append_unique(Value, Old), Map).
 
 %% wiring helpers
 
 wire_cens(Cens, Conts) ->
     Fn =
         fun(Cen = #{cenID := CenId,
-                   contIDs := ContIds}, Acc) when length(ContIds) > 1 ->
+                    contIDs := ContIds}, Acc) when length(ContIds) > 1 ->
             IdNumbers = id_numbers(CenId, ContIds, Conts),
             wire_cen(Cen, lists:zip(ContIds, IdNumbers)) ++ Acc;
            (_, Acc) ->
@@ -602,11 +640,11 @@ wire_cen(Cen = #{cenID := CenId}, ContsInfo) ->
                 [], lists:zip(ContsInfo, IpAddrs)).
 
 ipaddrs_for_conts(#{reservedIps := ReservedIps, contIDs := ContIds},
-                                                            ContsInfo) ->
+                  ContsInfo) ->
     lists:map(
-        fun({ContId, _}) ->
-            list_lookup2(ContId, ContIds, ReservedIps)
-        end, ContsInfo).
+      fun({ContId, _}) ->
+              list_lookup2(ContId, ContIds, ReservedIps)
+      end, ContsInfo).
 
 mk_wire_cont_to_cen_fun(CenId) ->
     fun({{ContId, Id}, Ip}, Acc) ->
@@ -653,7 +691,7 @@ endpoint_name(ContId, Side, N) ->
 list_binary_to_list(List) ->
     lists:map(fun binary_to_list/1, List).
 
-list_add_unique(Element, List) ->
+list_append_unique(Element, List) ->
     case lists:member(Element, List) of
         false ->
             List ++ [Element];
