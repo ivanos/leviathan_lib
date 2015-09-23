@@ -4,7 +4,7 @@
 
 -define(assertEqualLists(A,B), ?assertEqual(lists:sort(A), lists:sort(B))).
 
-leviathan_cen_test_ign() ->
+leviathan_cen_test_() ->
     {setup,
      fun setup/0,
      fun cleanup/1,
@@ -12,10 +12,10 @@ leviathan_cen_test_ign() ->
        fun each_setup/0,
        [
 % tests that use wire/null cen wire type. wire not used for now.
-%       {"decode_jiffy 0 containers", fun decode_jiffy1/0}
-%      ,{"decode_jiffy 1 container", fun decode_jiffy2/0}
-%      ,{"decode_jiffy 2 containers", fun decode_jiffy3/0}
-        {"decode_jiffy 3 containers", fun decode_jiffy4/0}
+        {"decode_jiffy 0 containers", fun decode_jiffy1/0}
+       ,{"decode_jiffy 1 container", fun decode_jiffy2/0}
+       ,{"decode_jiffy 2 containers", fun decode_jiffy3/0}
+       ,{"decode_jiffy 3 containers", fun decode_jiffy4/0}
 %      ,{"lm_add_container test 0", fun lm_add_container0/0}
 %      ,{"lm_add_container test 1", fun lm_add_container1/0}
        ,{"lm_add_container test 2", fun lm_add_container2/0}
@@ -31,19 +31,8 @@ leviathan_cen_test_ign() ->
 %      ,{"lm_compare 4", fun lm_compare4/0}
        ,{"lm_compare 5", fun lm_compare5/0}
        ,{"lm_add_cen 0", fun lm_add_cen0/0}
+       ,{"lm_add_container_to_new_cen", fun lm_add_container_to_new_cen/0}
        ]}}.
-
-%% Those are tests for dealing with a bug that occured when dynamically
-%% adding containers to cen and the rewiring had been done wrong
-leviathan_cen2_test_() ->
-    {setup,
-     fun setup/0,
-     fun cleanup/1,
-     {foreach,
-       fun each_setup/0,
-      [fun lm_compare5/0,
-       fun lm_add_container_to_new_cen/0]
-     }}.
 
 setup() ->
     ok = application:load(erl_mnesia),
@@ -51,22 +40,17 @@ setup() ->
     Apps = application:ensure_all_started(erl_mnesia),
     ok = mnesia:start(),
     ok = leviathan_mnesia:start(),
-    ok = meck:new(leviathan_store, [passthrough]),
     Apps.
 
 cleanup({ok, Apps}) ->
-    ok = meck:unload(leviathan_store),
     lists:foreach(fun application:stop/1, Apps).
 
 each_setup() ->
-    ok = meck:expect(leviathan_store, get_next_cin_ip, 0,
-                     meck:seq([<<"10.7.0.1">>, <<"10.8.0.1">>])),
-    ok = meck:reset(leviathan_store),
     ok = leviathan_mnesia:clear().
 
 decode_jiffy1() ->
     Json = [json_cen(<<"cen1">>, [])],
-    Cen1 = cen_map("cen1", [], null, "10.7.0.1"),
+    Cen1 = cen_map("cen1", [], bus, 10, "10.10.0.1"),
     {Cens, Conts, Wires} = decompose_lm(leviathan_cen:decode_jiffy(Json)),
     ?assertEqualLists([Cen1], Cens),
     ?assertEqualLists([], Conts),
@@ -74,8 +58,8 @@ decode_jiffy1() ->
 
 decode_jiffy2() ->
     Json = [json_cen(<<"cen1">>, [<<"c1">>])],
-    Cen1 = cen_map("cen1", ["c1"], null, "10.7.0.1"),
-    Cont1 = cont_map("c1", ["cen1"]),
+    Cen1 = cen_map("cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"]),
+    Cont1 = cont_map("c1", ["cen1"], [0]),
     {Cens, Conts, Wires} = decompose_lm(leviathan_cen:decode_jiffy(Json)),
     ?assertEqualLists([Cen1], Cens),
     ?assertEqualLists([Cont1], Conts),
@@ -83,34 +67,42 @@ decode_jiffy2() ->
 
 decode_jiffy3() ->
     Json = [json_cen(<<"cen1">>, [<<"c1">>, <<"c2">>])],
-    Cen1 = cen_map("cen1", ["c1", "c2"], wire, "10.7.0.1"),
-    Cont1 = cont_map("c1", ["cen1"]),
-    Cont2 = cont_map("c2", ["cen1"]),
-    Wire = [
-        endpoint("c1", "c1.0i", in, "cen1", "10.7.0.10"),
-        endpoint("c2", "c2.0i", in, "cen1", "10.7.0.11")
+    Cen1 = cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1", ["10.10.0.10",
+                                                                "10.10.0.11"]),
+    Cont1 = cont_map("c1", ["cen1"], [0]),
+    Cont2 = cont_map("c2", ["cen1"], [0]),
+    Wire1 = [
+        endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+        endpoint("cen1", "c1.0o", out)
+    ],
+    Wire2 = [
+        endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+        endpoint("cen1", "c2.0o", out)
     ],
     {Cens, Conts, Wires} = decompose_lm(leviathan_cen:decode_jiffy(Json)),
     ?assertEqualLists([Cen1], Cens),
     ?assertEqualLists([Cont1, Cont2], Conts),
-    ?assertEqualLists([Wire], Wires).
+    ?assertEqualLists([Wire1, Wire2], Wires).
 
 decode_jiffy4() ->
     Json = [json_cen(<<"cen1">>, [<<"c1">>, <<"c2">>, <<"c3">>])],
-    Cen1 = cen_map("cen1", ["c1", "c2", "c3"], bus, "10.7.0.1"),
-    Cont1 = cont_map("c1", ["cen1"]),
-    Cont2 = cont_map("c2", ["cen1"]),
-    Cont3 = cont_map("c3", ["cen1"]),
+    Cen1 = cen_map("cen1", ["c1", "c2", "c3"], bus, 10, "10.10.0.1",
+                                                            ["10.10.0.10",
+                                                             "10.10.0.11",
+                                                             "10.10.0.12"]),
+    Cont1 = cont_map("c1", ["cen1"], [0]),
+    Cont2 = cont_map("c2", ["cen1"], [0]),
+    Cont3 = cont_map("c3", ["cen1"], [0]),
     Wire1 = [
-        endpoint("c1", "c1.0i", in, "cen1", "10.7.0.10"),
+        endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
         endpoint("cen1", "c1.0o", out)
     ],
     Wire2 = [
-        endpoint("c2", "c2.0i", in, "cen1", "10.7.0.11"),
+        endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
         endpoint("cen1", "c2.0o", out)
     ],
     Wire3 = [
-        endpoint("c3", "c3.0i", in, "cen1", "10.7.0.12"),
+        endpoint("c3", "c3.0i", in, "cen1", "10.10.0.12"),
         endpoint("cen1", "c3.0o", out)
     ],
     {Cens, Conts, Wires} = decompose_lm(leviathan_cen:decode_jiffy(Json)),
@@ -121,7 +113,7 @@ decode_jiffy4() ->
 lm_add_container0() ->
     LM = leviathan_cen:lm_add_container("cen1", "c1", new_lm()),
     {Cens, Conts, Wires} = decompose_lm(LM),
-    ?assertEqual([cen_map("cen1", ["c1"], null, "10.7.0.1")], Cens),
+    ?assertEqual([cen_map("cen1", ["c1"], null, 7, "10.7.0.1")], Cens),
     ?assertEqual([cont_map("c1", ["cen1"])], Conts),
     ?assertEqual([], Wires).
 
@@ -129,7 +121,7 @@ lm_add_container1() ->
     LM0 = leviathan_cen:lm_add_container("cen1", "c1", new_lm()),
     LM1 = leviathan_cen:lm_add_container("cen1", "c2", LM0),
     {Cens, Conts, Wires} = decompose_lm(LM1),
-    ?assertEqual([cen_map("cen1", ["c2", "c1"], wire, "10.7.0.1")], Cens),
+    ?assertEqual([cen_map("cen1", ["c2", "c1"], wire, 7, "10.7.0.1")], Cens),
     ?assertEqualLists(Conts, [cont_map("c1", ["cen1"]),
                               cont_map("c2", ["cen1"])]),
     ?assertEqual([
@@ -146,7 +138,7 @@ lm_add_container2() ->
         fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c3", Acc) end,
         fun decompose_lm/1
     ]),
-    ?assertEqual([cen_map("cen1", ["c1", "c2", "c3"], bus, "10.7.0.1")], Cens),
+    ?assertEqual([cen_map("cen1", ["c1", "c2", "c3"], bus, 7, "10.7.0.1")], Cens),
     ?assertEqualLists([cont_map("c1", ["cen1"]),
                        cont_map("c2", ["cen1"]),
                        cont_map("c3", ["cen1"])],
@@ -165,8 +157,8 @@ lm_add_container3() ->
         fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c4", Acc) end,
         fun decompose_lm/1
     ]),
-    ?assertEqualLists([cen_map("cen1", ["c1", "c2", "c3"], bus, "10.7.0.1"),
-                       cen_map("cen2", ["c1", "c2", "c3", "c4"], bus, "10.8.0.1")],
+    ?assertEqualLists([cen_map("cen1", ["c1", "c2", "c3"], bus, 7, "10.7.0.1"),
+                       cen_map("cen2", ["c1", "c2", "c3", "c4"], bus, 8, "10.8.0.1")],
                       Cens),
     ?assertEqualLists([cont_map("c1", ["cen1", "cen2"]),
                        cont_map("c2", ["cen1", "cen2"]),
@@ -198,7 +190,7 @@ lm_remove_container1() ->
     LM0 = leviathan_cen:decode_jiffy(Json),
     LM1 = leviathan_cen:lm_remove_container("cen1", "c1", LM0),
     {Cens, Conts, Wires} = decompose_lm(LM1),
-    ?assertEqual([cen_map("cen1", [], null, "10.7.0.1")], Cens),
+    ?assertEqual([cen_map("cen1", [], null, 7, "10.7.0.1")], Cens),
     ?assertEqual([], Conts),
     ?assertEqual([], Wires).
 
@@ -207,7 +199,7 @@ lm_remove_container2() ->
     LM0 = leviathan_cen:decode_jiffy(Json),
     LM1 = leviathan_cen:lm_remove_container("cen1", "c1", LM0),
     {Cens, Conts, Wires} = decompose_lm(LM1),
-    ?assertEqual([cen_map("cen1", ["c2"], null, "10.7.0.1")], Cens),
+    ?assertEqual([cen_map("cen1", ["c2"], null, 7, "10.7.0.1")], Cens),
     ?assertEqual([cont_map("c2", ["cen1"])], Conts),
     ?assertEqual([], Wires).
 
@@ -218,7 +210,7 @@ lm_compare1() ->
     Json = [json_cen(<<"cen1">>, [<<"c1">>])],
     LM0 = leviathan_cen:decode_jiffy(Json),
     Instructions = [
-        {add, cen, cen_map("cen1", ["c1"], null, "10.7.0.1")},
+        {add, cen, cen_map("cen1", ["c1"], null, 7, "10.7.0.1")},
         {add, cont, cont_map("c1", ["cen1"])}
     ],
     ?assertEqual(Instructions, leviathan_cen:lm_compare(new_lm(), LM0)).
@@ -227,7 +219,7 @@ lm_compare2() ->
     Json = [json_cen(<<"cen1">>, [<<"c1">>])],
     LM0 = leviathan_cen:decode_jiffy(Json),
     Instructions = [
-        {destroy, cen, cen_map("cen1", ["c1"], null, "10.7.0.1")},
+        {destroy, cen, cen_map("cen1", ["c1"], null, 7, "10.7.0.1")},
         {destroy, cont, cont_map("c1", ["cen1"])}
     ],
     ?assertEqual(Instructions, leviathan_cen:lm_compare(LM0, new_lm())).
@@ -285,8 +277,8 @@ lm_compare5() ->
                                 ]}],
     %% ?debugFmt("~p", [leviathan_cen:lm_compare(LM0, LM1)]),
     %% ?debugFmt("~p", [Instructions]),
-    ?debugFmt("~p", [LM0]),
-    ?debugFmt("~p", [LM1]),
+    %% ?debugFmt("~p", [LM0]),
+    %% ?debugFmt("~p", [LM1]),
     ?assertEqualLists(Instructions, leviathan_cen:lm_compare(LM0, LM1)).
 
 lm_compare6() ->
@@ -314,9 +306,9 @@ lm_compare6() ->
                       endpoint("c4", "c4.0i", in, "cen2", "10.8.0.11"),
                       endpoint("cen2", "c4.0o", out)
                      ]}],
-    ?debugVal(LM0),
-    ?debugFmt("~p", [leviathan_cen:lm_compare(LM0, LM1)]),
-    ?debugFmt("~p", [LM1]),
+    %% ?debugVal(LM0),
+    %% ?debugFmt("~p", [leviathan_cen:lm_compare(LM0, LM1)]),
+    %% ?debugFmt("~p", [LM1]),
     ?assertEqual(lists:sort(Instructions),
                  lists:sort(leviathan_cen:lm_compare(LM0, LM1))).
 
@@ -371,15 +363,24 @@ decompose_lm(#{censmap := #{cens := Cens},
 json_cen(CenId, ContIds) ->
     #{<<"cenID">> => CenId, <<"containerIDs">> => ContIds}.
 
-cen_map(CenId, ContIds, WireType, IpAddr) ->
+cen_map(CenId, ContIds, WireType, IpAddrB, IpAddr) ->
+    cen_map(CenId, ContIds, WireType, IpAddrB, IpAddr, []).
+
+cen_map(CenId, ContIds, WireType, IpAddrB, IpAddr, ReservedIp) ->
     #{cenID => CenId,
       wire_type => WireType,
       contIDs => ContIds,
-      ip_address => IpAddr}.
+      ipaddr_b => IpAddrB,
+      ip_address => IpAddr,
+      reservedIps => ReservedIp}.
 
 cont_map(ContId, CenIds) ->
+    cont_map(ContId, CenIds, []).
+
+cont_map(ContId, CenIds, ReservedIds) ->
     #{contID => ContId,
-      cens => CenIds}.
+      cens => CenIds,
+      reservedIdNums => ReservedIds}.
 
 endpoint(ContId, EndId, Side, Alias, IpAddr) ->
     #{endID => EndId,
@@ -418,7 +419,7 @@ foldcalls2(Starting, CompareFn, Fns) ->
             Acc1
         end, Starting, Fns).
 
-lm_compare(Old, New) ->
+xx_lm_compare_xx(Old, New) ->
     ?debugVal(leviathan_cen:lm_compare(Old, New)),
     ?debugVal(New).
 

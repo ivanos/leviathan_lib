@@ -1,6 +1,10 @@
 -module(leviathan_cin).
 
--export([ip_address/2,prepare_wire_end/1,cen_ip_address/1]).
+-export([ip_address/2,
+         prepare_wire_end/1,
+         cen_ip_address/1,
+         bridge_ip_address/1,
+         next_cenb/0]).
 
 % Generate an IP address in the form:
 % 10.NN.C1.C2
@@ -29,13 +33,10 @@ prepare_wire_end(#{type := cont, id := ContId, alias := Alias, ip_address := IPA
 
 cen_ip_address(NetCount) when NetCount =< 244 ->
     B = NetCount + 6, %% offset
-    list_to_binary(inet_parse:ntoa({10, B, 0, 1})).
+    bridge_ip_address(B).
 
+bridge_ip_address(CenB) ->
+    list_to_binary(inet_parse:ntoa({10, CenB, 0, 1})).
 
-
-
-
-
-
-
-
+next_cenb() ->
+    leviathan_store:next_count(cenb, 10).

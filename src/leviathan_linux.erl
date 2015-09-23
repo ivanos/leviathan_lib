@@ -81,11 +81,12 @@ new_bridge(BridgeNum)->
 
 set_ip_address(Cid, Alias, IPAddress)->
     CPid = leviathan_docker:inspect_pid(Cid),
-    {ok,{A,B,_,_}} = inet:parse_ipv4_address(IPAddress),
-    Gateway = {A,B,0,1},
-    GatewayString = inet:ntoa(Gateway),
-    [leviathan_ip:netns_exec_ip_addr_add_dev(CPid,IPAddress ++ "/16",Alias), %% XXX hardcoded to /16
-     leviathan_ip:netns_exec_ip_route_add_default_via(CPid,GatewayString)].
+    %% Use /0 as netmask, since the concept of "local network" doesn't
+    %% make sense anymore.  Since the entire world is now our local
+    %% network, we don't need a gateway either.
+    [leviathan_ip:netns_exec_ip_addr_add_dev(CPid,IPAddress ++ "/0",Alias),
+     %% Add a route to send everything out through the network interface.
+     leviathan_ip:netns_exec_ip_route_add_default_dev(CPid,Alias)].
 
 eval(CmdBundle)->
     EvalBundle = lists:map(fun(X)->Result = leviathan_os:cmd(X), {X,Result} end,CmdBundle),

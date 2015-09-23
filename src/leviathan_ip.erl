@@ -50,4 +50,9 @@ netns_exec_ip_addr_add_dev(CPid,Address,DevName)->
 netns_exec_ip_route_add_default_via(CPid,Address)->
     "ip netns exec "  ++ CPid ++ " ip route add default via " ++ Address.
     
+%
+% Example: "ip netns exec $pid ip route add default dev cen2"
+%
+netns_exec_ip_route_add_default_dev(CPid,DevName)->
+    "ip netns exec "  ++ CPid ++ " ip route add default dev " ++ DevName.
     

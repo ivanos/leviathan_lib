@@ -24,3 +24,6 @@
                          cen :: string(),
                          data :: #{idnumber => integer(),
                                    ip_address => string()}}).
+
+% persistent counters
+-record(counter, {id :: atom(), count :: integer()}).

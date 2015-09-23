@@ -5,7 +5,8 @@
 -endif.
 
 -export([import_cens/2,
-         update_cens/2]).
+         update_cens/2,
+         import_switch/2]).
 
 -export([dby_cen_id/1,
          get_cen/1,
@@ -33,6 +34,15 @@ import_cens(Host, LM) ->
     ToPublish = [container_from_lm(Host, LM),
                  cens_from_lm(Host, LM),
                  wires_from_lm(Host, LM)],
+    ok = dby:publish(?PUBLISHER, lists:flatten(ToPublish), [persistent]).
+
+% import switch
+
+import_switch(Host, Switch) ->
+    ToPublish = [dby_switch(Host, Switch),
+                 switch_ports(Host, Switch),
+                 %% One flow table should be enough for everyone.
+                 switch_tables(Host, Switch, 1)],
     ok = dby:publish(?PUBLISHER, lists:flatten(ToPublish), [persistent]).
 
 % getters
@@ -161,6 +171,15 @@ dby_endpoint_id(Host, Endpoint) ->
 dby_ipaddr_id(IpAddr) ->
     dby_id([<<"lev_ip">>, IpAddr]).
 
+dby_switch_id(Host, ContId) ->
+    dby_id([<<"lev_switch">>, Host, ContId]).
+
+dby_of_port_id(SwitchId, N) ->
+    <<SwitchId/binary, "/OFP", (integer_to_binary(N))/binary>>.
+
+dby_of_flow_table_id(SwitchId, N) ->
+    <<SwitchId/binary, "-table-", (integer_to_binary(N))/binary>>.
+
 dby_cen(CenId, Metadata) when is_binary(CenId) ->
     {dby_cen_id(CenId), [{<<"cenID">>, CenId},
 			 {<<"type">>, <<"cen">>}] ++ Metadata}.
@@ -181,6 +200,21 @@ dby_endpoint(Host, EndID, Side, Metadata) when is_binary(EndID) ->
 dby_ipaddr(IpAddr) when is_binary(IpAddr) ->
     {dby_ipaddr_id(IpAddr), [{<<"type">>, <<"ipaddr">>},
                              {<<"ipaddr">>, IpAddr}]}.
+
+dby_switch(Host, #{<<"contID">> := ContId, <<"datapath_id">> := DatapathId}) ->
+    {dby_switch_id(Host, ContId),
+     [{<<"contID">>, ContId},
+      {<<"type">>, <<"of_switch">>},
+      {<<"datapath_id">>, DatapathId}]}.
+
+dby_of_port(SwitchId, N) ->
+    {dby_of_port_id(SwitchId, N),
+     [{<<"type">>, <<"of_port">>}]}.
+
+dby_of_flow_table(SwitchId, N) ->
+    {dby_of_flow_table_id(SwitchId, N),
+     [{<<"type">>, <<"of_flow_table">>},
+      {<<"table_no">>, N}]}.
 
 dby_endpoint_to_ipaddr(Host, EndpointId, IpAddr) ->
     dby_link(dby_endpoint_id(Host, EndpointId), dby_ipaddr_id(IpAddr),
@@ -266,6 +300,22 @@ wires_from_lm(Host, #{wiremap := #{wires := Wires}}) ->
         fun(Wire, Acc) ->
             [pub_wire(Host, Wire) | Acc]
         end, [], Wires).
+
+switch_ports(Host, #{<<"contID">> := ContID, <<"interfaces">> := InterfacesBin}) ->
+    SwitchId = dby_switch_id(Host, ContID),
+    NumberedInterfaces = lists:zip(lists:seq(1, length(InterfacesBin)), InterfacesBin),
+    [
+     [dby_of_port(SwitchId, N),
+      dby_link(dby_of_port_id(SwitchId, N), SwitchId, <<"part_of">>),
+      dby_link(dby_of_port_id(SwitchId, N), dby_bridge_id(Host, Interface), <<"bound_to">>)]
+     || {N, Interface} <- NumberedInterfaces].
+
+switch_tables(Host, #{<<"contID">> := ContID}, HowMany) ->
+    SwitchId = dby_switch_id(Host, ContID),
+    [
+     [dby_of_flow_table(SwitchId, N),
+      dby_link(dby_of_flow_table_id(SwitchId, N), SwitchId, <<"of_resource">>)]
+     || N <- lists:seq(0, HowMany - 1)].
 
 % prepare to publish one wire
 pub_wire(Host, [Endpoint1 = #{endID := EndId1},
