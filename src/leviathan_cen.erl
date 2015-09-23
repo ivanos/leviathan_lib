@@ -268,7 +268,6 @@ lm_add_container(CenId, ContId, LM0) ->
     LM2 = add_container_to_censmap(CenId, ContId, LM1),
     LM3 = add_container(ContId, LM2),
     LM4 = add_container_to_contsmap(ContId, CenId, LM3),
-    %% leviathan_store:add_container(CenId, ContId),
     lm_wire_cens(LM4).
 
 % add cen
@@ -623,7 +622,12 @@ wire_cens(Cens, Conts) ->
 id_numbers(CenId, ContIds, Conts) ->
     ContsMap = lists:foldl(
         fun(Cont = #{contID := ContId}, Acc) ->
-            maps:put(ContId, id_number_for_cen(CenId, Cont), Acc)
+            case id_number_for_cen(CenId, Cont) of
+                not_found ->
+                    Acc;
+                Id ->
+                    maps:put(ContId, Id, Acc)
+            end
         end, #{}, Conts),
     lists:map(
         fun(ContId) ->
@@ -671,8 +675,8 @@ mk_out_endpoint(CenId, ContId, IdNumber) ->
 
 % find the key in the first list argument and return the corresponding
 % value from the second list
-list_lookup2(Key, [], []) ->
-    error({no_key, Key});
+list_lookup2(_, [], []) ->
+    not_found;
 list_lookup2(Key, [Key | _], [Value | _]) ->
     Value;
 list_lookup2(Key, [_ | Keys], [_ | Values]) ->

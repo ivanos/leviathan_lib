@@ -177,7 +177,7 @@ lm_add_container3() ->
                                [inet:ntoa({10, 10, 0, X}) || X <- lists:seq(10, 12)]
                               ),
                        cen_map("cen2", ["c1", "c2", "c3", "c4"], bus, 11, "10.11.0.1",
-                               [inet:ntoa({10, 11, 0, X}) || X <- lists:seq(10, 12)]
+                               [inet:ntoa({10, 11, 0, X}) || X <- lists:seq(10, 13)]
                               )
                       ],
                       Cens),
@@ -286,22 +286,16 @@ lm_compare5() ->
                                fun(Acc) -> leviathan_cen:lm_add_container("cen1", "cB", Acc) end
                               ]),
     LM1 = leviathan_cen:lm_add_container("cen2", "cB", LM0),
-    %% ?debugFmt("CENS TAB ~p~n", [ets:tab2list(leviathan_cen)]),
-    %% ?debugFmt("CONT TAB ~p~n", [ets:tab2list(leviathan_cont)]),
     Instructions = [
                     {add,cont_in_cen,{"cB","cen2"}},
                     {add, wire, [
-                                 endpoint("cB", "cB.1i", in, "cen2", "10.8.0.11"),
+                                 endpoint("cB", "cB.1i", in, "cen2", "10.11.0.11"),
                                  endpoint("cen2", "cB.1o", out)
                                 ]},
                     {add, wire, [
-                                 endpoint("cA", "cA.1i", in, "cen2", "10.8.0.10"),
+                                 endpoint("cA", "cA.1i", in, "cen2", "10.11.0.10"),
                                  endpoint("cen2", "cA.1o", out)
                                 ]}],
-    %% ?debugFmt("~p", [leviathan_cen:lm_compare(LM0, LM1)]),
-    %% ?debugFmt("~p", [Instructions]),
-    %% ?debugFmt("~p", [LM0]),
-    %% ?debugFmt("~p", [LM1]),
     ?assertEqualLists(Instructions, leviathan_cen:lm_compare(LM0, LM1)).
 
 lm_compare6() ->
@@ -363,7 +357,9 @@ lm_add_cen0() ->
     NewLM = leviathan_cen:add_cen("cen1", OldLM),
     Instructions = [{add, cen, #{cenID => "cen1",
                                  contIDs => [],
-                                 ip_address => "10.7.0.1",
+                                 ip_address => "10.10.0.1",
+                                 ipaddr_b => 10,
+                                 reservedIps => [],
                                  wire_type => bus}}],
     ?assertEqual(Instructions, leviathan_cen:lm_compare(OldLM, NewLM)).
 
@@ -451,3 +447,6 @@ tr() ->
     dbg:tracer(),
     dbg:p(all, c),
     dbg:tpl(leviathan_cen, []).
+
+troff() ->
+    dbg:ctpl(leviathan_cen).
