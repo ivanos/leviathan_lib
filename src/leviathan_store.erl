@@ -3,7 +3,7 @@
 -export([import_cens/2,
          get_levmap/1,
          update_cens/2,
-         get_next_cin_ip/0,
+         next_count/2,
          add_cen/2,
          add_container/2,
          get_cen_ip/1,
@@ -40,9 +40,18 @@ update_cens(Host, Instructions) ->
     end,
     ok = leviathan_db:transaction(Fn).
 
-get_next_cin_ip() ->
-    % XXX not implemented.
-    ok.
+next_count(Key, InitialValue) ->
+    Fn = fun() ->
+        case leviathan_db:read({counter, Key}) of
+            [] ->
+                update_count(Key, InitialValue + 1),
+                InitialValue;
+            [#counter{count = Count}] ->
+                update_count(Key, Count + 1),
+                Count
+        end
+    end,
+    leviathan_db:transaction(Fn).
 
 add_cen(CenId, Ip) ->
     Fn = fun() ->
@@ -108,7 +117,7 @@ get_wire_data(CenId, ContId) ->
     MatchHead = #leviathan_cont{cen = CenId, cont = ContId, data = '$1', _ = '_'},
     MatchSpec = [{MatchHead, _Guard = [], _Result = ['$1']}],
     Fn = fun() ->
-                 [Data] =leviathan_db:select(leviathan_cont, MatchSpec),
+                 [Data] = leviathan_db:select(leviathan_cont, MatchSpec),
                  Data
          end,
     leviathan_db:transaction(Fn).
@@ -134,6 +143,9 @@ wire_cont_to_cen(CenId, ContId, Wire) ->
 % local functions
 %
 % -----------------------------------------------------------------------------
+
+update_count(Key, NewValue) ->
+    leviathan_db:write(#counter{id = Key, count = NewValue}).
 
 % XXX not implemented
 update_instruction(_, _) -> [].
@@ -281,3 +293,4 @@ update_leviathan_cen_wires(Wire, undefined) ->
     [Wire];
 update_leviathan_cen_wires(Wire, Wires) ->
     [Wire | Wires].
+

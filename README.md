@@ -123,11 +123,22 @@ Key | Value | Description
 cenID | CEN ID | CEN Identifier
 wire_type | bus, wire, or null | type of wiring used
 contIDs | list of container IDs | containers in the CEN
-ipaddr | string | (only for bus) IP address of the bridge
+ipaddr_b | integer | (only for bus) B part of the IP addresses for CEN
+ipaddress | string | IP address of bridge
+reservedIp | list of strings | Ip addresses in use in this CEN
+
+The list of containers in the CEN and the list of reserved IP addresses
+are in the same order. That is, the first container uses the first IP
+address.
 
 Example:
 ```
-#{cenID => "cen1", wire_type => bus, contIDs => ["c1","c2","c3"]}
+#{cenID => "cen1",
+  wire_type => bus,
+  contIDs => ["c1","c2","c3"],
+  ipaddr_b => 17,
+  reservedIp => ["10.17.0.1", "10.17.0.2", ...]
+}
 ```
 
 A Container is represented by a map:
@@ -136,10 +147,17 @@ Key | Value | Description
 --- | ----- | -----------
 contID | container ID | Container ID
 cens | list of CEN IDs | Container is in these CENs
+reservedIdNums | list of integers | Endpoint interfaces Ids used by this Container
+
+The list of CENs and the list of reserved interface Ids are in the same order.
+That is, the first the container uses the first interface Id for the first CEN.
 
 Example:
 ```
-#{contID => "c1", cens => ["cen1","cen2"]}
+#{contID => "c1",
+  cens => ["cen1","cen2"],
+  reservedIdNums => [0, 1, 2, ...]
+}
 ```
 
 A Wire is represented by a pair of maps in a list. Each map has:
