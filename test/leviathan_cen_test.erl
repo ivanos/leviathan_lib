@@ -4,7 +4,7 @@
 
 -define(assertEqualLists(A,B), ?assertEqual(lists:sort(A), lists:sort(B))).
 
-leviathan_cen_test_() ->
+leviathan_cen_import_test_() ->
     {setup,
      fun setup/0,
      fun cleanup/1,
@@ -16,8 +16,8 @@ leviathan_cen_test_() ->
        ,{"decode_jiffy 1 container", fun decode_jiffy2/0}
        ,{"decode_jiffy 2 containers", fun decode_jiffy3/0}
        ,{"decode_jiffy 3 containers", fun decode_jiffy4/0}
-%      ,{"lm_add_container test 0", fun lm_add_container0/0}
-%      ,{"lm_add_container test 1", fun lm_add_container1/0}
+       ,{"lm_add_container test 0", fun lm_add_container0/0}
+       ,{"lm_add_container test 1", fun lm_add_container1/0}
        ,{"lm_add_container test 2", fun lm_add_container2/0}
        ,{"lm_add_container test 3", fun lm_add_container3/0}
        ,{"lm_add_container test 4", fun lm_add_container4/0}
@@ -113,23 +113,30 @@ decode_jiffy4() ->
 lm_add_container0() ->
     LM = leviathan_cen:lm_add_container("cen1", "c1", new_lm()),
     {Cens, Conts, Wires} = decompose_lm(LM),
-    ?assertEqual([cen_map("cen1", ["c1"], null, 7, "10.7.0.1")], Cens),
-    ?assertEqual([cont_map("c1", ["cen1"])], Conts),
+    ?assertEqual([cen_map("cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"])],
+                  Cens),
+    ?assertEqual([cont_map("c1", ["cen1"], [0])], Conts),
     ?assertEqual([], Wires).
 
 lm_add_container1() ->
     LM0 = leviathan_cen:lm_add_container("cen1", "c1", new_lm()),
     LM1 = leviathan_cen:lm_add_container("cen1", "c2", LM0),
     {Cens, Conts, Wires} = decompose_lm(LM1),
-    ?assertEqual([cen_map("cen1", ["c2", "c1"], wire, 7, "10.7.0.1")], Cens),
-    ?assertEqualLists(Conts, [cont_map("c1", ["cen1"]),
-                              cont_map("c2", ["cen1"])]),
-    ?assertEqual([
-        [
-            endpoint("c2", "c2.0i", in, "cen1", "10.7.0.10"),
-            endpoint("c1", "c1.0i", in, "cen1", "10.7.0.11")
-        ]
-    ], Wires).
+    ?assertEqual([cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
+                          ["10.10.0.10", "10.10.0.11"])],
+                 Cens),
+    ?assertEqualLists(Conts, [cont_map("c1", ["cen1"], [0]),
+                              cont_map("c2", ["cen1"], [0])]),
+    ?assertEqualLists([
+                       [
+                        endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+                        endpoint("cen1", "c1.0o", out)
+                       ],
+                       [
+                        endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+                        endpoint("cen1", "c2.0o", out)
+                       ]
+                      ], Wires).
 
 lm_add_container2() ->
     {Cens, Conts, Wires} = foldcalls(new_lm(), [
@@ -138,32 +145,48 @@ lm_add_container2() ->
         fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c3", Acc) end,
         fun decompose_lm/1
     ]),
-    ?assertEqual([cen_map("cen1", ["c1", "c2", "c3"], bus, 7, "10.7.0.1")], Cens),
-    ?assertEqualLists([cont_map("c1", ["cen1"]),
-                       cont_map("c2", ["cen1"]),
-                       cont_map("c3", ["cen1"])],
+    ?assertEqual([
+                  cen_map("cen1", ["c1", "c2", "c3"], bus, 10, "10.10.0.1",
+                          [inet:ntoa({10, 10, 0, X}) || X <- lists:seq(10, 12)])
+                 ],
+                 Cens),
+    ?assertEqualLists([cont_map("c1", ["cen1"], [0]),
+                       cont_map("c2", ["cen1"], [0]),
+                       cont_map("c3", ["cen1"], [0])],
                       Conts),
     ?assertEqual(3, length(Wires)),
     assert_bus_wires(Wires).
 
 lm_add_container3() ->
-    {Cens, Conts, Wires} = foldcalls(new_lm(), [
-        fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end,
-        fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c2", Acc) end,
-        fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c3", Acc) end,
-        fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c1", Acc) end,
-        fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c2", Acc) end,
-        fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c3", Acc) end,
-        fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c4", Acc) end,
-        fun decompose_lm/1
-    ]),
-    ?assertEqualLists([cen_map("cen1", ["c1", "c2", "c3"], bus, 7, "10.7.0.1"),
-                       cen_map("cen2", ["c1", "c2", "c3", "c4"], bus, 8, "10.8.0.1")],
+    {Cens, Conts, Wires} = foldcalls(
+                             new_lm(),
+                             [
+                              %% cen1
+                              fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end,
+                              fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c2", Acc) end,
+                              fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c3", Acc) end,
+                              %% cen2
+                              fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c1", Acc) end,
+                              fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c2", Acc) end,
+                              fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c3", Acc) end,
+                              fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c4", Acc) end,
+                              fun decompose_lm/1
+                             ]),
+    ?assertEqualLists([
+                       cen_map("cen1", ["c1", "c2", "c3"], bus, 10, "10.10.0.1",
+                               [inet:ntoa({10, 10, 0, X}) || X <- lists:seq(10, 12)]
+                              ),
+                       cen_map("cen2", ["c1", "c2", "c3", "c4"], bus, 11, "10.11.0.1",
+                               [inet:ntoa({10, 11, 0, X}) || X <- lists:seq(10, 12)]
+                              )
+                      ],
                       Cens),
-    ?assertEqualLists([cont_map("c1", ["cen1", "cen2"]),
-                       cont_map("c2", ["cen1", "cen2"]),
-                       cont_map("c3", ["cen1", "cen2"]),
-                       cont_map("c4", ["cen2"])],
+    ?assertEqualLists([
+                       cont_map("c1", ["cen1", "cen2"], [0, 1]),
+                       cont_map("c2", ["cen1", "cen2"], [0, 1]),
+                       cont_map("c3", ["cen1", "cen2"], [0, 1]),
+                       cont_map("c4", ["cen2"], [0])
+                      ],
                       Conts),
     ?assertEqual(7, length(Wires)),
     leviathan_test_utils:check_wires(Cens, Wires),
