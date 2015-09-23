@@ -21,5 +21,8 @@ tabledefs() ->
                           {type, set}]},
         {leviathan_cont, [{attributes, record_info(fields, leviathan_cont)},
                           {disc_copies, [node()]},
-                          {type, bag}]}
+                          {type, bag}]},
+        {counter,        [{attributes, record_info(fields, counter)},
+                          {disc_copies, [node()]},
+                          {type, set}]}
     ].

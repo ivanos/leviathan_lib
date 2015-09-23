@@ -286,10 +286,8 @@ add_cen(CenId, LM = ?LM_CENS(Cens)) ->
         true ->
             LM;
         false ->
-            LM?LM_SET_CENS([cen(CenId,
-                                null,
-                                [],
-                                leviathan_store:get_next_cin_ip()) | Cens])
+            IpB = leviathan_cin:next_cenb(),
+            LM?LM_SET_CENS([cen(CenId, bus, [], IpB) | Cens])
     end.
 
 % returns filter function matching CenId
@@ -321,7 +319,7 @@ add_container_to_censmap(CenId, ContId, LM = ?LM_CENS(Cens0)) ->
     Cens1 = update_censmap(CenId, Cens0,
         fun(Cen = #{contIDs := ContIds0}) ->
             ContIds1 = list_add_unique(ContId, ContIds0),
-            [Cen#{contIDs := ContIds1, wire_type := wire_type(ContIds1)}]
+            [Cen#{contIDs := ContIds1}]
         end),
     LM?LM_SET_CENS(Cens1).
 
@@ -344,7 +342,7 @@ remove_container_from_censmap(CenId, ContId, LM = ?LM_CENS(Cens0)) ->
     Cens1 = update_censmap(CenId, Cens0,
         fun(Cen = #{contIDs := ContIds0}) ->
             ContIds1 = lists:delete(ContId, ContIds0),
-            [Cen#{contIDs := ContIds1, wire_type := wire_type(ContIds0)}]
+            [Cen#{contIDs := ContIds1}]
         end),
     LM?LM_SET_CENS(Cens1).
 
@@ -362,8 +360,10 @@ remove_container_from_contsmap(ContId, CenId, LM = ?LM_CONTS(Conts0)) ->
     LM?LM_SET_CONTS(Conts1).
 
 % Rewire the CENs
-lm_wire_cens(LM = ?LM_CENS(Cens)) ->
-    Wires = wire_cens(Cens),
+lm_wire_cens(LM) ->
+    ?LM_CONTS(Conts) = LM,
+    ?LM_CENS(Cens) = LM,
+    Wires = wire_cens(Cens, Conts),
     LM?LM_SET_WIRES(Wires).
 
 % Compare LMs
@@ -398,17 +398,12 @@ compare_cens_containers(?LM_CENS(OldCens), ?LM_CENS(NewCens)) ->
         fun(CenId) ->
             #{contIDs := OldList} = maps:get(CenId, OldMap),
             #{contIDs := NewList} = maps:get(CenId, NewMap),
-            Ipaddr = maps:get(ip_address, maps:get(CenId, NewMap), null),
             {ToRemove, ToAdd} = compare_lists(OldList, NewList),
             [
                 instructions(destroy, cont_in_cen,
                     [{ContId, CenId}|| ContId <- ToRemove]),
                 instructions(add, cont_in_cen,
-                    [{ContId, CenId} || ContId <- ToAdd]),
-                set_wiretype(CenId, wire_type(OldList),
-                                    wire_type(NewList)),
-                set_bridge(CenId, Ipaddr,
-                                    wire_type(OldList), wire_type(NewList))
+                    [{ContId, CenId} || ContId <- ToAdd])
             ]
         end, CommonKeys).
 
@@ -425,19 +420,6 @@ set_wiretype(_, Wiretype, Wiretype) ->
     [];
 set_wiretype(CenId, _, NewWiretype) ->
     {set, wire_type, {CenId, NewWiretype}}.
-
-set_bridge(_, _, WireType, WireType) ->
-    % nothing changed
-    [];
-set_bridge(CenId, Ipaddr, _, bus) ->
-    % add bridge
-    {add, bridge, {CenId, Ipaddr}};
-set_bridge(CenId, _, bus, _) ->
-    % remove bridge
-    {destroy, bridge, CenId};
-set_bridge(_, _, _, _) ->
-    % ignore any other transition
-    [].
 
 compare_wires(?LM_WIRES(OldWires), ?LM_WIRES(NewWires)) ->
     delta_instructions(wire, wires_map(OldWires), wires_map(NewWires)).
@@ -514,12 +496,10 @@ decode_jiffy(CensJson) ->
     ?DEBUG("CensJson:~n~p~n",[CensJson]),
     Cens = cens_from_jiffy(CensJson),
     Conts = conts_from_jiffy(CensJson),
-    % XXX wires may need to update the Conts with the counts
-    Wires = wire_cens(Cens),
     #{
         censmap => #{cens => Cens},
         contsmap => #{conts => Conts},
-        wiremap => #{wires => Wires}
+        wiremap => #{wires => wire_cens(Cens, Conts)}
     }.
 
 % cens
@@ -527,28 +507,25 @@ cens_from_jiffy(CensJson) ->
     Cens = lists:foldl(
         fun(#{<<"cenID">> := Cen, <<"containerIDs">> := Conts}, Acc) ->
             [cen(binary_to_list(Cen),
-                 wire_type(Conts),
+                 bus,
                  Conts,
-                 leviathan_store:get_next_cin_ip()) | Acc]
+                 leviathan_cin:next_cenb()) | Acc]
         end, [], CensJson),
     Cens.
 
-wire_type(Conts) when length(Conts) < 2 ->
-    bus;
-    %null;
-wire_type(Conts) when length(Conts)  == 2 ->
-    bus;
-    %wire
-wire_type(Conts) when length(Conts)  > 2 ->
-    bus.
+cen(Cen, WireType, Conts, IpAddrB) ->
+    #{cenID => Cen,
+      wire_type => WireType,
+      contIDs => list_binary_to_list(Conts),
+      ipaddr_b => IpAddrB,
+      ip_address => binary_to_list(leviathan_cin:bridge_ip_address(IpAddrB)),
+      reservedIps => list_binary_to_list(container_ip_addrs(IpAddrB, Conts))}.
 
-% XXX ignore wiretype for now and always use bus
-cen(Cen, _WireType, Conts, IpAddr) ->
-     #{cenID => Cen,
-%      wire_type => WireType,
-       wire_type => bus,
-       contIDs => list_binary_to_list(Conts),
-       ip_address => binary_to_list(IpAddr)}.
+container_ip_addrs(IpAddrB, Conts) ->
+    lists:map(
+        fun(Count) ->
+            leviathan_cin:ip_address(IpAddrB, Count)
+        end, lists:seq(1, length(Conts))).
 
 % conts
 conts_from_jiffy(CensJson) ->
@@ -559,9 +536,16 @@ conts_from_jiffy(CensJson) ->
         end, #{}, Pairs),
     maps:fold(
         fun(Cont, Cens, Acc) ->
-            [#{contID => binary_to_list(Cont),
-               cens => list_binary_to_list(Cens)} | Acc]
+            [cont(Cont, Cens) | Acc]
         end, [], Index).
+
+cont(Cont, Cens) ->
+    #{contID => binary_to_list(Cont),
+      cens => list_binary_to_list(Cens),
+      reservedIdNums => cont_id_numbers(Cens)}.
+
+cont_id_numbers(Cens) ->
+    lists:seq(0, length(Cens) - 1).
 
 cen_cont_pairs(CensJson) ->
     lists:foldl(
@@ -587,26 +571,47 @@ maps_append_unique(Key, Value, Map) ->
 
 %% wiring helpers
 
-wire_cens(Cens) ->
+wire_cens(Cens, Conts) ->
     Fn =
-        fun(#{cenID := CenId,
-              contIDs := ContIds}, Acc) when length(ContIds) > 1 ->
-            wire_cen(CenId, ContIds) ++ Acc;
+        fun(Cen = #{cenID := CenId,
+                   contIDs := ContIds}, Acc) when length(ContIds) > 1 ->
+            IdNumbers = id_numbers(CenId, ContIds, Conts),
+            wire_cen(Cen, lists:zip(ContIds, IdNumbers)) ++ Acc;
            (_, Acc) ->
             Acc
          end,
     lists:foldl(Fn, [], Cens).
 
-wire_cen(CenId, ContIds) ->
-    lists:foldl(mk_wire_cont_to_cen_fun(CenId), [], ContIds).
+id_numbers(CenId, ContIds, Conts) ->
+    ContsMap = lists:foldl(
+        fun(Cont = #{contID := ContId}, Acc) ->
+            maps:put(ContId, id_number_for_cen(CenId, Cont), Acc)
+        end, #{}, Conts),
+    lists:map(
+        fun(ContId) ->
+            maps:get(ContId, ContsMap)
+        end, ContIds).
+
+id_number_for_cen(CenId, #{cens := Cens, reservedIdNums := ReservedIds}) ->
+    list_lookup2(CenId, Cens, ReservedIds).
+
+% ContInfo :: [{contid, id}]
+wire_cen(Cen = #{cenID := CenId}, ContsInfo) ->
+    IpAddrs = ipaddrs_for_conts(Cen, ContsInfo),
+    lists:foldl(mk_wire_cont_to_cen_fun(CenId),
+                [], lists:zip(ContsInfo, IpAddrs)).
+
+ipaddrs_for_conts(#{reservedIps := ReservedIps, contIDs := ContIds},
+                                                            ContsInfo) ->
+    lists:map(
+        fun({ContId, _}) ->
+            list_lookup2(ContId, ContIds, ReservedIps)
+        end, ContsInfo).
 
 mk_wire_cont_to_cen_fun(CenId) ->
-    fun(ContId, Acc) ->
-            #{idnumber := Id, ip_address := Ip} =
-                leviathan_store:get_wire_data(CenId, ContId),
+    fun({{ContId, Id}, Ip}, Acc) ->
             Wire = [mk_in_endpoint(CenId, ContId, Id, Ip),
                     mk_out_endpoint(CenId, ContId, Id)],
-            leviathan_store:wire_cont_to_cen(CenId, ContId, Wire),
             [Wire| Acc]
     end.
 
@@ -616,7 +621,7 @@ mk_in_endpoint(CenId, ContId, IdNumber, Ip) ->
       dest => #{type => cont,
                 id => ContId,
                 alias => CenId,
-                ip_address => binary_to_list(Ip)}
+                ip_address => Ip}
      }.
 
 mk_out_endpoint(CenId, ContId, IdNumber) ->
@@ -625,6 +630,15 @@ mk_out_endpoint(CenId, ContId, IdNumber) ->
       dest => #{type => cen,
                 id => CenId}
      }.
+
+% find the key in the first list argument and return the corresponding
+% value from the second list
+list_lookup2(Key, [], []) ->
+    error({no_key, Key});
+list_lookup2(Key, [Key | _], [Value | _]) ->
+    Value;
+list_lookup2(Key, [_ | Keys], [_ | Values]) ->
+    list_lookup2(Key, Keys, Values).
 
 % name formatters
 in_endpoint_name(ContId, N) ->
