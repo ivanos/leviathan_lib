@@ -1,6 +1,13 @@
 # leviathan_lib
 Erlang code specific to Leviathan: Docker Container Network Orchestrator
 
+## Application Environment Variables
+| Varible | Description |
+| ------- | ----------- |
+| docker_bin | Location of the docker bin for reading events |
+
+For testing without Docker, set `docker_bin` to `"cat"`.
+
 Notes:
 
 
