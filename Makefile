@@ -20,6 +20,7 @@ deep-clean:
 	rm -fr deps/*/ebin/*
 
 run: compile
+	export docker_bin=cat
 	erl -pa ebin -pa deps/*/ebin \
 	-name leviathan_lib@127.0.0.1 \
 	-setcookie ${cookie} \
