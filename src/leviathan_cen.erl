@@ -377,21 +377,22 @@ lm_remove_container(CenId, ContId, LM) ->
 % remove container from cens maps
 remove_container_from_censmap(CenId, ContId, LM = ?LM_CENS(Cens0)) ->
     Cens1 = update_censmap(CenId, Cens0,
-        fun(Cen = #{contIDs := ContIds0}) ->
-            ContIds1 = lists:delete(ContId, ContIds0),
-            [Cen#{contIDs := ContIds1}]
+        fun(Cen = #{contIDs := ContIds0, reservedIps := ReservedIps0}) ->
+            {ContIds1, ReservedIps1} =
+                            list_delete2(ContId, ContIds0, ReservedIps0),
+            [Cen#{contIDs := ContIds1, reservedIps := ReservedIps1}]
         end),
     LM?LM_SET_CENS(Cens1).
 
 % remove container from Cont map
 remove_container_from_contsmap(ContId, CenId, LM = ?LM_CONTS(Conts0)) ->
     Conts1 = update_contsmap(ContId, Conts0,
-        fun(Cont = #{cens := Cens0}) ->
-            case lists:delete(CenId, Cens0) of
-                [] ->
-                    [];
-                Cens1 ->
-                    [Cont#{cens := Cens1}]
+        fun(Cont = #{cens := Cens0, reservedIdNums := ReservedIds0}) ->
+            {Cens1, ReservedIds1} =
+                list_delete2(CenId, Cens0, ReservedIds0),
+            if
+                Cens1 == [] -> [];
+                true -> [Cont#{cens := Cens1, reservedIdNums := ReservedIds1}]
             end
         end),
     LM?LM_SET_CONTS(Conts1).
@@ -681,6 +682,18 @@ list_lookup2(Key, [Key | _], [Value | _]) ->
     Value;
 list_lookup2(Key, [_ | Keys], [_ | Values]) ->
     list_lookup2(Key, Keys, Values).
+
+% delete the key in the first list argument and the corresponding element
+% from the second list.
+list_delete2(Key, Keys, Values) ->
+    list_delete2(Key, Keys, Values, [], []).
+
+list_delete2(_, [], [], NewKeys, NewValues) ->
+    {lists:reverse(NewKeys), lists:reverse(NewValues)};
+list_delete2(Key, [Key | Keys], [_ | Values], NewKeys, NewValues) ->
+    list_delete2(Key, Keys, Values, NewKeys, NewValues);
+list_delete2(_, [Key | Keys], [Value | Values], NewKeys, NewValues) ->
+    list_delete2(Key, Keys, Values, [Key | NewKeys], [Value | NewValues]).
 
 % name formatters
 in_endpoint_name(ContId, N) ->
