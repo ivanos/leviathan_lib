@@ -268,7 +268,6 @@ lm_add_container(CenId, ContId, LM0) ->
     LM2 = add_container_to_censmap(CenId, ContId, LM1),
     LM3 = add_container(ContId, LM2),
     LM4 = add_container_to_contsmap(ContId, CenId, LM3),
-    %% leviathan_store:add_container(CenId, ContId),
     lm_wire_cens(LM4).
 
 % add cen
@@ -378,21 +377,22 @@ lm_remove_container(CenId, ContId, LM) ->
 % remove container from cens maps
 remove_container_from_censmap(CenId, ContId, LM = ?LM_CENS(Cens0)) ->
     Cens1 = update_censmap(CenId, Cens0,
-        fun(Cen = #{contIDs := ContIds0}) ->
-            ContIds1 = lists:delete(ContId, ContIds0),
-            [Cen#{contIDs := ContIds1}]
+        fun(Cen = #{contIDs := ContIds0, reservedIps := ReservedIps0}) ->
+            {ContIds1, ReservedIps1} =
+                            list_delete2(ContId, ContIds0, ReservedIps0),
+            [Cen#{contIDs := ContIds1, reservedIps := ReservedIps1}]
         end),
     LM?LM_SET_CENS(Cens1).
 
 % remove container from Cont map
 remove_container_from_contsmap(ContId, CenId, LM = ?LM_CONTS(Conts0)) ->
     Conts1 = update_contsmap(ContId, Conts0,
-        fun(Cont = #{cens := Cens0}) ->
-            case lists:delete(CenId, Cens0) of
-                [] ->
-                    [];
-                Cens1 ->
-                    [Cont#{cens := Cens1}]
+        fun(Cont = #{cens := Cens0, reservedIdNums := ReservedIds0}) ->
+            {Cens1, ReservedIds1} =
+                list_delete2(CenId, Cens0, ReservedIds0),
+            if
+                Cens1 == [] -> [];
+                true -> [Cont#{cens := Cens1, reservedIdNums := ReservedIds1}]
             end
         end),
     LM?LM_SET_CONTS(Conts1).
@@ -623,7 +623,12 @@ wire_cens(Cens, Conts) ->
 id_numbers(CenId, ContIds, Conts) ->
     ContsMap = lists:foldl(
         fun(Cont = #{contID := ContId}, Acc) ->
-            maps:put(ContId, id_number_for_cen(CenId, Cont), Acc)
+            case id_number_for_cen(CenId, Cont) of
+                not_found ->
+                    Acc;
+                Id ->
+                    maps:put(ContId, Id, Acc)
+            end
         end, #{}, Conts),
     lists:map(
         fun(ContId) ->
@@ -671,12 +676,24 @@ mk_out_endpoint(CenId, ContId, IdNumber) ->
 
 % find the key in the first list argument and return the corresponding
 % value from the second list
-list_lookup2(Key, [], []) ->
-    error({no_key, Key});
+list_lookup2(_, [], []) ->
+    not_found;
 list_lookup2(Key, [Key | _], [Value | _]) ->
     Value;
 list_lookup2(Key, [_ | Keys], [_ | Values]) ->
     list_lookup2(Key, Keys, Values).
+
+% delete the key in the first list argument and the corresponding element
+% from the second list.
+list_delete2(Key, Keys, Values) ->
+    list_delete2(Key, Keys, Values, [], []).
+
+list_delete2(_, [], [], NewKeys, NewValues) ->
+    {lists:reverse(NewKeys), lists:reverse(NewValues)};
+list_delete2(Key, [Key | Keys], [_ | Values], NewKeys, NewValues) ->
+    list_delete2(Key, Keys, Values, NewKeys, NewValues);
+list_delete2(_, [Key | Keys], [Value | Values], NewKeys, NewValues) ->
+    list_delete2(Key, Keys, Values, [Key | NewKeys], [Value | NewValues]).
 
 % name formatters
 in_endpoint_name(ContId, N) ->

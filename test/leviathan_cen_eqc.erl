@@ -26,8 +26,8 @@ prop_wires() ->
     numtests(1000,
         ?SETUP(
             fun() ->
-                start_dobby(),
-                fun() -> stop_dobby() end
+                Apps = start_app(),
+                fun() -> stop_app(Apps) end
             end,
             ?FORALL(
                 Instructions,
@@ -87,8 +87,8 @@ prop_lm_dby() ->
     numtests(1000,
         ?SETUP(
             fun() ->
-                start_dobby(),
-                fun() -> stop_dobby() end
+                Apps = start_app(),
+                fun() -> stop_app(Apps) end
             end,
             ?FORALL(
                 {Base, Delta},
@@ -129,8 +129,8 @@ prop_deltas() ->
     numtests(1000,
         ?SETUP(
             fun() ->
-                start_dobby(),
-                fun() -> stop_dobby() end
+                Apps = start_app(),
+                fun() -> stop_app(Apps) end
             end,
             ?FORALL(
                 Instructions,
@@ -160,14 +160,20 @@ prop_deltas() ->
                 end
             ))).
 
-start_dobby() ->
+start_app() ->
     ok = application:set_env(erl_mnesia, options, [persistent]),
-    application:ensure_all_started(dobby),
+    ok = application:set_env(leviathan_lib, docker_bin, "cat"),
+    Apps = application_start(dobby) ++ application_start(leviathan_lib),
     lager:set_loglevel(lager_console_backend, warning),
-    mnesia:wait_for_tables([identifiers], 5000).
+    mnesia:wait_for_tables([identifiers], 5000),
+    Apps.
 
-stop_dobby() ->
-    application:stop(dobby).
+application_start(App) ->
+    {ok, Apps} = application:ensure_all_started(App),
+    Apps.
+
+stop_app(Apps) ->
+    lists:foreach(fun application:stop/1, Apps).
 
 cleanup() ->
     dby_db:clear().

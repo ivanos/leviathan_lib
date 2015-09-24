@@ -10,6 +10,7 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
+    leviathan_mnesia:start(),
     leviathan_lib_sup:start_link().
 
 stop(_State) ->
