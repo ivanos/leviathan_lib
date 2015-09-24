@@ -22,13 +22,13 @@ gen_op() ->
 gen_instructions() ->
     list({gen_op(), gen_cen_id(), gen_cont_id()}).
 
+gen_levmap() ->
+    list(int()).
+
 prop_wires() ->
     numtests(1000,
         ?SETUP(
-            fun() ->
-                Apps = start_app(),
-                fun() -> stop_app(Apps) end
-            end,
+            make_qc_setup_fun(),
             ?FORALL(
                 Instructions,
                 gen_instructions(),
@@ -86,10 +86,7 @@ expected_wire_count(Cens) ->
 prop_lm_dby() ->
     numtests(1000,
         ?SETUP(
-            fun() ->
-                Apps = start_app(),
-                fun() -> stop_app(Apps) end
-            end,
+            make_qc_setup_fun(),
             ?FORALL(
                 {Base, Delta},
                 {gen_instructions(), gen_instructions()},
@@ -128,10 +125,7 @@ prop_lm_dby() ->
 prop_deltas() ->
     numtests(1000,
         ?SETUP(
-            fun() ->
-                Apps = start_app(),
-                fun() -> stop_app(Apps) end
-            end,
+            make_qc_setup_fun(),
             ?FORALL(
                 Instructions,
                 gen_instructions(),
@@ -158,7 +152,27 @@ prop_deltas() ->
                     collect(length(Deltas),
                         equals([], Difference))
                 end
-            ))).
+              ))).
+
+prop_levmap() ->
+    numtests(1000,
+             ?SETUP(
+                make_qc_setup_fun(),
+                ?FORALL(
+                   LMToImport,
+                   gen_levmap(),
+                   lev_store_constructs_correct_levmap(LMToImport)
+                  )
+               )).
+
+lev_store_constructs_correct_levmap(_) ->
+    true.
+
+make_qc_setup_fun() ->
+    fun() ->
+            Apps = start_app(),
+            fun() -> stop_app(Apps) end
+    end.
 
 start_app() ->
     ok = application:set_env(erl_mnesia, options, [persistent]),
