@@ -22,9 +22,6 @@ gen_op() ->
 gen_instructions() ->
     list({gen_op(), gen_cen_id(), gen_cont_id()}).
 
-gen_levmap() ->
-    list(int()).
-
 prop_wires() ->
     numtests(1000,
         ?SETUP(
@@ -159,13 +156,18 @@ prop_levmap() ->
              ?SETUP(
                 make_qc_setup_fun(),
                 ?FORALL(
-                   LMToImport,
-                   gen_levmap(),
-                   lev_store_constructs_correct_levmap(LMToImport)
+                   Instructions,
+                   gen_instructions(),
+                   lev_store_constructs_correct_levmap(Instructions)
                   )
                )).
 
-lev_store_constructs_correct_levmap(_) ->
+lev_store_constructs_correct_levmap(Instructions) ->
+    cleanup(),
+    LM0 = run_instructions(Instructions, new_lm()),
+    ok = leviathan_store:import_cens(?HOST, LM0),
+    CenIds = cenids_from_lm(LM0),
+    ?assertEqual(LM0, leviathan_store:get_levmap(CenIds)),
     true.
 
 make_qc_setup_fun() ->

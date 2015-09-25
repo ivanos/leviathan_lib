@@ -16,6 +16,7 @@
 -record(leviathan_cen, {cen :: string(),
                         data :: #{contIDs => [string()],
                                   wire_type => wire_type(),
+                                  ipaddr_b => non_neg_integer(),
                                   ipaddr => string()},
                         wires :: [[in_endpoint() | out_endpoint()]]}).
 

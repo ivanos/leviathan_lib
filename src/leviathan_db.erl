@@ -17,7 +17,7 @@ start() ->
 transaction(Fn) ->
     case mnesia:transaction(Fn) of
         {aborted, Reason} ->
-            {error, {mnesia, Reason}};
+            throw({mnesia, Reason});
         {atomic, Ret} ->
             Ret
     end.

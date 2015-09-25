@@ -35,6 +35,17 @@ leviathan_cen_import_test_() ->
        ,{"lm_add_container_to_new_cen", fun lm_add_container_to_new_cen/0}
        ]}}.
 
+leviathan_levmap_test_() ->
+    {setup,
+     fun setup/0,
+     fun cleanup/1,
+     {foreach,
+      fun each_setup/0,
+      [
+       {"get levmap from store 0", fun get_levmap0/0}
+      ,{"get levmap from store 1", fun get_levmap1/0}
+      ]}}.
+
 setup() ->
     ok = application:load(erl_mnesia),
     ok = application:set_env(erl_mnesia, options, [persistent]),
@@ -387,6 +398,46 @@ lm_add_cen0() ->
                                  wire_type => bus}}],
     ?assertEqual(Instructions, leviathan_cen:lm_compare(OldLM, NewLM)).
 
+get_levmap0() ->
+    %% GIVEN
+    Cen = cen_map(CenId = "cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"]),
+    Cont = cont_map("c1", ["cen1"], [0]),
+    Wires = [],
+    ExpectedLM = compose_lm([Cen], [Cont], Wires),
+    leviathan_store:import_cens(<<"host">>, ExpectedLM),
+
+    %% WHEN
+    ActualLM = leviathan_store:get_levmap([CenId]),
+
+    %% THEN
+    ?assertEqual(ExpectedLM, ActualLM).
+
+get_levmap1() ->
+    %% GIVEN
+    Cen1 = cen_map(CenId = "cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
+                   ["10.10.0.10", "10.10.0.11"]),
+    Cont1 = cont_map("c1", ["cen1"], [0]),
+    Cont2 = cont_map("c2", ["cen1"], [0]),
+    Wire1 = [
+             endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+             endpoint("cen1", "c1.0o", out)
+            ],
+    Wire2 = [
+             endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+             endpoint("cen1", "c2.0o", out)
+            ],
+    ExpectedLM = compose_lm([Cen1], [Cont1, Cont2], [Wire1, Wire2]),
+    leviathan_store:import_cens(<<"host">>, ExpectedLM),
+
+    %% WHEN
+    ActualLM = leviathan_store:get_levmap([CenId]),
+
+    %% THEN
+    {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
+    ?assertEqualLists([Cen1], ActualCens),
+    ?assertEqualLists([Cont1, Cont2], ActualConts),
+    ?assertEqualLists([Wire1, Wire2], ActualWires).
+
 %-------------------------------------------------------------------------------
 % helpers
 %-------------------------------------------------------------------------------
@@ -396,12 +447,17 @@ new_lm() ->
         censmap => #{cens => []},
         contsmap => #{conts => []},
         wiremap => #{wires => []}
-    }.
+     }.
 
 decompose_lm(#{censmap := #{cens := Cens},
                contsmap := #{conts := Conts},
                wiremap := #{wires := Wires}}) ->
     {Cens, Conts, Wires}.
+
+compose_lm(Cens, Conts, Wires) ->
+    #{censmap => #{cens => Cens},
+      contsmap => #{conts => Conts},
+      wiremap => #{wires => Wires}}.
 
 json_cen(CenId, ContIds) ->
     #{<<"cenID">> => CenId, <<"containerIDs">> => ContIds}.
