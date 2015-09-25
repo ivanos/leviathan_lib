@@ -190,6 +190,7 @@ stop_app(Apps) ->
     lists:foreach(fun application:stop/1, Apps).
 
 cleanup() ->
+    leviathan_db:clear(),
     dby_db:clear().
 
 % LM
