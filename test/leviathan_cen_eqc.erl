@@ -22,13 +22,20 @@ gen_op() ->
 gen_instructions() ->
     list({gen_op(), gen_cen_id(), gen_cont_id()}).
 
+gen_add_cens_subset_to_instr(Instructions) ->
+    {_Ops, CenIds, _Conts} = lists:unzip3(Instructions),
+    {Instructions, sublist(CenIds)}.
+
+gen_instructions_wtih_cens_subset() ->
+    ?LET(I, gen_instructions(), gen_add_cens_subset_to_instr(I)).
+
 prop_wires() ->
     numtests(1000,
         ?SETUP(
             make_qc_setup_fun(),
             ?FORALL(
                 Instructions,
-                gen_instructions(),
+               gen_instructions(),
                 begin
                     cleanup(),
 
@@ -156,13 +163,14 @@ prop_levmap() ->
              ?SETUP(
                 make_qc_setup_fun(),
                 ?FORALL(
-                   Instructions,
-                   gen_instructions(),
-                   lev_store_constructs_correct_levmap(Instructions)
+                   {Instructions, CensToCheck},
+                   gen_instructions_wtih_cens_subset(),
+                   lev_store_constructs_correct_levmap(Instructions,
+                                                       CensToCheck)
                   )
                )).
 
-lev_store_constructs_correct_levmap(Instructions) ->
+lev_store_constructs_correct_levmap(Instructions, _CensToCheck) ->
     cleanup(),
     LM0 = run_instructions(Instructions, new_lm()),
     ok = leviathan_store:import_cens(?HOST, LM0),
