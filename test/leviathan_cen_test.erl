@@ -33,18 +33,9 @@ leviathan_cen_import_test_() ->
        ,{"lm_compare 6", fun lm_compare6/0}
        ,{"lm_add_cen 0", fun lm_add_cen0/0}
        ,{"lm_add_container_to_new_cen", fun lm_add_container_to_new_cen/0}
+       ,{"get levmap from store 0", fun get_levmap0/0}
+       ,{"get levmap from store 1", fun get_levmap1/0}
        ]}}.
-
-leviathan_levmap_test_() ->
-    {setup,
-     fun setup/0,
-     fun cleanup/1,
-     {foreach,
-      fun each_setup/0,
-      [
-       {"get levmap from store 0", fun get_levmap0/0}
-      ,{"get levmap from store 1", fun get_levmap1/0}
-      ]}}.
 
 setup() ->
     ok = application:load(erl_mnesia),
@@ -55,7 +46,8 @@ setup() ->
     Apps.
 
 cleanup({ok, Apps}) ->
-    lists:foreach(fun application:stop/1, Apps).
+    lists:foreach(fun application:stop/1, Apps),
+    ok = application:unload(erl_mnesia).
 
 each_setup() ->
     ok = leviathan_mnesia:clear().
