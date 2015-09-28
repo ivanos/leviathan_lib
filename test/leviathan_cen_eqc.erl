@@ -167,8 +167,15 @@ lev_store_constructs_correct_levmap(Instructions) ->
     LM0 = run_instructions(Instructions, new_lm()),
     ok = leviathan_store:import_cens(?HOST, LM0),
     CenIds = cenids_from_lm(LM0),
-    ?assertEqual(LM0, leviathan_store:get_levmap(CenIds)),
+    compare_lms(LM0, leviathan_store:get_levmap(CenIds)),
     true.
+
+compare_lms(Expected, Value) ->
+    {ECens, EConts, EWires} = decompose_lm(Expected),
+    {VCens, VConts, VWires} = decompose_lm(Value),
+    ?assertEqual(lists:sort(ECens), lists:sort(VCens)),
+    ?assertEqual(lists:sort(EConts), lists:sort(VConts)),
+    ?assertEqual(lists:sort(EWires), lists:sort(VWires)).
 
 make_qc_setup_fun() ->
     fun() ->

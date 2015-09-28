@@ -40,17 +40,16 @@ get_levmap(CenIds) ->
 
 fill_reserved_ips_in_cens(Cens, ContsIpsMap) ->
     Fun = fun(#{cenID := CenId, contIDs := ContIds} = Cen) ->
-                  ReservedIps = lists:foldl(
+                  ReservedIps = lists:map(
                                   mk_conts_ips_in_cen_fun(CenId, ContsIpsMap),
-                                  [],
                                   ContIds),
-                  Cen#{reservedIps => lists:reverse(ReservedIps)}
+                  Cen#{reservedIps => ReservedIps}
           end,
     lists:map(Fun, Cens).
 
 mk_conts_ips_in_cen_fun(CenId, IpsMap) ->
-    fun(ContId, ResrvedIps) ->
-            [maps:get({CenId, ContId}, IpsMap) | ResrvedIps]
+    fun(ContId) ->
+        maps:get({CenId, ContId}, IpsMap)
     end.
 
 update_cens(Host, Instructions) ->
@@ -245,8 +244,8 @@ cont_map(ContId, ContRecords, Ips0) ->
               {ContMap, IpsAcc}) when CId == ContId ->
 
                   #{cens := Cens, reservedIdNums := Ids} = ContMap,
-                  {ContMap#{cens := [CenId | Cens],
-                            reservedIdNums := [Id | Ids]},
+                  {ContMap#{cens := Cens ++ [CenId],
+                            reservedIdNums := Ids ++ [Id]},
                    maps:put({CenId, ContId}, Ip, IpsAcc)}
           end,
     lists:foldl(Fun, {#{contID => ContId, cens => [], reservedIdNums => []}, Ips0},
@@ -258,7 +257,7 @@ wire_map(#leviathan_cen{wires = Wires}) ->
 
 % read cens from db
 get_cens(CenIds) ->
-    valid_list(fun get_cen/1, CenIds).
+    lists:reverse(valid_list(fun get_cen/1, CenIds)).
 
 % read one cen from db
 get_cen(CenId) ->
