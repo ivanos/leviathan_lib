@@ -17,6 +17,11 @@
                     wiremap := #{wires := []}
                    }).
 
+-define(LM(Cens, Conts, Wires),#{censmap => #{cens => Cens},
+                                 contsmap => #{conts => Conts},
+                                 wiremap => #{wires => Wires}
+                                }).
+
 -include("leviathan.hrl").
 
 import_cens(_, ?LM_EMPTY) ->
@@ -30,13 +35,14 @@ import_cens(Host, LM) ->
     end,
     ok = leviathan_db:transaction(Fn).
 
+get_levmap([]) ->
+    ?LM([], [], []);
 get_levmap(CenIds) ->
     Cens = get_cens(CenIds),
     {Conts, ContsIpsMap} =  get_conts_and_their_ips(Cens),
-    #{censmap => #{cens => fill_reserved_ips_in_cens(Cens, ContsIpsMap)},
-      contsmap => #{conts => Conts},
-      wiremap => #{wires => get_wiremap(CenIds)}
-    }.
+    ?LM(fill_reserved_ips_in_cens(Cens, ContsIpsMap),
+        Conts,
+        get_wiremap(CenIds)).
 
 fill_reserved_ips_in_cens(Cens, ContsIpsMap) ->
     Fun = fun(#{cenID := CenId, contIDs := ContIds} = Cen) ->
@@ -177,8 +183,9 @@ containers_from_lm(Host, ContsIpsMap, #{contsmap := #{conts := Conts}}) ->
 
 cens_and_cont_ips_from_lm(Host, #{censmap := #{cens := Cens},
                                   wiremap := #{wires := Wires}}) ->
+    GroupedWires = group_wires_by_cen(Wires),
     Fun = fun(Cen, Acc) ->
-                  {cen_record(Host, Cen, Wires),
+                  {cen_record(Host, Cen, GroupedWires),
                    conts_ips_from_cen(Cen, Acc)}
           end,
     lists:mapfoldl(Fun, #{}, Cens).
@@ -212,15 +219,15 @@ cen_record(_Host, #{cenID := CenId,
                     ipaddr_b := IpAddrB,
                     ip_address := IpAddr}, Wires) ->
     #leviathan_cen{
-        cen = CenId,
-        data = #{
-          contIDs => ContIds,
-          wire_type => WireType,
-          ipaddr_b => IpAddrB,
-          ipaddr => IpAddr
+       cen = CenId,
+       data = #{
+         contIDs => ContIds,
+         wire_type => WireType,
+         ipaddr_b => IpAddrB,
+         ipaddr => IpAddr
         },
-        wires = Wires
-    }.
+       wires = maps:get(CenId, Wires, [])
+      }.
 
 % convert a cen record to a cen map
 cen_map(#leviathan_cen{
@@ -349,3 +356,12 @@ update_leviathan_cen_wires(Wire, undefined) ->
 update_leviathan_cen_wires(Wire, Wires) ->
     [Wire | Wires].
 
+group_wires_by_cen(Wires) ->
+    lists:foldl(fun group_wires_by_cen/2, #{}, Wires).
+
+group_wires_by_cen(Wire = [
+                            #{dest := #{alias := CenId}} = _InEndpoint,
+                            #{dest := #{id := CenId}} = _OutEndpoint
+                          ], Acc) ->
+    CenWires = maps:get(CenId, Acc, []),
+    maps:put(CenId, [Wire | CenWires], Acc).

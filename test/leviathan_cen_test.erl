@@ -35,6 +35,9 @@ leviathan_cen_import_test_() ->
        ,{"lm_add_container_to_new_cen", fun lm_add_container_to_new_cen/0}
        ,{"get levmap from store 0", fun get_levmap0/0}
        ,{"get levmap from store 1", fun get_levmap1/0}
+       ,{"get levmap from store 2", fun get_levmap2/0}
+       ,{"get levmap from store 3", fun get_levmap3/0}
+       ,{"get levmap from store 3", fun get_levmap4/0}
        ]}}.
 
 setup() ->
@@ -392,21 +395,21 @@ lm_add_cen0() ->
 
 get_levmap0() ->
     %% GIVEN
-    Cen = cen_map(CenId = "cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"]),
+    Cen = cen_map(CenIdToCheck = "cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"]),
     Cont = cont_map("c1", ["cen1"], [0]),
     Wires = [],
     ExpectedLM = compose_lm([Cen], [Cont], Wires),
     leviathan_store:import_cens(<<"host">>, ExpectedLM),
 
     %% WHEN
-    ActualLM = leviathan_store:get_levmap([CenId]),
+    ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
 
     %% THEN
     ?assertEqual(ExpectedLM, ActualLM).
 
 get_levmap1() ->
     %% GIVEN
-    Cen1 = cen_map(CenId = "cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
+    Cen1 = cen_map(CenIdToCheck = "cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
                    ["10.10.0.10", "10.10.0.11"]),
     Cont1 = cont_map("c1", ["cen1"], [0]),
     Cont2 = cont_map("c2", ["cen1"], [0]),
@@ -422,13 +425,119 @@ get_levmap1() ->
     leviathan_store:import_cens(<<"host">>, ExpectedLM),
 
     %% WHEN
-    ActualLM = leviathan_store:get_levmap([CenId]),
+    ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
 
     %% THEN
     {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
     ?assertEqualLists([Cen1], ActualCens),
     ?assertEqualLists([Cont1, Cont2], ActualConts),
     ?assertEqualLists([Wire1, Wire2], ActualWires).
+
+get_levmap2() ->
+    %% GIVEN
+    Cen1 = cen_map(CenIdToCheck = "cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
+                   ["10.10.0.10", "10.10.0.11"]),
+    Cen2 = cen_map("cen2", ["c2"], bus, 11, "10.11.0.1", ["10.11.0.10"]),
+    Cont1 = cont_map("c1", ["cen1"], [0]),
+    Cont2 = cont_map("c2", ["cen1", "cen2"], [0, 1]),
+    Wire1 = [
+             endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+             endpoint("cen1", "c1.0o", out)
+            ],
+    Wire2 = [
+             endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+             endpoint("cen1", "c2.0o", out)
+            ],
+    ExpectedLM = compose_lm([Cen1, Cen2], [Cont1, Cont2], [Wire1, Wire2]),
+    leviathan_store:import_cens(<<"host">>, ExpectedLM),
+
+    %% WHEN
+    ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
+
+    %% THEN
+    {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
+    ?assertEqualLists([Cen1], ActualCens),
+    ?assertEqualLists([Cont1, Cont2], ActualConts),
+    ?assertEqualLists([Wire1, Wire2], ActualWires).
+
+get_levmap3() ->
+    %% GIVEN
+    Cen1 = cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
+                   ["10.10.0.10", "10.10.0.11"]),
+    Cen2 = cen_map(CenIdToCheck = "cen2", ["c3", "c4"], bus, 11, "10.11.0.1",
+                   ["10.11.0.10", "10.11.0.11"]),
+    Cont1 = cont_map("c1", ["cen1"], [0]),
+    Cont2 = cont_map("c2", ["cen1"], [0]),
+    Cont3 = cont_map("c3", ["cen2"], [0]),
+    Cont4 = cont_map("c4", ["cen2"], [0]),
+    Wire1 = [
+             endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+             endpoint("cen1", "c1.0o", out)
+            ],
+    Wire2 = [
+             endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+             endpoint("cen1", "c2.0o", out)
+            ],
+    Wire3 = [
+             endpoint("c3", "c3.0i", in, "cen2", "10.11.0.10"),
+             endpoint("cen2", "c3.0o", out)
+            ],
+    Wire4 = [
+             endpoint("c4", "c4.0i", in, "cen2", "10.11.0.11"),
+             endpoint("cen2", "c4.0o", out)
+            ],
+    ExpectedLM = compose_lm([Cen1, Cen2],
+                            [Cont1, Cont2, Cont3, Cont4],
+                            [Wire1, Wire2, Wire3, Wire4]),
+    leviathan_store:import_cens(<<"host">>, ExpectedLM),
+
+    %% WHEN
+    ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
+
+    %% THEN
+    {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
+    ?assertEqualLists([Cen2], ActualCens),
+    ?assertEqualLists([Cont3, Cont4], ActualConts),
+    ?assertEqualLists([Wire3, Wire4], ActualWires).
+
+get_levmap4() ->
+    %% GIVEN
+    Cen1 = cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
+                   ["10.10.0.10", "10.10.0.11"]),
+    Cen2 = cen_map(CenIdToCheck = "cen2", ["c2", "c3"], bus, 11, "10.11.0.1",
+                   ["10.11.0.10", "10.11.0.11"]),
+    Cont1 = cont_map("c1", ["cen1"], [0]),
+    Cont2 = cont_map("c2", ["cen1", "cen2"], [0, 1]),
+    Cont3 = cont_map("c3", ["cen2"], [0]),
+    Wire1 = [
+             endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+             endpoint("cen1", "c1.0o", out)
+            ],
+    Wire2 = [
+             endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+             endpoint("cen1", "c2.0o", out)
+            ],
+    Wire3 = [
+             endpoint("c2", "c2.1i", in, "cen2", "10.11.0.10"),
+             endpoint("cen2", "c2.1o", out)
+            ],
+    Wire4 = [
+             endpoint("c3", "c3.0i", in, "cen2", "10.11.0.11"),
+             endpoint("cen2", "c3.0o", out)
+            ],
+    ExpectedLM = compose_lm([Cen1, Cen2],
+                            [Cont1, Cont2, Cont3],
+                            [Wire1, Wire2, Wire3, Wire4]),
+    leviathan_store:import_cens(<<"host">>, ExpectedLM),
+
+    %% WHEN
+    ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
+
+    %% THEN
+    {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
+    ?assertEqualLists([Cen2], ActualCens),
+    ?assertEqualLists([Cont2, Cont3], ActualConts),
+    ?assertEqualLists([Wire3, Wire4], ActualWires).
 
 %-------------------------------------------------------------------------------
 % helpers
@@ -451,14 +560,14 @@ compose_lm(Cens, Conts, Wires) ->
       contsmap => #{conts => Conts},
       wiremap => #{wires => Wires}}.
 
-json_cen(CenId, ContIds) ->
-    #{<<"cenID">> => CenId, <<"containerIDs">> => ContIds}.
+json_cen(CenIdToCheck, ContIds) ->
+    #{<<"cenID">> => CenIdToCheck, <<"containerIDs">> => ContIds}.
 
-cen_map(CenId, ContIds, WireType, IpAddrB, IpAddr) ->
-    cen_map(CenId, ContIds, WireType, IpAddrB, IpAddr, []).
+cen_map(CenIdToCheck, ContIds, WireType, IpAddrB, IpAddr) ->
+    cen_map(CenIdToCheck, ContIds, WireType, IpAddrB, IpAddr, []).
 
-cen_map(CenId, ContIds, WireType, IpAddrB, IpAddr, ReservedIp) ->
-    #{cenID => CenId,
+cen_map(CenIdToCheck, ContIds, WireType, IpAddrB, IpAddr, ReservedIp) ->
+    #{cenID => CenIdToCheck,
       wire_type => WireType,
       contIDs => ContIds,
       ipaddr_b => IpAddrB,
@@ -478,10 +587,10 @@ endpoint(ContId, EndId, Side, Alias, IpAddr) ->
                 ip_address => IpAddr,
                 type => cont}}.
 
-endpoint(CenId, EndId, Side) ->
+endpoint(CenIdToCheck, EndId, Side) ->
     #{endID => EndId,
       side => Side,
-      dest => #{id => CenId,
+      dest => #{id => CenIdToCheck,
                 type => cen}}.
 
 assert_bus_wires(Wires) ->
