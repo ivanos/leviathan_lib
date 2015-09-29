@@ -175,8 +175,85 @@ update_count(Key, NewValue) ->
     leviathan_db:write(#counter{id = Key, count = NewValue}).
 
 % XXX not implemented
-update_instruction(_, _) -> [].
+% - {add, cen, CenMap}
+% - {add, cont, ContMap}
+% - {add, wire, Wire}
+% - {add, cont_in_cen, {ContId, CenId}}
+% - {add, bridge, {CenId, IpAddr}}
+% - {destroy, cen, CenMap}
+% - {destroy, cont, ContMap}
+% - {destroy, wire, Wire}
+% - {destroy, cont_in_cen, {ContId, CenId}}
+% - {destroy, bridge, CenId}
+% - {set, wire_type, {CenId, WireType}}
+% Return lists of instructions and records to update the authoritative store
+% to reflect the instructions:
+% {write, Record | [Record]}
+% {update, {Record, UpdateFn} | [{Record, UpdateFn}]}
+% {delete, Key | [Key]}
+update_instruction(Host, {add, cen, Cen}) ->
+    {write, cen_record(Host, Cen)};
+update_instruction(Host, {add, cont, Cont}) ->
+    {write, cont_record(Host, Cont);
+update_instruction(Host, {add, wire, Wire}) ->
+    {update, wire_update_fun(Host, Wire)};
+update_instruction(Host, {add, cont_in_cen, {ContId, CenId}}) ->
+    pub_cont_in_cen(Host, ContId, CenId);
+update_instruction(Host, {add, bridge, {Cen, IpAddr}}) ->
+    pub_bridge(Host, Cen, IpAddr);
+update_instruction(Host, {destroy, cen, Cen}) ->
+    pub_destroy_cen(Host, Cen);
+update_instruction(Host, {destroy, cont, Cont}) ->
+    pub_destroy_cont(Host, Cont);
+update_instruction(Host, {destroy, wire, Wire}) ->
+    pub_destroy_wire(Host, Wire);
+update_instruction(Host, {destroy, cont_in_cen, {ContId, CenId}}) ->
+    pub_destroy_cont_in_cen(Host, ContId, CenId);
+update_instruction(Host, {destroy, bridge, Cen}) ->
+    pub_destroy_bridge(Host, Cen);
+update_instruction(_, {set, wire_type, {CenId, WireType}}) ->
+    pub_set_wire_type(CenId, WireType).
 
+cen_record(_, #{cenID := CenId,
+                wire_type := WireType,
+                contIDs := ContIds,
+                ipaddr_b := BIpAddr,
+                ipaddress := IpAddr}) ->
+    #leviathan_cen{
+        cen = CenId,
+        data = #{
+            contIDs => ContIds,
+            wire_type := WireType,
+            ipaddr_b => BIpAddr,
+            ipaddr => IpAddr
+        },
+        wires = []
+    }.
+
+% XXX overwrites existing container/cen combinations?
+cont_record(_, #{contID := ContId,
+                 cens := CenIds}) ->
+    lists:map(
+        fun(CenId) ->
+            #leviathan_cont{
+                cont = ContId,
+                cen = CenId,
+                data = #{
+                    idnumber => 0,
+                    ip_address => undefined
+                }
+            }
+        end, CenIds).
+
+wire_update_fun(_, [Endpoint1, Endpoint2]) ->
+    % in and out endpoints
+    InEndpoint =
+    OutEndpoint = 
+    % CenId from out endpoint
+    % ContId from in endpoint
+    % IP Addr from in endpoint
+    [
+    ]
 
 containers_from_lm(Host, ContsIpsMap, #{contsmap := #{conts := Conts}}) ->
     lists:map(fun(Cont) -> cont_record(Host, Cont, ContsIpsMap) end, Conts).
