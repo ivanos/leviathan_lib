@@ -37,7 +37,7 @@ leviathan_cen_import_test_() ->
        ,{"get levmap from store 1", fun get_levmap1/0}
        ,{"get levmap from store 2", fun get_levmap2/0}
        ,{"get levmap from store 3", fun get_levmap3/0}
-       ,{"get levmap from store 3", fun get_levmap4/0}
+       ,{"get levmap from store 4", fun get_levmap4/0}
        ]}}.
 
 setup() ->

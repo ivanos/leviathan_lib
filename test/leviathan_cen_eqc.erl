@@ -142,12 +142,12 @@ prop_deltas() ->
                     % apply Deltas to dobby one by one
                     lists:foreach(
                         fun(Delta) ->
-                            ok = leviathan_dby:update_cens(?HOST, [Delta])
+                            ok = leviathan_store:update_cens(?HOST, [Delta])
                         end, Deltas),
 
-                    % pull LM from dobby
+                    % pull LM from store
                     CenIds = cenids_from_lm(LM),
-                    DobbyLM = leviathan_cen:get_levmap(CenIds),
+                    DobbyLM = leviathan_store:get_levmap(CenIds),
 
                     % compute delta between new dobby and new LM
                     % (should be no difference)
