@@ -49,8 +49,8 @@ fill_reserved_ips_in_cens(Cens, ContsIpsMap) ->
     Fun =
         fun(#{contIDs := []} = Cen) ->
             Cen#{reservedIps := []};
-           (#{ip_addrb := CenB, cenID := CenId, ContIDs := [ContId]} = Cen) ->
-            IpAddr = case maps:get({CenId, ContId}, ContsIpMap) of
+           (#{ip_addrb := CenB, cenID := CenId, contIDs := [ContId]} = Cen) ->
+            IpAddr = case maps:get({CenId, ContId}, ContsIpsMap) of
                 undefined ->
                     leviathan_cin:ip_address(CenB, []);
                 SetAddr ->
