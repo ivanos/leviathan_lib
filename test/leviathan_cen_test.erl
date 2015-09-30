@@ -38,6 +38,10 @@ leviathan_cen_import_test_() ->
        ,{"get levmap from store 2", fun get_levmap2/0}
        ,{"get levmap from store 3", fun get_levmap3/0}
        ,{"get levmap from store 4", fun get_levmap4/0}
+       ,{"update cens in store 0", fun update_cens0/0}
+       ,{"update cens in store 1", fun update_cens1/0}
+       ,{"update cens in store 2", fun update_cens2/0}
+       ,{"update cens in store 3", fun update_cens3/0}
        ]}}.
 
 setup() ->
@@ -538,6 +542,137 @@ get_levmap4() ->
     ?assertEqualLists([Cen2], ActualCens),
     ?assertEqualLists([Cont2, Cont3], ActualConts),
     ?assertEqualLists([Wire3, Wire4], ActualWires).
+
+update_cens0() ->
+    %% GIVEN
+    Cen = cen_map(CenIdToCheck = "cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"]),
+    Cont = cont_map("c1", ["cen1"], [0]),
+    ExpectedLM = compose_lm([Cen], [Cont], _Wires = []),
+    Delta = leviathan_cen:lm_compare(new_lm(), ExpectedLM),
+        
+    %% WHEN
+    ok = leviathan_store:update_cens(<<"host">>, Delta),
+
+    %% THEN
+    ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
+    {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
+    ?assertEqualLists([Cen], ActualCens),
+    ?assertEqualLists([Cont], ActualConts),
+    ?assertEqualLists([], ActualWires).
+
+update_cens1() ->
+    %% GIVEN
+    Cen1 = cen_map(CenIdToCheck = "cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
+                   ["10.10.0.10", "10.10.0.11"]),
+    Cont1 = cont_map("c1", ["cen1"], [0]),
+    Cont2 = cont_map("c2", ["cen1"], [0]),
+    Wire1 = [
+             endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+             endpoint("cen1", "c1.0o", out)
+            ],
+    Wire2 = [
+             endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+             endpoint("cen1", "c2.0o", out)
+            ],
+    ExpectedLM = compose_lm([Cen1], [Cont1, Cont2], [Wire1, Wire2]),
+    Delta = leviathan_cen:lm_compare(new_lm(), ExpectedLM),
+    
+    %% WHEN
+    ok = leviathan_store:update_cens(<<"host">>, Delta),
+    
+    %% THEN
+    ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
+    {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
+    ?assertEqualLists([Cen1], ActualCens),
+    ?assertEqualLists([Cont1, Cont2], ActualConts),
+    ?assertEqualLists([Wire1, Wire2], ActualWires).
+
+update_cens2() ->
+    %% GIVEN
+    LM0 = foldcalls(new_lm(),
+                    [
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c2", Acc) end,
+                     fun(Acc) -> leviathan_cen:add_cen("cen2", Acc) end
+                    ]),
+    ok = leviathan_store:import_cens(<<"host">>, LM0),
+    LM1 = leviathan_cen:lm_add_container("cen2", "c2", LM0),
+    Cen1 = cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
+                   ["10.10.0.10", "10.10.0.11"]),
+    Cen2 = cen_map("cen2", ["c2"], bus, 11, "10.11.0.1", ["10.11.0.10"]),
+    Cont1 = cont_map("c1", ["cen1"], [0]),
+    Cont2 = cont_map("c2", ["cen1", "cen2"], [0, 1]),
+    Wire1 = [
+             endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+             endpoint("cen1", "c1.0o", out)
+            ],
+    Wire2 = [
+             endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+             endpoint("cen1", "c2.0o", out)
+            ],
+    ExpectedLM = compose_lm([Cen1, Cen2], [Cont1, Cont2], [Wire1, Wire2]),
+    Delta = leviathan_cen:lm_compare(LM0, LM1),
+
+    %% WHEN
+    ok = leviathan_store:update_cens(<<"host">>, Delta),
+
+    %% THEN
+    ActualLM = leviathan_store:get_levmap(["cen1", "cen2"]),
+    {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
+    ?assertEqualLists([Cen1, Cen2], ActualCens),
+    ?assertEqualLists([Cont1, Cont2], ActualConts),
+    ?assertEqualLists([Wire1, Wire2], ActualWires).
+
+update_cens3() ->
+    %% GIVEN
+    LM0 = foldcalls(new_lm(),
+                    [
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c2", Acc) end,
+                     fun(Acc) -> leviathan_cen:add_cen("cen2", Acc) end
+                    ]),
+    ok = leviathan_store:import_cens(<<"host">>, LM0),
+    LM1 = foldcalls(LM0,
+                    [
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c2", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c3", Acc) end
+                    ]),
+    Cen1 = cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
+                   ["10.10.0.10", "10.10.0.11"]),
+    Cen2 = cen_map("cen2", ["c2"], bus, 11, "10.11.0.1", ["10.11.0.10"]),
+    Cont1 = cont_map("c1", ["cen1"], [0]),
+    Cont2 = cont_map("c2", ["cen1", "cen2"], [0, 1]),
+    Cont3 = cont_map("c2", ["cen2"], [0]),
+    Wire1 = [
+             endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+             endpoint("cen1", "c1.0o", out)
+            ],
+    Wire2 = [
+             endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+             endpoint("cen1", "c2.0o", out)
+            ],
+    Wire3 = [
+             endpoint("c2", "c2.1i", in, "cen2", "10.11.0.10"),
+             endpoint("cen2", "c2.1o", out)
+            ],
+    Wire4 = [
+             endpoint("c3", "c3.0i", in, "cen2", "10.11.0.11"),
+             endpoint("cen2", "c3.0o", out)
+            ],
+    ExpectedLM = compose_lm([Cen1, Cen2], [Cont1, Cont2, Cont3], [Wire1, Wire2,
+                                                                  Wire3, Wire4]),
+    Delta = leviathan_cen:lm_compare(LM0, LM1),
+
+    %% WHEN
+    ?debugFmt("Delat ~p", [Delta]),
+    ok = leviathan_store:update_cens(<<"host">>, Delta),
+
+    %% THEN
+    ActualLM = leviathan_store:get_levmap(["cen1", "cen2"]),
+    {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
+    ?assertEqualLists([Cen1, Cen2], ActualCens),
+    ?assertEqualLists([Cont1, Cont2], ActualConts),
+    ?assertEqualLists([Wire1, Wire2], ActualWires).
 
 %-------------------------------------------------------------------------------
 % helpers
