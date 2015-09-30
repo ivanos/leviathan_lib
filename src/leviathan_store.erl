@@ -44,13 +44,25 @@ get_levmap(CenIds) ->
         Conts,
         get_wiremap(CenIds)).
 
+% special case for zero and one containers?
 fill_reserved_ips_in_cens(Cens, ContsIpsMap) ->
-    Fun = fun(#{cenID := CenId, contIDs := ContIds} = Cen) ->
-                  ReservedIps = lists:map(
-                                  mk_conts_ips_in_cen_fun(CenId, ContsIpsMap),
-                                  ContIds),
-                  Cen#{reservedIps => ReservedIps}
-          end,
+    Fun =
+        fun(#{contIDs := []} = Cen) ->
+            Cen#{reservedIps := []};
+           (#{ip_addrb := CenB, cenID := CenId, ContIDs := [ContId]} = Cen) ->
+            IpAddr = case maps:get({CenId, ContId}, ContsIpMap) of
+                undefined ->
+                    leviathan_cin:ip_address(CenB, []);
+                SetAddr ->
+                    SetAddr
+            end,
+            Cen#{reservedIps := [IpAddr]};
+           (#{cenID := CenId, contIDs := ContIds} = Cen) ->
+            ReservedIps = lists:map(
+                              mk_conts_ips_in_cen_fun(CenId, ContsIpsMap),
+                              ContIds),
+            Cen#{reservedIps := ReservedIps}
+        end,
     lists:map(Fun, Cens).
 
 mk_conts_ips_in_cen_fun(CenId, IpsMap) ->
@@ -59,11 +71,12 @@ mk_conts_ips_in_cen_fun(CenId, IpsMap) ->
     end.
 
 update_cens(Host, Instructions) ->
+    Fns = lists:map(
+        fun(Instruction) ->
+            update_instruction(Host, Instruction)
+        end, Instructions),
     Fn = fun() ->
-        Records = lists:map(
-            fun(Instruction) -> update_instruction(Host, Instruction) end,
-            Instructions),
-        ok = leviathan_db:write(lists:flatten(Records))
+        lists:foreach(fun(Fn) -> Fn() end, lists:flatten(Fns))
     end,
     ok = leviathan_db:transaction(Fn).
 
@@ -179,51 +192,123 @@ update_count(Key, NewValue) ->
 % - {add, cont, ContMap}
 % - {add, wire, Wire}
 % - {add, cont_in_cen, {ContId, CenId}}
-% - {add, bridge, {CenId, IpAddr}}
+% - {add, bridge, {CenId, IpAddr}} XXX not used
 % - {destroy, cen, CenMap}
 % - {destroy, cont, ContMap}
 % - {destroy, wire, Wire}
 % - {destroy, cont_in_cen, {ContId, CenId}}
-% - {destroy, bridge, CenId}
-% - {set, wire_type, {CenId, WireType}}
-% Return lists of instructions and records to update the authoritative store
-% to reflect the instructions:
-% {write, Record | [Record]}
-% {update, {Record, UpdateFn} | [{Record, UpdateFn}]}
-% {delete, Key | [Key]}
+% - {destroy, bridge, CenId} XXX not used
+% - {set, wire_type, {CenId, WireType}} XXX not used
+% Return lists of instructions functions that updates the
+% authoritative store.
 update_instruction(Host, {add, cen, Cen}) ->
-    {write, cen_record(Host, Cen)};
+    write_fn(cen_record(Host, Cen));
 update_instruction(Host, {add, cont, Cont}) ->
-    {write, cont_record(Host, Cont);
-update_instruction(Host, {add, wire, Wire}) ->
-    {update, wire_update_fun(Host, Wire)};
-update_instruction(Host, {add, cont_in_cen, {ContId, CenId}}) ->
-    pub_cont_in_cen(Host, ContId, CenId);
-update_instruction(Host, {add, bridge, {Cen, IpAddr}}) ->
-    pub_bridge(Host, Cen, IpAddr);
-update_instruction(Host, {destroy, cen, Cen}) ->
-    pub_destroy_cen(Host, Cen);
-update_instruction(Host, {destroy, cont, Cont}) ->
-    pub_destroy_cont(Host, Cont);
-update_instruction(Host, {destroy, wire, Wire}) ->
-    pub_destroy_wire(Host, Wire);
-update_instruction(Host, {destroy, cont_in_cen, {ContId, CenId}}) ->
-    pub_destroy_cont_in_cen(Host, ContId, CenId);
-update_instruction(Host, {destroy, bridge, Cen}) ->
-    pub_destroy_bridge(Host, Cen);
-update_instruction(_, {set, wire_type, {CenId, WireType}}) ->
-    pub_set_wire_type(CenId, WireType).
+    lists:map(
+        fun(Record) ->
+            write_fn(Record)
+        end, cont_record(Host, Cont));
+update_instruction(_, {add, wire, Wire}) ->
+    % XXX set the ip address in the container
+    CenId = cenid_from_wire(Wire),
+    update_fn({leviathan_cen, CenId},
+        fun(CenRecord = #leviathan_cen{wires = Wires}) ->
+            CenRecord#leviathan_cen{wires = [Wire | Wires]}
+        end);
+update_instruction(_, {add, cont_in_cen, {ContId, CenId}}) ->
+    % XXX cens added to container by {add, cont, Cont}?
+    update_fn({leviathan_cen, CenId},
+        fun(CenRecord = #leviathan_cen{data = Data0}) ->
+            #{contIDs := ContIds} = Data0,
+            Data1 = Data0#{contIDs := [ContId] ++ ContIds},
+            CenRecord#leviathan_cen{data = Data1}
+        end);
+update_instruction(_, {add, bridge, _}) ->
+    % not used
+    [];
+update_instruction(_, {destroy, cen, #{cenID := CenId}}) ->
+    delete_fn({leviathan_cen, CenId});
+update_instruction(_, {destroy, cont, #{contID := ContId}}) ->
+    delete_fn({leviathan_cont, ContId});
+update_instruction(_, {destroy, wire, Wire}) ->
+    % XXX remove ip address from container?
+    CenId = cenid_from_wire(Wire),
+    update_fn({leviathan_cen, CenId},
+        fun(CenRecord = #leviathan_cen{wires = Wires}) ->
+            CenRecord#leviathan_cen{wires = Wires -- [Wire]}
+        end);
+update_instruction(_, {destroy, cont_in_cen, {ContId, CenId}}) ->
+    [
+        % remove container from cen
+        update_fn({leviathan_cen, CenId},
+            fun(CenRecord = #leviathan_cen{data = Data0}) ->
+                #{contIDs := ContIds} = Data0,
+                Data1 = Data0#{contIDs := ContIds -- [ContId]},
+                CenRecord#leviathan_cen{data = Data1}
+            end),
+        % remove container
+        delete_record_fn({leviathan_cont, ContId},
+            fun(ContRecords) ->
+                [Record | _] = lists:dropwhile(
+                    fun(#leviathan_cont{cen = C}) ->
+                        C == CenId
+                    end, ContRecords),
+                Record
+            end)
+    ];
+update_instruction(_, {destroy, bridge, _}) ->
+    % not used
+    [];
+update_instruction(_, {set, wire_type, _}) ->
+    % not used
+    [].
+
+% fun to write the Record
+write_fn(Record) ->
+    fun() -> leviathan_db:write(Record) end.
+
+% fun to delete the Key
+delete_fn(Key) ->
+    fun() -> leviathan_db:delete(Key) end.
+
+% fun to delete record
+delete_record_fn(Key, SelectFn) ->
+    fun() ->
+        Records = leviathan_db:read(Key),
+        Record = SelectFn(Records),
+        leviathan_db:delete_object(Record)
+    end.
+
+% fun to update the record with Key using the UpdateFn
+update_fn(Key, UpdateFn) ->
+    fun() ->
+        [Record0] = leviathan_db:read(Key),
+        Record1 = UpdateFn(Record0),
+        leviathan_db:write(Record1)
+    end.
+
+cenid_from_wire(Wire) ->
+    % in and out endpoints
+    OutEndpoint = out_endpoint(Wire),
+    % CenId from out endpoint
+    #{dest := #{type := cen, id := CenId}} = OutEndpoint,
+    CenId.
+
+out_endpoint([Out = #{side := out}, _]) ->
+    Out;
+out_endpoint([_, Out = #{side := out}]) ->
+    Out.
 
 cen_record(_, #{cenID := CenId,
                 wire_type := WireType,
                 contIDs := ContIds,
                 ipaddr_b := BIpAddr,
-                ipaddress := IpAddr}) ->
+                ip_address := IpAddr}) ->
     #leviathan_cen{
         cen = CenId,
         data = #{
             contIDs => ContIds,
-            wire_type := WireType,
+            wire_type => WireType,
             ipaddr_b => BIpAddr,
             ipaddr => IpAddr
         },
@@ -244,16 +329,6 @@ cont_record(_, #{contID := ContId,
                 }
             }
         end, CenIds).
-
-wire_update_fun(_, [Endpoint1, Endpoint2]) ->
-    % in and out endpoints
-    InEndpoint =
-    OutEndpoint = 
-    % CenId from out endpoint
-    % ContId from in endpoint
-    % IP Addr from in endpoint
-    [
-    ]
 
 containers_from_lm(Host, ContsIpsMap, #{contsmap := #{conts := Conts}}) ->
     lists:map(fun(Cont) -> cont_record(Host, Cont, ContsIpsMap) end, Conts).

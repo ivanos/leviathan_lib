@@ -410,12 +410,12 @@ lm_wire_cens(LM) ->
 % - {add, cont, ContMap}
 % - {add, wire, Wire}
 % - {add, cont_in_cen, {ContId, CenId}}
-% - {add, bridge, {CenId, IpAddr}}
+% - {add, bridge, {CenId, IpAddr}} XXX not used
 % - {destroy, cen, CenMap}
 % - {destroy, cont, ContMap}
 % - {destroy, wire, Wire}
 % - {destroy, cont_in_cen, {ContId, CenId}}
-% - {destroy, bridge, CenId}
+% - {destroy, bridge, CenId} XXX not used
 % - {set, wire_type, {CenId, WireType}}
 lm_compare(Old, New) ->
     lists:flatten([
