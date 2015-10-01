@@ -281,40 +281,61 @@ lm_compare2() ->
     ?assertEqual(Instructions, leviathan_cen:lm_compare(LM0, new_lm())).
 
 lm_compare3() ->
-    OldLM = leviathan_cen:decode_jiffy([json_cen(<<"cen1">>, [<<"c1">>])]),
-    NewLM = leviathan_cen:decode_jiffy([json_cen(<<"cen1">>,
-                                                    [<<"c2">>, <<"c1">>])]),
-    Instructions = [
-        {add, cont_in_cen, {"c2", "cen1"}},
-        {add, cont, cont_map("c2", ["cen1"], [0])},
-        {add, wire, [
-            endpoint("c1", "c1.0i", in, "cen1", "10.11.0.11"),
-            endpoint("cen1", "c1.0o", out)
-        ]},
-        {add, wire, [
-            endpoint("c2", "c2.0i", in, "cen1", "10.11.0.10"),
-            endpoint("cen1", "c2.0o", out)
-        ]}
-    ],
-    ?assertEqual(Instructions, leviathan_cen:lm_compare(OldLM, NewLM)).
+    OldLM = foldcalls(new_lm(),
+                      [
+                       fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
+                       fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end
+                      ]),
+    NewLM = leviathan_cen:lm_add_container("cen1", "c2", OldLM),
+    %% OldLM = leviathan_cen:decode_jiffy([json_cen(<<"cen1">>, [<<"c1">>])]),
+    %% NewLM = leviathan_cen:decode_jiffy([json_cen(<<"cen1">>,
+    %%                                              [<<"c1">>, <<"c2">>])]),
+    EInstructions =
+        [
+         {add, cont_in_cen, {cont_map("c2", ["cen1"], [0]),
+                             cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
+                                     ["10.10.0.10", "10.10.0.11"])
+                            }},
+         {add, cont, cont_map("c2", ["cen1"], [0])},
+         {add, wire, [
+                      endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+                      endpoint("cen1", "c1.0o", out)
+                     ]},
+         {add, wire, [
+                      endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+                      endpoint("cen1", "c2.0o", out)
+                     ]}
+        ],
+    AInstructions = leviathan_cen:lm_compare(OldLM, NewLM),
+    assert_equal_instructions(EInstructions, AInstructions).
+
+
 
 lm_compare4() ->
-    OldLM = leviathan_cen:decode_jiffy([json_cen(<<"cen1">>,
-                                                    [<<"c2">>, <<"c1">>])]),
-    NewLM = leviathan_cen:decode_jiffy([json_cen(<<"cen1">>, [<<"c1">>])]),
-    Instructions = [
-        {destroy, cont_in_cen, {"c2", "cen1"}},
-        {destroy, cont, cont_map("c2", ["cen1"], [0])},
-        {destroy, wire, [
-            endpoint("c1", "c1.0i", in, "cen1", "10.10.0.11"),
-            endpoint("cen1", "c1.0o", out)
-        ]},
-        {destroy, wire, [
-            endpoint("c2", "c2.0i", in, "cen1", "10.10.0.10"),
-            endpoint("cen1", "c2.0o", out)
-        ]}
-    ],
-    ?assertEqual(Instructions, leviathan_cen:lm_compare(OldLM, NewLM)).
+    NewLM = foldcalls(new_lm(),
+                      [
+                       fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
+                       fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end
+                      ]),
+    OldLM = leviathan_cen:lm_add_container("cen1", "c2", NewLM),
+    EInstructions =
+        [
+         {destroy, cont_in_cen, {cont_map("c2", ["cen1"], [0]),
+                                 cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
+                                         ["10.10.0.10", "10.10.0.11"])
+                            }},
+         {destroy, cont, cont_map("c2", ["cen1"], [0])},
+         {destroy, wire, [
+                          endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+                          endpoint("cen1", "c1.0o", out)
+                         ]},
+         {destroy, wire, [
+                          endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+                          endpoint("cen1", "c2.0o", out)
+                         ]}
+        ],
+    AInstructions = leviathan_cen:lm_compare(OldLM, NewLM),
+    assert_equal_instructions(EInstructions, AInstructions).
 
 lm_compare5() ->
     LM0 = foldcalls(new_lm(), [
@@ -325,9 +346,12 @@ lm_compare5() ->
                                fun(Acc) -> leviathan_cen:lm_add_container("cen1", "cB", Acc) end
                               ]),
     LM1 = leviathan_cen:lm_add_container("cen2", "cB", LM0),
-    Instructions = [
-                    {add,cont_in_cen,{"cB","cen2"}},
-                    {add, wire, [
+    EInstructions = [
+                    {add, cont_in_cen, {cont_map("cB", ["cen1", "cen2"], [0, 1]),
+                                        cen_map("cen2", ["cA", "cB"], bus, 11, "10.11.0.1",
+                                                ["10.11.0.10", "10.11.0.11"]) 
+                                       }},
+                     {add, wire, [
                                  endpoint("cB", "cB.1i", in, "cen2", "10.11.0.11"),
                                  endpoint("cen2", "cB.1o", out)
                                 ]},
@@ -335,7 +359,8 @@ lm_compare5() ->
                                  endpoint("cA", "cA.1i", in, "cen2", "10.11.0.10"),
                                  endpoint("cen2", "cA.1o", out)
                                 ]}],
-    ?assertEqualLists(Instructions, leviathan_cen:lm_compare(LM0, LM1)).
+    AInstructions = leviathan_cen:lm_compare(LM0, LM1),
+    assert_equal_instructions(EInstructions, AInstructions).
 
 lm_compare6() ->
     LM0 = foldcalls(new_lm(), 
@@ -351,11 +376,19 @@ lm_compare6() ->
                      fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c3", Acc) end,
                      fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c4", Acc) end
                     ]),
-    Instructions = 
+    EInstructions = 
         [
-         {add,cont_in_cen,{"c4","cen2"}},
-         {add,cont_in_cen,{"c3","cen2"}},
-         {add,cont,cont_map("c4", ["cen2"], [0])},
+         {add, cont_in_cen, {cont_map("c4", ["cen2"], [0]),
+                             cen_map("cen2", ["c3", "c4"], bus, 11, "10.11.0.1",
+                                     ["10.11.0.10", "10.11.0.11"]) 
+                            }},
+         {add, cont_in_cen, {cont_map("c3", ["cen1", "cen2"], [0, 1]),
+                             cen_map("cen2", ["c3", "c4"], bus, 11, "10.11.0.1",
+                                     ["10.11.0.10", "10.11.0.11"]) 
+                            }},
+         %% {add,cont_in_cen,{"c4","cen2"}},
+         %% {add,cont_in_cen,{"c3","cen2"}},
+         {add,cont, cont_map("c4", ["cen2"], [0])},
          {add, wire, [
                       endpoint("c3", "c3.1i", in, "cen2", "10.11.0.10"),
                       endpoint("cen2", "c3.1o", out)
@@ -364,8 +397,8 @@ lm_compare6() ->
                       endpoint("c4", "c4.0i", in, "cen2", "10.11.0.11"),
                       endpoint("cen2", "c4.0o", out)
                      ]}],
-    ?assertEqual(lists:sort(Instructions),
-                 lists:sort(leviathan_cen:lm_compare(LM0, LM1))).
+    AInstructions = leviathan_cen:lm_compare(LM0, LM1),
+    assert_equal_instructions(EInstructions, AInstructions).
 
 lm_add_container_to_new_cen() ->
     LM0 = foldcalls(new_lm(), 
@@ -673,6 +706,21 @@ update_cens3() ->
     ?assertEqualLists([Cen1, Cen2], ActualCens),
     ?assertEqualLists([Cont1, Cont2], ActualConts),
     ?assertEqualLists([Wire1, Wire2], ActualWires).
+
+% -------------------------------------------------------------------------------
+% assertion helpers
+% -------------------------------------------------------------------------------
+
+assert_equal_instructions(EInstructions, AInstructions) ->
+    Fn = fun({{_, Item, EValue}, {_, Item, AValue}})
+               when is_list(EValue) andalso is_list(AValue) ->
+                 ?assertEqualLists(EValue, AValue);
+            ({{_, Item, EValue}, {_, Item, AValue}}) ->
+                 ?assertEqual(EValue, AValue)
+         end,
+    lists:foreach(Fn, lists:zip(lists:sort(EInstructions),
+                                lists:sort(AInstructions))).
+
 
 %-------------------------------------------------------------------------------
 % helpers

@@ -191,12 +191,12 @@ update_count(Key, NewValue) ->
 % - {add, cen, CenMap}
 % - {add, cont, ContMap}
 % - {add, wire, Wire}
-% - {add, cont_in_cen, {ContId, CenId}}
+% - {add, cont_in_cen, {ContMap, CenMap}}
 % - {add, bridge, {CenId, IpAddr}} XXX not used
 % - {destroy, cen, CenMap}
 % - {destroy, cont, ContMap}
 % - {destroy, wire, Wire}
-% - {destroy, cont_in_cen, {ContId, CenId}}
+% - {destroy, cont_in_cen, {ContMap, CenMap}}
 % - {destroy, bridge, CenId} XXX not used
 % - {set, wire_type, {CenId, WireType}} XXX not used
 % Return lists of instructions functions that updates the
@@ -218,7 +218,9 @@ update_instruction(_, {add, wire, Wire}, ContIpsMap) ->
                            CenRecord#leviathan_cen{wires = [Wire | Wires]}
                    end),
     {Fn, ContIpsMap};
-update_instruction(_, {add, cont_in_cen, {ContId, CenId}}, ContIpsMap) ->
+update_instruction(_,
+                   {add, cont_in_cen, {#{contID := ContId}, #{cenID := CenId}}},
+                    ContIpsMap) ->
     %% XXX cens added to container by {add, cont, Cont}?
     %% update_fn({leviathan_cen, CenId},
     %%           fun(CenRecord = #leviathan_cen{data = Data0}) ->

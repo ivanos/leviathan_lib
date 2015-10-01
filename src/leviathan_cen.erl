@@ -409,12 +409,12 @@ lm_wire_cens(LM) ->
 % - {add, cen, CenMap}
 % - {add, cont, ContMap}
 % - {add, wire, Wire}
-% - {add, cont_in_cen, {ContId, CenId}}
+% - {add, cont_in_cen, {ContMap, CenMap}}
 % - {add, bridge, {CenId, IpAddr}} XXX not used
 % - {destroy, cen, CenMap}
 % - {destroy, cont, ContMap}
 % - {destroy, wire, Wire}
-% - {destroy, cont_in_cen, {ContId, CenId}}
+% - {destroy, cont_in_cen, {ContMap, CenMap}}
 % - {destroy, bridge, CenId} XXX not used
 % - {set, wire_type, {CenId, WireType}}
 lm_compare(Old, New) ->
@@ -428,22 +428,32 @@ lm_compare(Old, New) ->
 compare_cens(?LM_CENS(OldCens), ?LM_CENS(NewCens)) ->
     delta_instructions(cen, cens_map(OldCens), cens_map(NewCens)).
 
-compare_cens_containers(?LM_CENS(OldCens), ?LM_CENS(NewCens)) ->
-    OldMap = cens_map(OldCens),
-    NewMap = cens_map(NewCens),
-    CommonKeys = maps:keys(maps:with(maps:keys(OldMap), NewMap)),
+compare_cens_containers(OldLM = ?LM_CENS(OldCens), NewLM = ?LM_CENS(NewCens)) ->
+    OldCensMap = cens_map(OldCens),
+    NewCensMap = cens_map(NewCens),
+    ?LM_CONTS(OldConts) = OldLM,
+    ?LM_CONTS(NewConts) = NewLM,
+    OldContsMap = conts_map(OldConts),
+    NewContsMap = conts_map(NewConts),
+    CommonKeys = maps:keys(maps:with(maps:keys(OldCensMap), NewCensMap)),
+    MkInstructionsFun =
+        fun(Op, ContIds, CenId, ContsMap, CensMap) ->
+                CenMap = maps:get(CenId, CensMap),
+                instructions(
+                  Op,
+                  cont_in_cen,
+                  [{maps:get(ContId, ContsMap), CenMap} || ContId <- ContIds])
+        end,
     lists:map(
-        fun(CenId) ->
-            #{contIDs := OldList} = maps:get(CenId, OldMap),
-            #{contIDs := NewList} = maps:get(CenId, NewMap),
-            {ToRemove, ToAdd} = compare_lists(OldList, NewList),
-            [
-                instructions(destroy, cont_in_cen,
-                    [{ContId, CenId}|| ContId <- ToRemove]),
-                instructions(add, cont_in_cen,
-                    [{ContId, CenId} || ContId <- ToAdd])
-            ]
-        end, CommonKeys).
+      fun(CenId) ->
+              #{contIDs := OldList} = maps:get(CenId, OldCensMap),
+              #{contIDs := NewList} = maps:get(CenId, NewCensMap),
+              {ToRemove, ToAdd} = compare_lists(OldList, NewList),
+              [
+               MkInstructionsFun(destroy, ToRemove, CenId, OldContsMap, OldCensMap),
+               MkInstructionsFun(add, ToAdd, CenId, NewContsMap, NewCensMap)
+              ]
+      end, CommonKeys).
 
 cens_map(Cens) ->
     map_from_list(Cens, fun(#{cenID := CenId}) -> CenId end).
