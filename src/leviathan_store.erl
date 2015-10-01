@@ -70,7 +70,8 @@ mk_conts_ips_in_cen_fun(CenId, IpsMap) ->
         maps:get({CenId, ContId}, IpsMap)
     end.
 
-update_cens(Host, Instructions) ->
+update_cens(Host, Instructions0) ->
+    Instructions = sort_update_instructions(Instructions0),
     {Fns, _} = lists:mapfoldl(
                  fun(Instruction, ContIpsMap) ->
                          update_instruction(Host, Instruction, ContIpsMap)
@@ -588,3 +589,22 @@ next_cont_id_number(ReservedIds, IdCandidate) ->
             next_cont_id_number(ReservedIds,
                                 (IdCandidate+1) rem (_DummyInterfacesLimit = 1000))
     end.
+
+sort_update_instructions(Instructions) ->
+    Fn = fun({_, cont, _}, {_, wire, _}) ->
+                 %% wires should be at the end of the list; cont should go before wires
+                 true;
+            ({_, cont_in_cen, _}, {_, ContOrWire, _})
+               when ContOrWire =:= cont orelse ContOrWire =:= wire ->
+                 %% cont_in_cen sholud be before conts and wires
+                 true;
+            ({_, cen, _}, _) ->
+                 %% cen should be at the beginning
+                 true;
+            (_, _) ->
+                 false
+         end,
+    lists:sort(Fn, Instructions).
+
+
+
