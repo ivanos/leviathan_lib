@@ -22,6 +22,7 @@
                                  wiremap => #{wires => Wires}
                                 }).
 
+-include_lib("stdlib/include/ms_transform.hrl").
 -include("leviathan.hrl").
 
 import_cens(_, ?LM_EMPTY) ->
@@ -72,10 +73,10 @@ mk_conts_ips_in_cen_fun(CenId, IpsMap) ->
 
 update_cens(Host, Instructions0) ->
     Instructions = sort_update_instructions(Instructions0),
-    {Fns, _} = lists:mapfoldl(
-                 fun(Instruction, ContIpsMap) ->
-                         update_instruction(Host, Instruction, ContIpsMap)
-                 end, #{}, Instructions),
+    Fns = lists:map(
+            fun(Instruction) ->
+                    update_instruction(Host, Instruction)
+            end, Instructions),
     Fn = fun() ->
         lists:foreach(fun(Fn) -> Fn() end, lists:flatten(Fns))
     end,
@@ -188,66 +189,120 @@ wire_cont_to_cen(CenId, ContId, Wire) ->
 update_count(Key, NewValue) ->
     leviathan_db:write(#counter{id = Key, count = NewValue}).
 
-% XXX not implemented
-% - {add, cen, CenMap}
-% - {add, cont, ContMap}
-% - {add, wire, Wire}
-% - {add, cont_in_cen, {ContMap, CenMap}}
-% - {add, bridge, {CenId, IpAddr}} XXX not used
-% - {destroy, cen, CenMap}
-% - {destroy, cont, ContMap}
-% - {destroy, wire, Wire}
-% - {destroy, cont_in_cen, {ContMap, CenMap}}
-% - {destroy, bridge, CenId} XXX not used
-% - {set, wire_type, {CenId, WireType}} XXX not used
-% Return lists of instructions functions that updates the
-% authoritative store.
-update_instruction(Host, {add, cen, Cen}, ContIpsMap) ->
-    {write_fn(cen_record(Host, Cen)),
-     conts_ips_from_cen(Cen, ContIpsMap)};
-update_instruction(Host, {add, cont, Cont = #{contID := ContId}}, ContIpsMap) ->
-    Fn = lists:map(
-           fun(Record) ->
-                   write_fn(Record)
-           end, cont_record(Host, Cont, ContIpsMap)),
-    {Fn, ContIpsMap};
-update_instruction(_, {add, wire, Wire}, ContIpsMap) ->
-    %% XXX set the ip address in the container
+%% @doc Return lists of instructions functions that updates the authoritative store.
+%%
+%% The instruction list passed to the funciton is sorted as described by
+%% {@link sort_update_instructions/1}. Below is a list of alload instrcutions:
+%% - {add, cen, CenMap}
+%% - {add, cont, ContMap}
+%% - {add, wire, Wire}
+%% - {add, cont_in_cen, {ContMap, CenMap}}
+%% - {add, bridge, {CenId, IpAddr}} XXX not used
+%% - {destroy, cen, CenMap}
+%% - {destroy, cont, ContMap}
+%% - {destroy, wire, Wire}
+%% - {destroy, cont_in_cen, {ContMap, CenMap}}
+%% - {destroy, bridge, CenId} XXX not used
+%% - {set, wire_type, {CenId, WireType}} XXX not used
+update_instruction(Host, {add, cen, Cen = #{cenID := CenId,
+                                            contIDs := Conts,
+                                            reservedIps := Ips}}) ->
+    %% If {add, cen, _} instruction exists in the list and there are
+    %% any containers in the contIDs of Cen then:
+    %% 1) This instruction was preceded by {add, cont, _} instructions
+    %%    for all the containers in the contIDs; thus #leviathan_cont
+    %%    records for these containers already exists
+    %% 2) The aforementioned records are missing IP address information;
+    %%    thus we update them with IP addresses based on reservedIps
+    %%    field from this Cen
+    %% 3) The IP address may not be already filled by {add, cont_in_cen, _}
+    %%    instruction as it does not occur together with this instruction
+    %%    for a particular cen
+    MkSelectFun =
+        fun(FCenId, FContId) ->
+                ets:fun2ms(fun(#leviathan_cont{cen = CId, cont = CtId} = R)
+                                 when CId =:= FCenId andalso CtId =:= FContId ->
+                                   R
+                           end)
+        end,
+    MkUpdateFun =
+        fun(ContId, Ip) ->
+                SelectFun = MkSelectFun(CenId, ContId),
+                ContUpdateFun = fun(R = #leviathan_cont{data = Data0}) ->
+                                    Data1 = Data0#{ip_address => Ip},
+                                    R#leviathan_cont{data = Data1}
+                            end,
+                update_selected_or_write_fn({leviathan_cont, SelectFun}, ContUpdateFun)
+                                    
+        end,
+    [
+     write_fn(cen_record(Host, Cen)),
+     lists:foldl(fun({ContId, Ip}, Acc) ->
+                         [MkUpdateFun(ContId, Ip) | Acc]
+                 end, [], lists:zip(Conts, Ips))
+    ];
+update_instruction(Host, {add, cont, Cont = #{contID := ContId}}) ->
+    %% If {add, cont, _} instruction exists in the list then:
+    %% 1) The cont is seen for the firt time and there are no records
+    %%    for {AnyCen, ContId}; thus we create #leviathan_cont record
+    %%    for each CenId in the Cont.
+    %% 2) ip_address field for each record will be filled later as this
+    %%    instrction is always followed by either {add, cen, _} or
+    %%    {add, cont_in_cen, _} that refers to the cont in this instruction
+    lists:map(fun(Record) ->
+                      write_fn(Record)
+              end, cont_record(Host, Cont));
+update_instruction(_, {add, wire, Wire}) ->
     CenId = cenid_from_wire(Wire),
-    Fn = update_fn({leviathan_cen, CenId},
-                   fun(CenRecord = #leviathan_cen{wires = Wires}) ->
-                           CenRecord#leviathan_cen{wires = [Wire | Wires]}
-                   end),
-    {Fn, ContIpsMap};
+    update_fn({leviathan_cen, CenId},
+              fun(CenRecord = #leviathan_cen{wires = Wires}) ->
+                      CenRecord#leviathan_cen{wires = [Wire | Wires]}
+              end);
 update_instruction(_,
-                   {add, cont_in_cen, {#{contID := ContId}, #{cenID := CenId}}},
-                    ContIpsMap) ->
-    %% XXX cens added to container by {add, cont, Cont}?
-    %% update_fn({leviathan_cen, CenId},
-    %%           fun(CenRecord = #leviathan_cen{data = Data0}) ->
-    %%                   #{contIDs := ContIds, ipaddr_b = IpB} = Data0,
-    %%                   leviathan_cin:ip_address(IpB, RIps),
-    %%                   Data1 = Data0#{contIDs := [ContId] ++ ContIds},
-    %%                   CenRecord#leviathan_cen{data = Data1}
-    %%           end),
-    {fun() ->
-             %% update leviathan_cen
-             [#leviathan_cen{data = Data0} = CenRecord] =
-                 leviathan_db:read({leviathan_cen, CenId}),
-             #{contIDs := ContIds, ipaddr_b := IpB} = Data0,
-             Data1 = Data0#{contIDs := ContIds ++ [ContId]},
-             leviathan_db:write(CenRecord#leviathan_cen{data = Data1}),
-
-             %% create leviathan cont
-             Ip = binary_to_list(
-                    leviathan_cin:ip_address(IpB,
-                                             get_cen_reserved_ips(CenId))),
-             Id = next_cont_id_num(get_cont_reserved_ids(ContId)),
-             ContRecord = #leviathan_cont{cont = ContId, cen = CenId,
-                                          data = #{ip_address => Ip,
-                                                   idnumber => Id}},
-             leviathan_db:write(ContRecord)
-     end, ContIpsMap}.
+                   {add, cont_in_cen, {#{contID := ContId,
+                                        reservedIdNums := Ids} = Cont,
+                                       #{cenID := CenId,
+                                         reservedIps := Ips} = Cen
+                                      }}) ->
+    %% If {add, cont_in_cen, _} instruction exists in the list then:
+    %% 1) This instruction may have been preceded by {add, cont, _} for
+    %%    the same container and appropriate #leviathan_cont may had
+    %%    been created; thus we check for such record existence, and
+    %%    create it if necessary.
+    %% 2) If #leviathan_cont record already exists for {ContId, CenId}
+    %%    we fill its IP address field.
+    %% 3) There is no {add, cen, _} instruction for the CenId thus we
+    %%    also need to update the Cen with new ContId
+    MkSelectFun =
+        fun(FCenId, FContId) ->
+                ets:fun2ms(fun(#leviathan_cont{cen = CId, cont = CtId} = R)
+                                 when CId =:= FCenId andalso CtId =:= FContId ->
+                                   R
+                           end)
+        end,
+    SelectFun = MkSelectFun(CenId, ContId),
+    Ip = cont_ip_address(ContId, Cen),
+    ContUpdateFun = fun(#leviathan_cont{data = Data0} = R) ->
+                            Data1 = Data0#{ip_address => Ip},
+                            R#leviathan_cont{data = Data1};
+                       (no_match) ->
+                            #leviathan_cont{
+                               cont = ContId,
+                               cen = CenId,
+                               data = #{idnumber => cont_id_number(CenId, Cont),
+                                        ip_address => Ip}
+                              }
+                    end,
+    CenUpdateFun =
+        fun(#leviathan_cen{data = Data0} = R) ->
+                #{contIDs := Conts} = Data0,
+                Data1 = Data0#{contIDs => Conts ++ [ContId]},
+                R#leviathan_cen{data = Data1}
+        end,
+    [
+     update_selected_or_write_fn({leviathan_cont, SelectFun}, ContUpdateFun),
+     update_fn({leviathan_cen, CenId}, CenUpdateFun)
+    ];
 update_instruction(_, {add, bridge, _}) ->
     % not used
     [];
@@ -312,6 +367,24 @@ update_fn(Key, UpdateFn) ->
         leviathan_db:write(Record1)
     end.
 
+update_selected_or_write_fn({Table, Match}, UpdateOrWriteFn) ->
+    %% fun() ->
+    %%         Fn = fun(Record0) ->
+    %%                      leviathan_db:write(UpdateFn(Record0)),
+    %%                      leviathan_db:delete_object(Record0)
+    %%              end,
+    %%         lists:foreach(Fn, leviathan_db:select(Table, Match))
+    %% end.
+    fun() ->
+            case leviathan_db:select(Table, Match) of
+                [Record0] ->
+                    leviathan_db:write(UpdateOrWriteFn(Record0)),
+                    leviathan_db:delete_object(Record0);
+                [] ->
+                    leviathan_db:write(UpdateOrWriteFn(no_match))
+            end
+    end.
+
 cenid_from_wire(Wire) ->
     % in and out endpoints
     OutEndpoint = out_endpoint(Wire),
@@ -339,6 +412,18 @@ in_endpoint([In = #{side := in}, _]) ->
 in_endpoint([_, In = #{side := in}]) ->
     In.
 
+cont_id_number(CenId, #{cens := Cens, reservedIdNums := Ids}) ->
+    [{CenId, Id} | _] = lists:dropwhile(fun({CId, _Id}) ->
+                                                CId =/= CenId
+                                        end, lists:zip(Cens, Ids)),
+    Id.
+
+cont_ip_address(ContId, #{contIDs := Conts, reservedIps := Ips}) ->
+    [{ContId, Ip} | _] = lists:dropwhile(fun({CtId, _Ip}) ->
+                                                 CtId =/= ContId
+                                         end, lists:zip(Conts, Ips)),
+    Ip.
+
 cen_record(_, #{cenID := CenId,
                 wire_type := WireType,
                 contIDs := ContIds,
@@ -355,20 +440,16 @@ cen_record(_, #{cenID := CenId,
         wires = []
     }.
 
-% XXX overwrites existing container/cen combinations?
-cont_record(_, #{contID := ContId,
-                 cens := CenIds}) ->
+cont_record(_, #{contID := ContId, cens := CenIds, reservedIdNums := Ids}) ->
     lists:map(
-        fun(CenId) ->
-            #leviathan_cont{
-                cont = ContId,
-                cen = CenId,
-                data = #{
-                    idnumber => 0,
-                    ip_address => undefined
-                }
-            }
-        end, CenIds).
+      fun({CenId, Id}) ->
+              #leviathan_cont{cont = ContId,
+                              cen = CenId,
+                              data = #{idnumber => Id,
+                                       ip_address => to_be_filled
+                                      }
+                             }
+      end, lists:zip(CenIds, Ids)).
 
 containers_from_lm(Host, ContsIpsMap, #{contsmap := #{conts := Conts}}) ->
     lists:map(fun(Cont) -> cont_record(Host, Cont, ContsIpsMap) end, Conts).
@@ -590,16 +671,22 @@ next_cont_id_number(ReservedIds, IdCandidate) ->
                                 (IdCandidate+1) rem (_DummyInterfacesLimit = 1000))
     end.
 
+%% @doc Sort update instructions.
+%%
+%% This function sorts the instruction list by an instruction item
+%% (regardles of the operation: add/destroy). The output order of
+%% instruction list is following:
+%% cont < cen < cont_in_cen < wire. 
 sort_update_instructions(Instructions) ->
-    Fn = fun({_, cont, _}, {_, wire, _}) ->
+    Fn = fun({_, cont_in_cen, _}, {_, wire, _}) ->
                  %% wires should be at the end of the list; cont should go before wires
                  true;
-            ({_, cont_in_cen, _}, {_, ContOrWire, _})
-               when ContOrWire =:= cont orelse ContOrWire =:= wire ->
-                 %% cont_in_cen sholud be before conts and wires
+            ({_, cen, _}, {_, ContInCenOrWire, _})
+               when ContInCenOrWire =:= cont_in_cen orelse ContInCenOrWire =:= wire ->
+                 %% cen sholud be before cont_in_cens and wires
                  true;
-            ({_, cen, _}, _) ->
-                 %% cen should be at the beginning
+            ({_, cont, _}, _) ->
+                 %% cont should be at the beginning
                  true;
             (_, _) ->
                  false

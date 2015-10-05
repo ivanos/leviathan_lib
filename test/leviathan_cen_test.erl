@@ -1,6 +1,7 @@
 -module(leviathan_cen_test).
 
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("stdlib/include/ms_transform.hrl").
 
 -define(assertEqualLists(A,B), ?assertEqual(lists:sort(A), lists:sort(B))).
 
@@ -287,9 +288,6 @@ lm_compare3() ->
                        fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end
                       ]),
     NewLM = leviathan_cen:lm_add_container("cen1", "c2", OldLM),
-    %% OldLM = leviathan_cen:decode_jiffy([json_cen(<<"cen1">>, [<<"c1">>])]),
-    %% NewLM = leviathan_cen:decode_jiffy([json_cen(<<"cen1">>,
-    %%                                              [<<"c1">>, <<"c2">>])]),
     EInstructions =
         [
          {add, cont_in_cen, {cont_map("c2", ["cen1"], [0]),
@@ -308,8 +306,6 @@ lm_compare3() ->
         ],
     AInstructions = leviathan_cen:lm_compare(OldLM, NewLM),
     assert_equal_instructions(EInstructions, AInstructions).
-
-
 
 lm_compare4() ->
     NewLM = foldcalls(new_lm(),
@@ -386,8 +382,6 @@ lm_compare6() ->
                              cen_map("cen2", ["c3", "c4"], bus, 11, "10.11.0.1",
                                      ["10.11.0.10", "10.11.0.11"]) 
                             }},
-         %% {add,cont_in_cen,{"c4","cen2"}},
-         %% {add,cont_in_cen,{"c3","cen2"}},
          {add,cont, cont_map("c4", ["cen2"], [0])},
          {add, wire, [
                       endpoint("c3", "c3.1i", in, "cen2", "10.11.0.10"),
@@ -672,10 +666,11 @@ update_cens3() ->
                     ]),
     Cen1 = cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
                    ["10.10.0.10", "10.10.0.11"]),
-    Cen2 = cen_map("cen2", ["c2"], bus, 11, "10.11.0.1", ["10.11.0.10"]),
+    Cen2 = cen_map("cen2", ["c3", "c2"], bus, 11, "10.11.0.1",
+                   ["10.11.0.11", "10.11.0.10"]),
     Cont1 = cont_map("c1", ["cen1"], [0]),
     Cont2 = cont_map("c2", ["cen1", "cen2"], [0, 1]),
-    Cont3 = cont_map("c2", ["cen2"], [0]),
+    Cont3 = cont_map("c3", ["cen2"], [0]),
     Wire1 = [
              endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
              endpoint("cen1", "c1.0o", out)
@@ -692,20 +687,17 @@ update_cens3() ->
              endpoint("c3", "c3.0i", in, "cen2", "10.11.0.11"),
              endpoint("cen2", "c3.0o", out)
             ],
-    ExpectedLM = compose_lm([Cen1, Cen2], [Cont1, Cont2, Cont3], [Wire1, Wire2,
-                                                                  Wire3, Wire4]),
     Delta = leviathan_cen:lm_compare(LM0, LM1),
 
     %% WHEN
-    ?debugFmt("Delat ~p", [Delta]),
     ok = leviathan_store:update_cens(<<"host">>, Delta),
 
     %% THEN
     ActualLM = leviathan_store:get_levmap(["cen1", "cen2"]),
     {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
     ?assertEqualLists([Cen1, Cen2], ActualCens),
-    ?assertEqualLists([Cont1, Cont2], ActualConts),
-    ?assertEqualLists([Wire1, Wire2], ActualWires).
+    ?assertEqualLists([Cont1, Cont2, Cont3], ActualConts),
+    ?assertEqualLists([Wire1, Wire2, Wire3, Wire4], ActualWires).
 
 % -------------------------------------------------------------------------------
 % assertion helpers
