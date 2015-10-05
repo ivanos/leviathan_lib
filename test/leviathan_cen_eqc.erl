@@ -24,7 +24,7 @@ gen_instructions() ->
 
 gen_add_cens_subset_to_instr(Instructions) ->
     {_Ops, CenIds, _Conts} = lists:unzip3(Instructions),
-    {Instructions, sublist(CenIds)}.
+    {Instructions, sublist(lists:usort(CenIds))}.
 
 gen_instructions_wtih_cens_subset() ->
     ?LET(I, gen_instructions(), gen_add_cens_subset_to_instr(I)).
@@ -170,13 +170,20 @@ prop_levmap() ->
                   )
                )).
 
-lev_store_constructs_correct_levmap(Instructions, _CensToCheck) ->
+lev_store_constructs_correct_levmap(Instructions, CensToCheck) ->
     cleanup(),
     LM0 = run_instructions(Instructions, new_lm()),
     ok = leviathan_store:import_cens(?HOST, LM0),
-    CenIds = cenids_from_lm(LM0),
-    compare_lms(LM0, leviathan_store:get_levmap(CenIds)),
+    compare_lms(filter_levmap(CensToCheck, LM0),
+                leviathan_store:get_levmap(CensToCheck)),
     true.
+
+filter_levmap(CensToKeep, LM) ->
+    {CensMap0, ContsMap0, Wires0} = decompose_lm(LM),
+    compose_lm(lists:filter(mk_filter_censmap_fn(CensToKeep), CensMap0),
+               lists:filter(mk_filter_contsmap_fn(CensToKeep), ContsMap0),
+               lists:filter(mk_filter_wiresmap_fn(CensToKeep), Wires0)).
+
 
 compare_lms(Expected, Value) ->
     {ECens, EConts, EWires} = decompose_lm(Expected),
@@ -249,6 +256,11 @@ decompose_lm(#{censmap := #{cens := Cens},
                wiremap := #{wires := Wires}}) ->
     {Cens, Conts, Wires}.
 
+compose_lm(Cens, Conts, Wires) ->
+    #{censmap => #{cens => Cens},
+      contsmap => #{conts => Conts},
+      wiremap => #{wires => Wires}}.
+
 check_wires(Cens, Wires) ->
     % map CEN to ipaddr
     IpAddrByCen = map_cen_to_ipaddr(Cens),
@@ -292,4 +304,23 @@ cen_ipaddrs_in_cen([{CenId, IpAddr} | Rest], IpAddrByCen) ->
             false;
         true ->
             cen_ipaddrs_in_cen(Rest, IpAddrByCen)
+    end.
+
+mk_filter_censmap_fn(CensToKeep) ->
+    fun(#{cenID := CenId}) ->
+            lists:member(CenId, CensToKeep)
+    end.
+
+mk_filter_contsmap_fn(CensToKeep) ->
+    fun(#{cens := Cens}) ->
+            S = sets:intersection(sets:from_list(Cens),
+                                  sets:from_list(CensToKeep)),
+            sets:size(S) =/= 0
+    end.
+
+mk_filter_wiresmap_fn(CensToKeep) ->
+    fun([_, #{dest := #{type := cen, id := CenId}}]) ->
+            lists:member(CenId, CensToKeep);
+       ([#{dest := #{type := cen, id := CenId}}, _]) ->
+            lists:member(CenId, CensToKeep)
     end.
