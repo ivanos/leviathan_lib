@@ -142,16 +142,16 @@ prop_deltas() ->
                     % apply Deltas to dobby one by one
                     lists:foreach(
                         fun(Delta) ->
-                            ok = leviathan_store:update_cens(?HOST, [Delta])
+                            ok = leviathan_store:update_cens(?HOST, Delta)
                         end, Deltas),
 
                     % pull LM from store
                     CenIds = cenids_from_lm(LM),
-                    DobbyLM = leviathan_store:get_levmap(CenIds),
+                    LMFromStore = leviathan_store:get_levmap(CenIds),
 
                     % compute delta between new dobby and new LM
                     % (should be no difference)
-                    Difference = leviathan_cen:lm_compare(LM, DobbyLM),
+                    Difference = leviathan_cen:lm_compare(LM, LMFromStore),
 
                     collect(length(Deltas),
                         equals([], Difference))
@@ -242,11 +242,11 @@ deltas(Instructions) ->
     deltas(Instructions, [], new_lm()).
 
 deltas([], Deltas, LM) ->
-    {LM, lists:flatten(Deltas)};
+    {LM, lists:reverse(Deltas)};
 deltas([Op | Rest], Deltas, LM) ->
     NewLM = run_op(Op, LM),
     Delta = leviathan_cen:lm_compare(LM, NewLM),
-    deltas(Rest, [Deltas, Delta], NewLM).
+    deltas(Rest, [Delta | Deltas], NewLM).
 
 cenids_from_lm(#{censmap := #{cens := Cens}}) ->
     [CenId || #{cenID := CenId} <- Cens].
