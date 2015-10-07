@@ -404,19 +404,50 @@ lm_wire_cens(LM) ->
     Wires = wire_cens(Cens, Conts),
     LM?LM_SET_WIRES(Wires).
 
-% Compare LMs
-% Returns a list of instructions, list of:
-% - {add, cen, CenMap}
-% - {add, cont, ContMap}
-% - {add, wire, Wire}
-% - {add, cont_in_cen, {ContMap, CenMap}}
-% - {add, bridge, {CenId, IpAddr}} XXX not used
-% - {destroy, cen, CenMap}
-% - {destroy, cont, ContMap}
-% - {destroy, wire, Wire}
-% - {destroy, cont_in_cen, {ContMap, CenMap}}
-% - {destroy, bridge, CenId} XXX not used
-% - {set, wire_type, {CenId, WireType}}
+%% Compare LMs
+%% Returns a list of instructions, list of:
+%% - {add, cen, CenMap}
+%% - {add, cont, ContMap}
+%% - {add, wire, Wire}
+%% - {add, cont_in_cen, {ContMap, CenMap}}
+%% - {add, bridge, {CenId, IpAddr}} XXX not used
+%% - {destroy, cen, CenMap}
+%% - {destroy, cont, ContMap}
+%% - {destroy, wire, Wire}
+%% - {destroy, cont_in_cen, {ContMap, CenMap}}
+%% - {destroy, bridge, CenId} XXX not used
+%% - {set, wire_type, {CenId, WireType}}
+%% Regarding the add instructions there are 5 base cases:
+%% 1) Add an empty Cen:
+%%    {add, cen, CenMap}
+%% 2) Add a new Cen and assign an existing Cont to it:
+%%    {add, cen, CenMap}
+%%    {add, cont_in_cen, {ContMap, CenMap}}
+%%    {add, wire, Wire} (it is not added if Cen has only one Cont)
+%% 3) Add a new Cen and new Cont in it:
+%%    {add, cen, CenMap}
+%%    {add, cont, ContMap}
+%%    {add, cont_in_cen, {ContMap, CenMap}}
+%%    {add, wire, Wire} (it is not added if Cen has only one Cont)
+%% 4) Add a new Cont to an existing Cen
+%%    {add, cont, ContMap}
+%%    {add, cont_in_cen, {ContMap, CenMap}}
+%%    {add, wire, Wire} (it is not added if Cen has only one Cont)
+%% 5) Add an existing Cont to an existing Cen
+%%    {add, cont_in_cen, {ContMap, CenMap}}
+%%    {add, wire, Wire} (it is not added if Cen has only one Cont)
+%% Regarding the destroy instructions there are 3 base cases:
+%% 1) Destroy an empty Cen:
+%%    {destroy, cen, Cen}
+%% 2) Destroy a Cen with Cont:
+%%    {destroy, cen, CenMap}
+%%    {destroy, cont, ContMap}
+%%    {destroy, cont_in_cen, {ContMap, CenMap}}
+%%    {destroy, wire, Wires} (providing the Cen had more than one Cont)
+%% 3) Destroy a Cont in Cen:
+%%    {destroy, cont, ContMap}
+%%    {destroy, cont_in_cen, {ContMap, CenMap}}
+%%    {destroy, wire, Wire} (providing the Cen had more than one Cont)
 lm_compare(Old, New) ->
     lists:flatten([
         compare_cens(Old, New),
@@ -429,31 +460,31 @@ compare_cens(?LM_CENS(OldCens), ?LM_CENS(NewCens)) ->
     delta_instructions(cen, cens_map(OldCens), cens_map(NewCens)).
 
 compare_cens_containers(OldLM = ?LM_CENS(OldCens), NewLM = ?LM_CENS(NewCens)) ->
-    OldCensMap = cens_map(OldCens),
-    NewCensMap = cens_map(NewCens),
     ?LM_CONTS(OldConts) = OldLM,
     ?LM_CONTS(NewConts) = NewLM,
-    OldContsMap = conts_map(OldConts),
-    NewContsMap = conts_map(NewConts),
-    CommonKeys = maps:keys(maps:with(maps:keys(OldCensMap), NewCensMap)),
+    [OldCensMap, NewCensMap] = [cens_map(C) || C <- [OldCens, NewCens]],
+    [OldContsMap, NewContsMap] = [conts_map(C) || C <- [OldConts, NewConts]],
     MkInstructionsFun =
-        fun(Op, ContIds, CenId, ContsMap, CensMap) ->
+        fun(_, [], _) ->
+                [];
+           (Op, ContIds, CenId) ->
+                {CensMap, ContsMap} = case Op of
+                                          destroy -> {OldCensMap, OldContsMap};
+                                          add -> {NewCensMap, NewContsMap}
+                                      end,
                 CenMap = maps:get(CenId, CensMap),
-                instructions(
-                  Op,
-                  cont_in_cen,
-                  [{maps:get(ContId, ContsMap), CenMap} || ContId <- ContIds])
+                instructions(Op, cont_in_cen,
+                             [{maps:get(CId, ContsMap), CenMap} || CId <- ContIds])
         end,
-    lists:map(
-      fun(CenId) ->
-              #{contIDs := OldList} = maps:get(CenId, OldCensMap),
-              #{contIDs := NewList} = maps:get(CenId, NewCensMap),
-              {ToRemove, ToAdd} = compare_lists(OldList, NewList),
-              [
-               MkInstructionsFun(destroy, ToRemove, CenId, OldContsMap, OldCensMap),
-               MkInstructionsFun(add, ToAdd, CenId, NewContsMap, NewCensMap)
-              ]
-      end, CommonKeys).
+    [begin
+         #{contIDs := OldList} = maps:get(CenId, OldCensMap, #{contIDs => []}),
+         #{contIDs := NewList} = maps:get(CenId, NewCensMap, #{contIDs => []}),
+         {ToRemove, ToAdd} = compare_lists(OldList, NewList),
+         [
+          MkInstructionsFun(destroy, ToRemove, CenId),
+          MkInstructionsFun(add, ToAdd, CenId)
+         ]
+     end || CenId <- lists:usort(maps:keys(NewCensMap) ++ maps:keys(OldCensMap))].
 
 cens_map(Cens) ->
     map_from_list(Cens, fun(#{cenID := CenId}) -> CenId end).
@@ -695,15 +726,15 @@ list_lookup2(Key, [_ | Keys], [_ | Values]) ->
 
 % delete the key in the first list argument and the corresponding element
 % from the second list.
-list_delete2(Key, Keys, Values) ->
-    list_delete2(Key, Keys, Values, [], []).
+list_delete2(ToRemove, Keys, Values) ->
+    list_delete2(ToRemove, Keys, Values, [], []).
 
 list_delete2(_, [], [], NewKeys, NewValues) ->
     {lists:reverse(NewKeys), lists:reverse(NewValues)};
-list_delete2(Key, [Key | Keys], [_ | Values], NewKeys, NewValues) ->
-    list_delete2(Key, Keys, Values, NewKeys, NewValues);
-list_delete2(_, [Key | Keys], [Value | Values], NewKeys, NewValues) ->
-    list_delete2(Key, Keys, Values, [Key | NewKeys], [Value | NewValues]).
+list_delete2(ToRemove, [ToRemove | Keys], [_ | Values], NewKeys, NewValues) ->
+    list_delete2(ToRemove, Keys, Values, NewKeys, NewValues);
+list_delete2(ToRemove, [OtherKey | Keys], [Value | Values], NewKeys, NewValues) ->
+    list_delete2(ToRemove, Keys, Values, [OtherKey | NewKeys], [Value | NewValues]).
 
 % name formatters
 in_endpoint_name(ContId, N) ->

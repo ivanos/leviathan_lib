@@ -16,18 +16,26 @@ gen_cen_id() ->
 gen_cont_id() ->
     ?LET(I, choose(1,100), make_id("cont-", I)).
 
-gen_op() ->
-    frequency([{3, add}, {0, destroy}]).
+gen_add_instructions() ->
+    list({add, gen_cen_id(), gen_cont_id()}).
+
+gen_destroy_instruction({add, Cen, Cont}) ->
+    %% leviathan_cen:destroy_cen/1 is not implemented
+    frequency([{8,{destroy, Cen, Cont}}, {0, {destroy, Cen}}]).
+
+gen_destroy_instructions(AddInstructions) ->
+    AddInstructions ++
+        sublist([{destroy, Cen, Cont} || {add, Cen, Cont} <- AddInstructions]).
 
 gen_instructions() ->
-    list({gen_op(), gen_cen_id(), gen_cont_id()}).
+    ?LET(I, gen_add_instructions(), gen_destroy_instructions(I)).
 
 gen_add_cens_subset_to_instr(Instructions) ->
-    {_Ops, CenIds, _Conts} = lists:unzip3(Instructions),
-    {Instructions, sublist(lists:usort(CenIds))}.
+    {_Ops, Cens, _Conts} = lists:unzip3(Instructions),
+    {Instructions, sublist(lists:usort(Cens))}.
 
 gen_instructions_wtih_cens_subset() ->
-    ?LET(I, gen_instructions(), gen_add_cens_subset_to_instr(I)).
+    ?LET(I, gen_add_instructions(), gen_add_cens_subset_to_instr(I)).
 
 prop_wires() ->
     numtests(1000,
@@ -35,7 +43,7 @@ prop_wires() ->
             make_qc_setup_fun(),
             ?FORALL(
                 Instructions,
-               gen_instructions(),
+               gen_add_instructions(),
                 begin
                     cleanup(),
 
@@ -93,7 +101,7 @@ prop_lm_dby() ->
             make_qc_setup_fun(),
             ?FORALL(
                 {Base, Delta},
-                {gen_instructions(), gen_instructions()},
+                {gen_add_instructions(), gen_add_instructions()},
                 begin
                     cleanup(),
 
@@ -141,8 +149,8 @@ prop_deltas() ->
 
                     % apply Deltas to dobby one by one
                     lists:foreach(
-                        fun(Delta) ->
-                            ok = leviathan_store:update_cens(?HOST, Delta)
+                      fun(Delta) ->
+                              ok = leviathan_store:update_cens(?HOST, Delta)
                         end, Deltas),
 
                     % pull LM from store

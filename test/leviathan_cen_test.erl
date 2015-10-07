@@ -25,14 +25,17 @@ leviathan_cen_import_test_() ->
        ,{"lm_remove_container test 1", fun lm_remove_container1/0}
        ,{"lm_remove_container test 2", fun lm_remove_container2/0}
        ,{"lm_remove_container test 3", fun lm_remove_container3/0}
-       ,{"lm_compare 0", fun lm_compare0/0}
-       ,{"lm_compare 1", fun lm_compare1/0}
-       ,{"lm_compare 2", fun lm_compare2/0}
-       ,{"lm_compare 3", fun lm_compare3/0}
-       ,{"lm_compare 4", fun lm_compare4/0}
-       ,{"lm_compare 5", fun lm_compare5/0}
-       ,{"lm_compare 6", fun lm_compare6/0}
-       ,{"lm_add_cen 0", fun lm_add_cen0/0}
+       ,{"lm_remove_container test 4", fun lm_remove_container4/0}
+       ,{"lm_compare_when_adding 0", fun lm_compare_when_adding0/0}
+       ,{"lm_compare_when_adding 1", fun lm_compare_when_adding1/0}
+       ,{"lm_compare_when_adding 2", fun lm_compare_when_adding2/0}
+       ,{"lm_compare_when_adding 3", fun lm_compare_when_adding3/0}
+       ,{"lm_compare_when_adding 4", fun lm_compare_when_adding4/0}
+       ,{"lm_compare_when_adding 5", fun lm_compare_when_adding5/0}
+       ,{"lm_compare_when_adding 6", fun lm_compare_when_adding6/0}
+       ,{"lm_compare_when_destroying 1", fun lm_compare_when_destroying1/0}
+       ,{"lm_compare_when_destroying 2", fun lm_compare_when_destroying2/0}
+       ,{"lm_compare_when_destroying 3", fun lm_compare_when_destroying3/0}
        ,{"lm_add_container_to_new_cen", fun lm_add_container_to_new_cen/0}
        ,{"get levmap from store 0", fun get_levmap0/0}
        ,{"get levmap from store 1", fun get_levmap1/0}
@@ -221,74 +224,92 @@ lm_remove_container0() ->
     ?assertEqual(new_lm(), LM).
 
 lm_remove_container1() ->
-    Json = [json_cen(<<"cen1">>, [<<"c1">>])],
-    LM0 = leviathan_cen:decode_jiffy(Json),
+    LM0 = leviathan_cen:lm_add_container("cen1", "c1", new_lm()),
     LM1 = leviathan_cen:lm_remove_container("cen1", "c1", LM0),
-    {Cens, Conts, Wires} = decompose_lm(LM1),
-    ?assertEqual([cen_map("cen1", [], bus, 10, "10.10.0.1", [])], Cens),
-    ?assertEqual([], Conts),
-    ?assertEqual([], Wires).
+    Cens = [cen_map("cen1", [], bus, 10, "10.10.0.1", [])],
+    assert_equal_levmaps(compose_lm(Cens, [], []), LM1).
+
 
 lm_remove_container2() ->
-    Json = [json_cen(<<"cen1">>, [<<"c1">>, <<"c2">>])],
-    LM0 = leviathan_cen:decode_jiffy(Json),
+    LM0 = foldcalls(new_lm(),
+                    [
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c2", Acc) end
+                    ]),
     LM1 = leviathan_cen:lm_remove_container("cen1", "c1", LM0),
-    {Cens, Conts, Wires} = decompose_lm(LM1),
-    ?assertEqual([cen_map("cen1", ["c2"], bus, 10, "10.10.0.1", ["10.10.0.11"])], Cens),
-    ?assertEqual([cont_map("c2", ["cen1"], [0])], Conts),
-    ?assertEqual([], Wires).
+    ExpectedLM = compose_lm([cen_map("cen1", ["c2"], bus, 10, "10.10.0.1", ["10.10.0.11"])],
+                            [cont_map("c2", ["cen1"], [0])],
+                            []),
+    assert_equal_levmaps(ExpectedLM, LM1).
 
 lm_remove_container3() ->
-    Json = [json_cen(<<"cen1">>, [<<"c1">>, <<"c2">>]),
-            json_cen(<<"cen2">>, [<<"c1">>, <<"c3">>])],
-    LM0 = leviathan_cen:decode_jiffy(Json),
+    LM0 = foldcalls(new_lm(),
+                    [
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c2", Acc) end
+                    ]),
     LM1 = leviathan_cen:lm_remove_container("cen1", "c1", LM0),
-    {Cens, Conts, Wires} = decompose_lm(LM1),
-    ?assertEqual([cen_map("cen2", ["c1","c3"], bus, 11, "10.11.0.1", ["10.11.0.10", "10.11.0.11"]),
-                  cen_map("cen1", ["c2"], bus, 10, "10.10.0.1", ["10.10.0.11"])], Cens),
-    ?assertEqual([cont_map("c3", ["cen2"], [0]),
-                  cont_map("c2", ["cen1"], [0]),
-                  cont_map("c1", ["cen2"], [1])], Conts),
-    ?assertEqual([
-        [
-            endpoint("c3", "c3.0i", in, "cen2", "10.11.0.11"),
-            endpoint("cen2", "c3.0o", out)
-        ],
-        [
-            endpoint("c1", "c1.1i", in, "cen2", "10.11.0.10"),
-            endpoint("cen2", "c1.1o", out)
-        ]
-    ], Wires).
+    ExpectedLM = compose_lm([cen_map("cen1", ["c2"], bus, 10, "10.10.0.1", ["10.10.0.11"])],
+                            [cont_map("c2", ["cen1"], [0])],
+                            []),
+    assert_equal_levmaps(ExpectedLM, LM1).
 
-lm_compare0() ->
+lm_remove_container4() ->
+    LM0 = foldcalls(new_lm(),
+                    [
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c2", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c1", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c3", Acc) end
+                    ]),
+    LM1 = leviathan_cen:lm_remove_container("cen1", "c1", LM0),
+    ExpectedLM = compose_lm(
+                   [cen_map("cen2", ["c1","c3"], bus, 11, "10.11.0.1", ["10.11.0.10",
+                                                                        "10.11.0.11"]),
+                    cen_map("cen1", ["c2"], bus, 10, "10.10.0.1", ["10.10.0.11"])], 
+                   [cont_map("c3", ["cen2"], [0]),
+                    cont_map("c2", ["cen1"], [0]),
+                    cont_map("c1", ["cen2"], [1])], 
+                   [
+                    [
+                     endpoint("c3", "c3.0i", in, "cen2", "10.11.0.11"),
+                     endpoint("cen2", "c3.0o", out)
+                    ],
+                    [
+                     endpoint("c1", "c1.1i", in, "cen2", "10.11.0.10"),
+                     endpoint("cen2", "c1.1o", out)
+                    ]
+                   ]),
+    assert_equal_levmaps(ExpectedLM, LM1).
+
+%% Compare two empty Leviathan Maps.
+lm_compare_when_adding0() ->
     ?assertEqual([], leviathan_cen:lm_compare(new_lm(), new_lm())).
 
-lm_compare1() ->
-    Json = [json_cen(<<"cen1">>, [<<"c1">>])],
-    LM0 = leviathan_cen:decode_jiffy(Json),
-    Instructions = [
-        {add, cen, cen_map("cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"])},
-        {add, cont, cont_map("c1", ["cen1"], [0])}
-    ],
-    ?assertEqual(Instructions, leviathan_cen:lm_compare(new_lm(), LM0)).
+%% Add a new Cen with a new Container.
+lm_compare_when_adding1() ->
+    LM0 = leviathan_cen:lm_add_container("cen1", "c1", new_lm()),
+    Cen = cen_map("cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"]),
+    Cont = cont_map("c1", ["cen1"], [0]),
+    Instructions =
+        [
+         {add, cen, Cen},
+         {add, cont, Cont},
+         {add, cont_in_cen, {Cont, Cen}}
+        ],
+    assert_equal_instructions(Instructions, leviathan_cen:lm_compare(new_lm(), LM0)).
 
-lm_compare2() ->
-    Json = [json_cen(<<"cen1">>, [<<"c1">>])],
-    LM0 = leviathan_cen:decode_jiffy(Json),
-    Instructions = [
-        {destroy, cen, cen_map("cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"])},
-        {destroy, cont, cont_map("c1", ["cen1"], [0])}
-    ],
-    ?assertEqual(Instructions, leviathan_cen:lm_compare(LM0, new_lm())).
 
-lm_compare3() ->
+
+%% Add a new Container to an existing Cen.
+lm_compare_when_adding2() ->
     OldLM = foldcalls(new_lm(),
                       [
                        fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
                        fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end
                       ]),
     NewLM = leviathan_cen:lm_add_container("cen1", "c2", OldLM),
-    EInstructions =
+    Instructions =
         [
          {add, cont_in_cen, {cont_map("c2", ["cen1"], [0]),
                              cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
@@ -304,36 +325,10 @@ lm_compare3() ->
                       endpoint("cen1", "c2.0o", out)
                      ]}
         ],
-    AInstructions = leviathan_cen:lm_compare(OldLM, NewLM),
-    assert_equal_instructions(EInstructions, AInstructions).
+    assert_equal_instructions(Instructions, leviathan_cen:lm_compare(OldLM, NewLM)).
 
-lm_compare4() ->
-    NewLM = foldcalls(new_lm(),
-                      [
-                       fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
-                       fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end
-                      ]),
-    OldLM = leviathan_cen:lm_add_container("cen1", "c2", NewLM),
-    EInstructions =
-        [
-         {destroy, cont_in_cen, {cont_map("c2", ["cen1"], [0]),
-                                 cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
-                                         ["10.10.0.10", "10.10.0.11"])
-                            }},
-         {destroy, cont, cont_map("c2", ["cen1"], [0])},
-         {destroy, wire, [
-                          endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
-                          endpoint("cen1", "c1.0o", out)
-                         ]},
-         {destroy, wire, [
-                          endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
-                          endpoint("cen1", "c2.0o", out)
-                         ]}
-        ],
-    AInstructions = leviathan_cen:lm_compare(OldLM, NewLM),
-    assert_equal_instructions(EInstructions, AInstructions).
-
-lm_compare5() ->
+%% Add an existing Container to an existing Cen.
+lm_compare_when_adding3() ->
     LM0 = foldcalls(new_lm(), [
                                fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
                                fun(Acc) -> leviathan_cen:add_cen("cen2", Acc) end,
@@ -342,12 +337,12 @@ lm_compare5() ->
                                fun(Acc) -> leviathan_cen:lm_add_container("cen1", "cB", Acc) end
                               ]),
     LM1 = leviathan_cen:lm_add_container("cen2", "cB", LM0),
-    EInstructions = [
+    Instructions = [
                     {add, cont_in_cen, {cont_map("cB", ["cen1", "cen2"], [0, 1]),
                                         cen_map("cen2", ["cA", "cB"], bus, 11, "10.11.0.1",
                                                 ["10.11.0.10", "10.11.0.11"]) 
                                        }},
-                     {add, wire, [
+                    {add, wire, [
                                  endpoint("cB", "cB.1i", in, "cen2", "10.11.0.11"),
                                  endpoint("cen2", "cB.1o", out)
                                 ]},
@@ -355,10 +350,10 @@ lm_compare5() ->
                                  endpoint("cA", "cA.1i", in, "cen2", "10.11.0.10"),
                                  endpoint("cen2", "cA.1o", out)
                                 ]}],
-    AInstructions = leviathan_cen:lm_compare(LM0, LM1),
-    assert_equal_instructions(EInstructions, AInstructions).
+    assert_equal_instructions(Instructions, leviathan_cen:lm_compare(LM0, LM1)).
 
-lm_compare6() ->
+%% Add exsisting containers to an eixsting empty Cen.
+lm_compare_when_adding4() ->
     LM0 = foldcalls(new_lm(), 
                     [
                      fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
@@ -372,7 +367,7 @@ lm_compare6() ->
                      fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c3", Acc) end,
                      fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c4", Acc) end
                     ]),
-    EInstructions = 
+    Instructions = 
         [
          {add, cont_in_cen, {cont_map("c4", ["cen2"], [0]),
                              cen_map("cen2", ["c3", "c4"], bus, 11, "10.11.0.1",
@@ -392,7 +387,25 @@ lm_compare6() ->
                       endpoint("cen2", "c4.0o", out)
                      ]}],
     AInstructions = leviathan_cen:lm_compare(LM0, LM1),
-    assert_equal_instructions(EInstructions, AInstructions).
+    assert_equal_instructions(Instructions, AInstructions).
+
+%% Add an existing container to a new Cen.
+lm_compare_when_adding5() ->
+    LM0 = foldcalls(new_lm(), 
+                    [
+                     fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
+                     fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end
+                    ]),
+    LM1 = leviathan_cen:lm_add_container("cen2", "c1", LM0),
+    Cen = cen_map("cen2", ["c1"], bus, 11, "10.11.0.1", ["10.11.0.10"]),
+    Instructions = 
+        [
+         {add, cont_in_cen, {cont_map("c1", ["cen1", "cen2"], [0, 1]),
+                             Cen
+                            }},
+         {add, cen, Cen}
+        ],
+    assert_equal_instructions(Instructions, leviathan_cen:lm_compare(LM0, LM1)).
 
 lm_add_container_to_new_cen() ->
     LM0 = foldcalls(new_lm(), 
@@ -413,7 +426,8 @@ lm_add_container_to_new_cen() ->
                           ?assert(lists:member(Wire, LM1Wires))
                   end, LM0Wires).
 
-lm_add_cen0() ->
+%% Add an empty Cen.
+lm_compare_when_adding6() ->
     OldLM = new_lm(),
     NewLM = leviathan_cen:add_cen("cen1", OldLM),
     Instructions = [{add, cen, #{cenID => "cen1",
@@ -422,7 +436,53 @@ lm_add_cen0() ->
                                  ipaddr_b => 10,
                                  reservedIps => [],
                                  wire_type => bus}}],
-    ?assertEqual(Instructions, leviathan_cen:lm_compare(OldLM, NewLM)).
+    assert_equal_instructions(Instructions, leviathan_cen:lm_compare(OldLM, NewLM)).
+
+%% Remove an empty Cen
+lm_compare_when_destroying1() ->
+    NewLM = new_lm(),
+    OldLM = leviathan_cen:add_cen("cen1", NewLM),
+    Instructions = [{destroy, cen, cen_map("cen1", [], bus, 10, "10.10.0.1")}],
+    assert_equal_instructions(Instructions, leviathan_cen:lm_compare(OldLM, NewLM)).
+
+%% Remove a Cen with a Cont
+lm_compare_when_destroying2() ->
+    LM0 = leviathan_cen:lm_add_container("cen1", "c1", new_lm()),
+    Cen = cen_map("cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"]),
+    Cont = cont_map("c1", ["cen1"], [0]),
+    Instructions =
+        [
+         {destroy, cen, Cen},
+         {destroy, cont, Cont},
+         {destroy, cont_in_cen,  {Cont, Cen}}
+        ],
+    assert_equal_instructions(Instructions, leviathan_cen:lm_compare(LM0, new_lm())).
+
+%% Remove a Container from a Cen.
+lm_compare_when_destroying3() ->
+    NewLM = foldcalls(new_lm(),
+                      [
+                       fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
+                       fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end
+                      ]),
+    OldLM = leviathan_cen:lm_add_container("cen1", "c2", NewLM),
+    Instructions =
+        [
+         {destroy, cont_in_cen, {cont_map("c2", ["cen1"], [0]),
+                                 cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
+                                         ["10.10.0.10", "10.10.0.11"])
+                                }},
+         {destroy, cont, cont_map("c2", ["cen1"], [0])},
+         {destroy, wire, [
+                          endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+                          endpoint("cen1", "c1.0o", out)
+                         ]},
+         {destroy, wire, [
+                          endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+                          endpoint("cen1", "c2.0o", out)
+                         ]}
+        ],
+    assert_equal_instructions(Instructions, leviathan_cen:lm_compare(OldLM, NewLM)).
 
 get_levmap0() ->
     %% GIVEN
@@ -694,25 +754,58 @@ update_cens3() ->
 
     %% THEN
     ActualLM = leviathan_store:get_levmap(["cen1", "cen2"]),
-    {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
-    ?assertEqualLists([Cen1, Cen2], ActualCens),
-    ?assertEqualLists([Cont1, Cont2, Cont3], ActualConts),
-    ?assertEqualLists([Wire1, Wire2, Wire3, Wire4], ActualWires).
+    assert_equal_levmaps(compose_lm([Cen1, Cen2],
+                                    [Cont1, Cont2, Cont3],
+                                    [Wire1, Wire2, Wire3, Wire4]),
+                         ActualLM).
+    %% {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
+    %% ?assertEqualLists([Cen1, Cen2], ActualCens),
+    %% ?assertEqualLists([Cont1, Cont2, Cont3], ActualConts),
+    %% ?assertEqualLists([Wire1, Wire2, Wire3, Wire4], ActualWires).
 
 % -------------------------------------------------------------------------------
 % assertion helpers
 % -------------------------------------------------------------------------------
 
-assert_equal_instructions(EInstructions, AInstructions) ->
+assert_equal_instructions(Instructions, AInstructions) ->
     Fn = fun({{_, Item, EValue}, {_, Item, AValue}})
                when is_list(EValue) andalso is_list(AValue) ->
                  ?assertEqualLists(EValue, AValue);
             ({{_, Item, EValue}, {_, Item, AValue}}) ->
                  ?assertEqual(EValue, AValue)
          end,
-    lists:foreach(Fn, lists:zip(lists:sort(EInstructions),
+    lists:foreach(Fn, lists:zip(lists:sort(Instructions),
                                 lists:sort(AInstructions))).
 
+assert_equal_levmaps(ELM, ALM) ->
+    {ECens, EConts, EWires} = decompose_lm(ELM),
+    {ACens, AConts, AWires} = decompose_lm(ALM),
+    assert_censmap_equal(ECens, ACens),
+    assert_contsmap_equal(EConts, AConts),
+    assert_wiresmap_equal(EWires, AWires).
+
+assert_censmap_equal(ECens, ACens) ->
+    lists:foreach(fun({ECen, ACen}) ->
+                          assert_maps_with_lists_equal([contIDs, reservedIps],
+                                                       ECen,
+                                                       ACen)
+                  end, lists:zip(lists:sort(ECens), lists:sort(ACens))).
+
+assert_contsmap_equal(EConts, AConts) ->
+    lists:foreach(fun({ECont, ACont}) ->
+                          assert_maps_with_lists_equal([cens, reservedIdNums],
+                                                       ECont,
+                                                       ACont)
+                  end, lists:zip(lists:sort(EConts), lists:sort(AConts))).
+
+assert_wiresmap_equal(EWires, AWires) ->
+    ?assertEqualLists(EWires, AWires).
+
+assert_maps_with_lists_equal(KeysForLists, ECens, ACens) ->
+    ?assertEqual(maps:without(KeysForLists, ECens),
+                 maps:without(KeysForLists, ACens)),
+    [?assertEqualLists(maps:get(K, ECens), maps:get(K, ACens))
+     || K <- KeysForLists].
 
 %-------------------------------------------------------------------------------
 % helpers
