@@ -14,6 +14,8 @@
 -export([decode_jiffy/1]).
 -endif.
 
+-define(MAX_INTERFACE_ID, 1000).
+
 -include("leviathan_logger.hrl").
 
 
@@ -338,10 +340,10 @@ next_ip_in_cen(IpB, ReservedIps0) ->
 
 %% add container to Cont map
 add_container_to_contsmap(ContId, CenId, LM = ?LM_CONTS(Conts0)) ->
-    Conts1 = update_contsmap(ContId, Conts0, mk_add_container_to_contsmap_fun(CenId)),
+    Conts1 = update_contsmap(ContId, Conts0, mk_add_container_to_contsmap_fn(CenId)),
     LM?LM_SET_CONTS(Conts1).
 
-mk_add_container_to_contsmap_fun(CenId) ->
+mk_add_container_to_contsmap_fn(CenId) ->
     fun(Cont = #{cens := Cens0, reservedIdNums := ReserverdIdNums0}) ->
             case lists:member(CenId, Cens0) of
                 true ->
@@ -356,16 +358,16 @@ mk_add_container_to_contsmap_fun(CenId) ->
 
 next_cont_id_num(ReservedIds) ->
     %% TODO: throw an exception when there're no IPs left
-    next_cont_id_number(ReservedIds, length(ReservedIds)).
+    next_cont_id_num(ReservedIds, length(ReservedIds)).
 
-next_cont_id_number(ReservedIds, IdCandidate) ->
+next_cont_id_num(ReservedIds, IdCandidate) ->
     %% TODO: throw an exception when there're no id numbers left
     case lists:member(IdCandidate, ReservedIds) of
         false ->
             IdCandidate;
         true ->
-            next_cont_id_number(ReservedIds,
-                                (IdCandidate+1) rem (_DummyInterfacesLimit = 1000))
+            next_cont_id_num(ReservedIds,
+                             (IdCandidate+1) rem ?MAX_INTERFACE_ID)
     end.
 
 % Remove container from CEN

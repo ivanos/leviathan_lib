@@ -127,31 +127,32 @@ decode_jiffy4() ->
 
 lm_add_container0() ->
     LM = leviathan_cen:lm_add_container("cen1", "c1", new_lm()),
-    {Cens, Conts, Wires} = decompose_lm(LM),
-    ?assertEqual([cen_map("cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"])],
-                  Cens),
-    ?assertEqual([cont_map("c1", ["cen1"], [0])], Conts),
-    ?assertEqual([], Wires).
+    ExpectedLM = compose_lm(
+                   [cen_map("cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"])],
+                   [cont_map("c1", ["cen1"], [0])],
+                   []),
+    assert_equal_levmaps(ExpectedLM, LM).
 
 lm_add_container1() ->
     LM0 = leviathan_cen:lm_add_container("cen1", "c1", new_lm()),
     LM1 = leviathan_cen:lm_add_container("cen1", "c2", LM0),
-    {Cens, Conts, Wires} = decompose_lm(LM1),
-    ?assertEqual([cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
-                          ["10.10.0.10", "10.10.0.11"])],
-                 Cens),
-    ?assertEqualLists(Conts, [cont_map("c1", ["cen1"], [0]),
-                              cont_map("c2", ["cen1"], [0])]),
-    ?assertEqualLists([
-                       [
-                        endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
-                        endpoint("cen1", "c1.0o", out)
-                       ],
-                       [
-                        endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
-                        endpoint("cen1", "c2.0o", out)
-                       ]
-                      ], Wires).
+    ExpectedLM = compose_lm(
+                   [cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
+                            ["10.10.0.10", "10.10.0.11"])],
+                   [cont_map("c1", ["cen1"], [0]),
+                    cont_map("c2", ["cen1"], [0])],
+                   [
+                    [
+                     endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+
+                     endpoint("cen1", "c1.0o", out)
+                    ],
+                    [
+                     endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+                     endpoint("cen1", "c2.0o", out)
+                    ]
+                   ]),
+    assert_equal_levmaps(ExpectedLM, LM1).
 
 lm_add_container2() ->
     {Cens, Conts, Wires} = foldcalls(new_lm(), [
@@ -229,7 +230,6 @@ lm_remove_container1() ->
     Cens = [cen_map("cen1", [], bus, 10, "10.10.0.1", [])],
     assert_equal_levmaps(compose_lm(Cens, [], []), LM1).
 
-
 lm_remove_container2() ->
     LM0 = foldcalls(new_lm(),
                     [
@@ -298,8 +298,6 @@ lm_compare_when_adding1() ->
          {add, cont_in_cen, {Cont, Cen}}
         ],
     assert_equal_instructions(Instructions, leviathan_cen:lm_compare(new_lm(), LM0)).
-
-
 
 %% Add a new Container to an existing Cen.
 lm_compare_when_adding2() ->
@@ -496,7 +494,7 @@ get_levmap0() ->
     ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
 
     %% THEN
-    ?assertEqual(ExpectedLM, ActualLM).
+    assert_equal_levmaps(ExpectedLM, ActualLM).
 
 get_levmap1() ->
     %% GIVEN
@@ -519,10 +517,7 @@ get_levmap1() ->
     ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
 
     %% THEN
-    {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
-    ?assertEqualLists([Cen1], ActualCens),
-    ?assertEqualLists([Cont1, Cont2], ActualConts),
-    ?assertEqualLists([Wire1, Wire2], ActualWires).
+    assert_equal_levmaps(ExpectedLM, ActualLM).
 
 get_levmap2() ->
     %% GIVEN
@@ -539,17 +534,16 @@ get_levmap2() ->
              endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
              endpoint("cen1", "c2.0o", out)
             ],
-    ExpectedLM = compose_lm([Cen1, Cen2], [Cont1, Cont2], [Wire1, Wire2]),
-    leviathan_store:import_cens(<<"host">>, ExpectedLM),
+    leviathan_store:import_cens(<<"host">>, compose_lm([Cen1, Cen2],
+                                                       [Cont1, Cont2],
+                                                       [Wire1, Wire2])),
 
     %% WHEN
     ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
 
     %% THEN
-    {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
-    ?assertEqualLists([Cen1], ActualCens),
-    ?assertEqualLists([Cont1, Cont2], ActualConts),
-    ?assertEqualLists([Wire1, Wire2], ActualWires).
+    ExpectedLM = compose_lm([Cen1], [Cont1, Cont2], [Wire1, Wire2]),
+    assert_equal_levmaps(ExpectedLM, ActualLM).
 
 get_levmap3() ->
     %% GIVEN
@@ -577,19 +571,17 @@ get_levmap3() ->
              endpoint("c4", "c4.0i", in, "cen2", "10.11.0.11"),
              endpoint("cen2", "c4.0o", out)
             ],
-    ExpectedLM = compose_lm([Cen1, Cen2],
-                            [Cont1, Cont2, Cont3, Cont4],
-                            [Wire1, Wire2, Wire3, Wire4]),
-    leviathan_store:import_cens(<<"host">>, ExpectedLM),
-
+    leviathan_store:import_cens(<<"host">>,
+                                compose_lm([Cen1, Cen2],
+                                           [Cont1, Cont2, Cont3, Cont4],
+                                           [Wire1, Wire2, Wire3, Wire4])),
+    
     %% WHEN
     ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
 
     %% THEN
-    {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
-    ?assertEqualLists([Cen2], ActualCens),
-    ?assertEqualLists([Cont3, Cont4], ActualConts),
-    ?assertEqualLists([Wire3, Wire4], ActualWires).
+    ExpectedLM = compose_lm([Cen2], [Cont3, Cont4], [Wire3, Wire4]),
+    assert_equal_levmaps(ExpectedLM, ActualLM).
 
 get_levmap4() ->
     %% GIVEN
@@ -616,19 +608,17 @@ get_levmap4() ->
              endpoint("c3", "c3.0i", in, "cen2", "10.11.0.11"),
              endpoint("cen2", "c3.0o", out)
             ],
-    ExpectedLM = compose_lm([Cen1, Cen2],
-                            [Cont1, Cont2, Cont3],
-                            [Wire1, Wire2, Wire3, Wire4]),
-    leviathan_store:import_cens(<<"host">>, ExpectedLM),
+    leviathan_store:import_cens(<<"host">>,
+                                compose_lm([Cen1, Cen2],
+                                           [Cont1, Cont2, Cont3],
+                                           [Wire1, Wire2, Wire3, Wire4])),
 
     %% WHEN
     ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
 
     %% THEN
-    {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
-    ?assertEqualLists([Cen2], ActualCens),
-    ?assertEqualLists([Cont2, Cont3], ActualConts),
-    ?assertEqualLists([Wire3, Wire4], ActualWires).
+    ExpectedLM = compose_lm([Cen2], [Cont2, Cont3], [Wire3, Wire4]),
+    assert_equal_levmaps(ExpectedLM, ActualLM).
 
 update_cens0() ->
     %% GIVEN
@@ -642,10 +632,7 @@ update_cens0() ->
 
     %% THEN
     ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
-    {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
-    ?assertEqualLists([Cen], ActualCens),
-    ?assertEqualLists([Cont], ActualConts),
-    ?assertEqualLists([], ActualWires).
+    assert_equal_levmaps(ExpectedLM, ActualLM).
 
 update_cens1() ->
     %% GIVEN
@@ -669,10 +656,7 @@ update_cens1() ->
     
     %% THEN
     ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
-    {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
-    ?assertEqualLists([Cen1], ActualCens),
-    ?assertEqualLists([Cont1, Cont2], ActualConts),
-    ?assertEqualLists([Wire1, Wire2], ActualWires).
+    assert_equal_levmaps(ExpectedLM, ActualLM).
 
 update_cens2() ->
     %% GIVEN
@@ -705,10 +689,7 @@ update_cens2() ->
 
     %% THEN
     ActualLM = leviathan_store:get_levmap(["cen1", "cen2"]),
-    {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
-    ?assertEqualLists([Cen1, Cen2], ActualCens),
-    ?assertEqualLists([Cont1, Cont2], ActualConts),
-    ?assertEqualLists([Wire1, Wire2], ActualWires).
+    assert_equal_levmaps(ExpectedLM, ActualLM).
 
 update_cens3() ->
     %% GIVEN
@@ -758,14 +739,10 @@ update_cens3() ->
                                     [Cont1, Cont2, Cont3],
                                     [Wire1, Wire2, Wire3, Wire4]),
                          ActualLM).
-    %% {ActualCens, ActualConts, ActualWires} = decompose_lm(ActualLM),
-    %% ?assertEqualLists([Cen1, Cen2], ActualCens),
-    %% ?assertEqualLists([Cont1, Cont2, Cont3], ActualConts),
-    %% ?assertEqualLists([Wire1, Wire2, Wire3, Wire4], ActualWires).
 
-% -------------------------------------------------------------------------------
-% assertion helpers
-% -------------------------------------------------------------------------------
+%% -------------------------------------------------------------------------------
+%% assertion helpers
+%% -------------------------------------------------------------------------------
 
 assert_equal_instructions(Instructions, AInstructions) ->
     Fn = fun({{_, Item, EValue}, {_, Item, AValue}})
