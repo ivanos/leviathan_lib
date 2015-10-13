@@ -42,7 +42,7 @@ prop_wires() ->
         ?SETUP(
             make_qc_setup_fun(),
             ?FORALL(
-                Instructions,
+               Instructions,
                gen_add_instructions(),
                 begin
                     cleanup(),
@@ -95,7 +95,9 @@ expected_wire_count(Cens) ->
             Count + length(ContIds)
         end, 0, Cens).
 
-prop_lm_dby() ->
+%% prop_lm_dby no longer makes sense as Leviathan Map is now constructed
+%% from the internal Mnesia Store; not from dobby
+ignore_prop_lm_dby() ->
     numtests(1000,
         ?SETUP(
             make_qc_setup_fun(),
