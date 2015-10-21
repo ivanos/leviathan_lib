@@ -216,6 +216,64 @@ Examples:
 
 Identifier names.  Fields starting with a Capital letter are the fillins:
 
+### Leviathan Authoritate Store: persistent store
+
+**leviathan_cen** table:
+
+Key | Value Type | Description
+--- | ----- | -----------
+cen | string | CEN identifier
+data | map | Data describing CEN
+wires | list of list of map pairs | Wire follows the same format as described in above.
+
+Map descring CEN:
+
+Key | Value Type | Description
+--- | ----- | -----------
+contIDs | string | list of Container IDs
+wirte_type | atom: bus, wire or null | the type of wiring used
+ipaddr_b | integer | (only for bus) B part of the IP addresses for CEN
+ipaddress | string | IP address of bridge
+
+Example table record:
+
+```erlang
+{leviathan_cen, "cen1",
+                #{contIDs => ["cont1","cont2"],
+                  ipaddr => "10.10.0.1",
+                  ipaddr_b => 10,
+                  wire_type => bus},
+                [[#{dest => #{alias => "cen1",id => "cont1",ip_address => "10.10.0.10",type => cont},
+                    endID => "cont1.0i",
+                    side => in},
+                  #{dest => #{id => "cen1",type => cen},endID => "cont1.0o",side => out}],
+                 [#{dest => #{alias => "cen1",id => "cont2",ip_address => "10.10.0.11",type => cont},
+                    endID => "cont2.0i",
+                    side => in},
+                    #{dest => #{id => "cen1",type => cen},endID => "cont2.0o",side => out}]]}
+```
+
+**leviathan_cont** table:
+
+Key | Value Type | Description
+--- | ----- | -----------
+cont | string | Containerd identifiers
+cen | string | CEN id the Container is in
+data | map | Data describing Container
+
+Map descring Container:
+
+Key | Value Type | Description
+--- | ----- | -----------
+idnumber | integer | Endpoint interfaces Ids used by the Container in this CEN
+ip_address | string | IP address of the Container
+
+Example table record:
+
+```erlang
+{leviathan_cont, "cont2", "cen1", #{idnumber => 0,ip_address => "10.10.0.11"}},
+```
+
 Type | Name Format | Example
 ---- | ----------- | -------
 CEN | lev_cen>CEN | lev_cen>cen1
