@@ -22,45 +22,57 @@ import_file(Filename)->
 
 import_binary(Binary)->
     CPoolsMap = jiffy:decode(Binary, [return_maps]),
-    io:format("CPools = ~p~n",[CPoolsMap]),
+    io:format("CPools = ~p~n", [CPoolsMap]),
     #{<<"cpoolList">> := CPoolList} = CPoolsMap,
-    NewCinDicts  = lists:foldl(fun(CPool,CinDict)->
-				       #{<<"cins">> := CinsBin,
-					 <<"start_with">> := StartWithNum,
-					 <<"type">> := CTypeBin
-					} = CPool,
-				       Containers = run_containers(binary:bin_to_list(CTypeBin),
-								   StartWithNum),
-				       add_conts2cins(cin2list(CinsBin),Containers,CinDict)
-			       end,dict:new(),CPoolList),
+    NewCinDicts  = lists:foldl(
+                     fun(CPool,CinDict)->
+                             #{<<"cins">> := CinsBin,
+                               <<"start_with">> := StartWithNum,
+                               <<"type">> := CTypeBin
+                              } = CPool,
+                             Containers = run_containers(
+                                            binary:bin_to_list(CTypeBin),
+                                            StartWithNum),
+                             add_conts2cins(cin2list(CinsBin), Containers, CinDict)
+                     end, dict:new(), CPoolList),
     CinListBin = dict:fetch_keys(NewCinDicts),
-    NewCinMap = lists:foldl(fun(CinID,Acc)->Acc++[#{<<"cenID">> => CinID,<<"containerIDs">> =>dict:fetch(CinID,NewCinDicts)}] end,[],CinListBin),
-    io:format("NewCinMap:~n~p~n",[NewCinMap]),
+    NewCinMap =
+        lists:foldl(
+          fun(CinID, Acc)->
+                  Acc ++
+                      [#{<<"cenID">> => CinID,
+                         <<"containerIDs">> => dict:fetch(CinID, NewCinDicts)}]
+          end, [], CinListBin),
+    io:format("NewCinMap:~n~p~n", [NewCinMap]),
     LM = leviathan_cen:decode_jiffy(NewCinMap),
     io:format("LM:~n~p~n",[LM]),
     leviathan_dby:import_cens(<<"host1">>,LM),
+    leviathan_store:import_cens(<<"host1">>, LM),
     leviathan_cen:prepare(lists:map(fun(CinId)->
-					    binary_to_list(CinId) end,CinListBin)).
+					    binary_to_list(CinId)
+                                    end, CinListBin)).
 
 cin2list(BinList)->
     lists:map(fun(Elem)->
-		      #{<<"cinID">>:=CinId} = Elem,
-		      CinId end,BinList).
+		      #{<<"cinID">> := CinId} = Elem,
+		      CinId
+              end, BinList).
 
-add_conts2cins(CinList,Containers,CinDict)->
+add_conts2cins(CinList, Containers, CinDict)->
     lists:foldl(fun(Cin,Acc)->
-			dict:append_list(Cin,Containers,Acc) end,CinDict,CinList).
+			dict:append_list(Cin,Containers,Acc)
+                end, CinDict, CinList).
 
-run_containers(CType,Num) when Num > 0 ->
-    run_containers(CType,Num,[]).
+run_containers(CType, Num) when Num > 0 ->
+    run_containers(CType, Num, []).
 
-run_containers(_,0,Acc)->
-    io:format("container reulsts:~n~p~n",[Acc]),
+run_containers(_, 0, Acc)->
+    io:format("container reulsts:~n~p~n", [Acc]),
     Acc;
-run_containers(CType,Num,Acc) when Num > 0  ->
-    CmdBundle = [leviathan_docker:run(CType,"--net=none","/bin/bash")],
-    Result = leviathan_linux:eval(CmdBundle,output),
-    run_containers(CType,Num-1,Acc ++ Result).
+run_containers(CType, Num, Acc) when Num > 0  ->
+    CmdBundle = [leviathan_docker:run(CType , "--net=none", "/bin/bash")],
+    Result = leviathan_linux:eval(CmdBundle, output),
+    run_containers(CType, Num-1, Acc ++ Result).
 
     
 

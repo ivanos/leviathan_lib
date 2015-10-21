@@ -8,6 +8,7 @@
                   stdlib,
                   lager,
                   jiffy,
+                  erl_mnesia,
                   dobby_clib
                  ]},
   {mod, {leviathan_lib_app, []}},

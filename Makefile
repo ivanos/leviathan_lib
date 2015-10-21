@@ -1,4 +1,4 @@
-.PHONY: test compile run deps
+.PHONY: test compile run deps qc qc_compile
 
 cookie ?= dobby
 
@@ -20,6 +20,7 @@ deep-clean:
 	rm -fr deps/*/ebin/*
 
 run: compile
+	export docker_bin=cat
 	erl -pa ebin -pa deps/*/ebin \
 	-name leviathan_lib@127.0.0.1 \
 	-setcookie ${cookie} \
@@ -29,6 +30,12 @@ run: compile
 
 test:
 	./rebar eunit skip_deps=true
+
+qc:
+	./rebar qc
+
+qc_copmile:
+	./rebar qc compile_only=true
 
 rebar:
 	wget -c https://github.com/rebar/rebar/wiki/rebar

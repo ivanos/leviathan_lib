@@ -16,22 +16,34 @@ gen_cen_id() ->
 gen_cont_id() ->
     ?LET(I, choose(1,100), make_id("cont-", I)).
 
-gen_op() ->
-    frequency([{3, add}, {0, destroy}]).
+gen_add_instructions() ->
+    list({add, gen_cen_id(), gen_cont_id()}).
+
+gen_destroy_instruction({add, Cen, Cont}) ->
+    %% leviathan_cen:destroy_cen/1 is not implemented
+    frequency([{8,{destroy, Cen, Cont}}, {0, {destroy, Cen}}]).
+
+gen_destroy_instructions(AddInstructions) ->
+    AddInstructions ++
+        sublist([{destroy, Cen, Cont} || {add, Cen, Cont} <- AddInstructions]).
 
 gen_instructions() ->
-    list({gen_op(), gen_cen_id(), gen_cont_id()}).
+    ?LET(I, gen_add_instructions(), gen_destroy_instructions(I)).
+
+gen_add_cens_subset_to_instr(Instructions) ->
+    {_Ops, Cens, _Conts} = lists:unzip3(Instructions),
+    {Instructions, sublist(lists:usort(Cens))}.
+
+gen_instructions_wtih_cens_subset() ->
+    ?LET(I, gen_add_instructions(), gen_add_cens_subset_to_instr(I)).
 
 prop_wires() ->
     numtests(1000,
         ?SETUP(
-            fun() ->
-                start_dobby(),
-                fun() -> stop_dobby() end
-            end,
+            make_qc_setup_fun(),
             ?FORALL(
-                Instructions,
-                gen_instructions(),
+               Instructions,
+               gen_add_instructions(),
                 begin
                     cleanup(),
 
@@ -83,16 +95,15 @@ expected_wire_count(Cens) ->
             Count + length(ContIds)
         end, 0, Cens).
 
-prop_lm_dby() ->
+%% prop_lm_dby no longer makes sense as Leviathan Map is now constructed
+%% from the internal Mnesia Store; not from dobby
+ignore_prop_lm_dby() ->
     numtests(1000,
         ?SETUP(
-            fun() ->
-                start_dobby(),
-                fun() -> stop_dobby() end
-            end,
+            make_qc_setup_fun(),
             ?FORALL(
                 {Base, Delta},
-                {gen_instructions(), gen_instructions()},
+                {gen_add_instructions(), gen_add_instructions()},
                 begin
                     cleanup(),
 
@@ -128,10 +139,7 @@ prop_lm_dby() ->
 prop_deltas() ->
     numtests(1000,
         ?SETUP(
-            fun() ->
-                start_dobby(),
-                fun() -> stop_dobby() end
-            end,
+            make_qc_setup_fun(),
             ?FORALL(
                 Instructions,
                 gen_instructions(),
@@ -143,33 +151,80 @@ prop_deltas() ->
 
                     % apply Deltas to dobby one by one
                     lists:foreach(
-                        fun(Delta) ->
-                            ok = leviathan_dby:update_cens(?HOST, [Delta])
+                      fun(Delta) ->
+                              ok = leviathan_store:update_cens(?HOST, Delta)
                         end, Deltas),
 
-                    % pull LM from dobby
+                    % pull LM from store
                     CenIds = cenids_from_lm(LM),
-                    DobbyLM = leviathan_cen:get_levmap(CenIds),
+                    LMFromStore = leviathan_store:get_levmap(CenIds),
 
                     % compute delta between new dobby and new LM
                     % (should be no difference)
-                    Difference = leviathan_cen:lm_compare(LM, DobbyLM),
+                    Difference = leviathan_cen:lm_compare(LM, LMFromStore),
 
                     collect(length(Deltas),
                         equals([], Difference))
                 end
-            ))).
+              ))).
 
-start_dobby() ->
+prop_levmap() ->
+    numtests(1000,
+             ?SETUP(
+                make_qc_setup_fun(),
+                ?FORALL(
+                   {Instructions, CensToCheck},
+                   gen_instructions_wtih_cens_subset(),
+                   lev_store_constructs_correct_levmap(Instructions,
+                                                       CensToCheck)
+                  )
+               )).
+
+lev_store_constructs_correct_levmap(Instructions, CensToCheck) ->
+    cleanup(),
+    LM0 = run_instructions(Instructions, new_lm()),
+    ok = leviathan_store:import_cens(?HOST, LM0),
+    compare_lms(filter_levmap(CensToCheck, LM0),
+                leviathan_store:get_levmap(CensToCheck)),
+    true.
+
+filter_levmap(CensToKeep, LM) ->
+    {CensMap0, ContsMap0, Wires0} = decompose_lm(LM),
+    compose_lm(lists:filter(mk_filter_censmap_fn(CensToKeep), CensMap0),
+               lists:filter(mk_filter_contsmap_fn(CensToKeep), ContsMap0),
+               lists:filter(mk_filter_wiresmap_fn(CensToKeep), Wires0)).
+
+
+compare_lms(Expected, Value) ->
+    {ECens, EConts, EWires} = decompose_lm(Expected),
+    {VCens, VConts, VWires} = decompose_lm(Value),
+    ?assertEqual(lists:sort(ECens), lists:sort(VCens)),
+    ?assertEqual(lists:sort(EConts), lists:sort(VConts)),
+    ?assertEqual(lists:sort(EWires), lists:sort(VWires)).
+
+make_qc_setup_fun() ->
+    fun() ->
+            Apps = start_app(),
+            fun() -> stop_app(Apps) end
+    end.
+
+start_app() ->
     ok = application:set_env(erl_mnesia, options, [persistent]),
-    application:ensure_all_started(dobby),
+    ok = application:set_env(leviathan_lib, docker_bin, "cat"),
+    Apps = application_start(dobby) ++ application_start(leviathan_lib),
     lager:set_loglevel(lager_console_backend, warning),
-    mnesia:wait_for_tables([identifiers], 5000).
+    mnesia:wait_for_tables([identifiers], 5000),
+    Apps.
 
-stop_dobby() ->
-    application:stop(dobby).
+application_start(App) ->
+    {ok, Apps} = application:ensure_all_started(App),
+    Apps.
+
+stop_app(Apps) ->
+    lists:foreach(fun application:stop/1, Apps).
 
 cleanup() ->
+    leviathan_db:clear(),
     dby_db:clear().
 
 % LM
@@ -197,11 +252,11 @@ deltas(Instructions) ->
     deltas(Instructions, [], new_lm()).
 
 deltas([], Deltas, LM) ->
-    {LM, lists:flatten(Deltas)};
+    {LM, lists:reverse(Deltas)};
 deltas([Op | Rest], Deltas, LM) ->
     NewLM = run_op(Op, LM),
     Delta = leviathan_cen:lm_compare(LM, NewLM),
-    deltas(Rest, [Deltas, Delta], NewLM).
+    deltas(Rest, [Delta | Deltas], NewLM).
 
 cenids_from_lm(#{censmap := #{cens := Cens}}) ->
     [CenId || #{cenID := CenId} <- Cens].
@@ -210,6 +265,11 @@ decompose_lm(#{censmap := #{cens := Cens},
                contsmap := #{conts := Conts},
                wiremap := #{wires := Wires}}) ->
     {Cens, Conts, Wires}.
+
+compose_lm(Cens, Conts, Wires) ->
+    #{censmap => #{cens => Cens},
+      contsmap => #{conts => Conts},
+      wiremap => #{wires => Wires}}.
 
 check_wires(Cens, Wires) ->
     % map CEN to ipaddr
@@ -254,4 +314,23 @@ cen_ipaddrs_in_cen([{CenId, IpAddr} | Rest], IpAddrByCen) ->
             false;
         true ->
             cen_ipaddrs_in_cen(Rest, IpAddrByCen)
+    end.
+
+mk_filter_censmap_fn(CensToKeep) ->
+    fun(#{cenID := CenId}) ->
+            lists:member(CenId, CensToKeep)
+    end.
+
+mk_filter_contsmap_fn(CensToKeep) ->
+    fun(#{cens := Cens}) ->
+            S = sets:intersection(sets:from_list(Cens),
+                                  sets:from_list(CensToKeep)),
+            sets:size(S) =/= 0
+    end.
+
+mk_filter_wiresmap_fn(CensToKeep) ->
+    fun([_, #{dest := #{type := cen, id := CenId}}]) ->
+            lists:member(CenId, CensToKeep);
+       ([#{dest := #{type := cen, id := CenId}}, _]) ->
+            lists:member(CenId, CensToKeep)
     end.

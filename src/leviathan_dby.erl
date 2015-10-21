@@ -30,10 +30,10 @@
 
 % import CENs
 
-import_cens(Host, CensMap) ->
-    ToPublish = [container_from_lm(Host, CensMap),
-                 cens_from_lm(Host, CensMap),
-                 wires_from_lm(Host, CensMap)],
+import_cens(Host, LM) ->
+    ToPublish = [container_from_lm(Host, LM),
+                 cens_from_lm(Host, LM),
+                 wires_from_lm(Host, LM)],
     ok = dby:publish(?PUBLISHER, lists:flatten(ToPublish), [persistent]).
 
 % import switch
@@ -129,8 +129,8 @@ update_instruction(Host, {add, cont, Cont}) ->
     pub_cont(Host, Cont);
 update_instruction(Host, {add, wire, Wire}) ->
     pub_wire(Host, Wire);
-update_instruction(Host, {add, cont_in_cen, {ContId, CenId}}) ->
-    pub_cont_in_cen(Host, ContId, CenId);
+update_instruction(Host, {add, cont_in_cen, {Cont, Cen}}) ->
+    pub_cont_in_cen(Host, Cont, Cen);
 update_instruction(Host, {add, bridge, {Cen, IpAddr}}) ->
     pub_bridge(Host, Cen, IpAddr);
 update_instruction(Host, {destroy, cen, Cen}) ->
@@ -139,8 +139,8 @@ update_instruction(Host, {destroy, cont, Cont}) ->
     pub_destroy_cont(Host, Cont);
 update_instruction(Host, {destroy, wire, Wire}) ->
     pub_destroy_wire(Host, Wire);
-update_instruction(Host, {destroy, cont_in_cen, {ContId, CenId}}) ->
-    pub_destroy_cont_in_cen(Host, ContId, CenId);
+update_instruction(Host, {destroy, cont_in_cen, {Cont, Cen}}) ->
+    pub_destroy_cont_in_cen(Host, Cont, Cen);
 update_instruction(Host, {destroy, bridge, Cen}) ->
     pub_destroy_bridge(Host, Cen);
 update_instruction(_, {set, wire_type, {CenId, WireType}}) ->
@@ -366,12 +366,12 @@ endpoint_to_endpoint_type(_,_) ->
     <<"veth_peer">>.
 
 % prepare to add container to cen
-pub_cont_in_cen(Host, ContId, CenId) ->
+pub_cont_in_cen(Host, #{contID := ContId}, #{cenID := CenId}) ->
     [dby_cen_to_container(Host, list_to_binary(CenId),
                                 list_to_binary(ContId))].
 
 % prepare to destroy container to cen
-pub_destroy_cont_in_cen(Host, ContId, CenId) ->
+pub_destroy_cont_in_cen(Host, #{contID := ContId}, #{cenID := CenId}) ->
     [{dby_cen_id(list_to_binary(CenId)),
       dby_cont_id(Host, list_to_binary(ContId)),
       delete}].
