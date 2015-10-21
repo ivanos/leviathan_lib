@@ -39,6 +39,7 @@ import_binary(Binary)->
     LM = leviathan_cen:decode_jiffy(NewCinMap),
     io:format("LM:~n~p~n",[LM]),
     leviathan_dby:import_cens(<<"host1">>,LM),
+    leviathan_store:import_cens(<<"host1">>,LM),
     leviathan_cen:prepare(lists:map(fun(CinId)->
 					    binary_to_list(CinId) end,CinListBin)).
 
