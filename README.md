@@ -10,10 +10,18 @@ Erlang code specific to Leviathan: Docker Container Network Orchestrator
     - [JSON format example](#json-format-example)
     - [Top level API](#top-level-api)
     - [Environment Variables](#environment-variables)
-    - [Leviathan Erlang Data Structures](#leviathan-erlang-data-structures)
-        - [Leviathan Map: The top level structure:](#leviathan-map-the-top-level-structure)
-        - [Leviathan Authoritative Store: persistent store](#leviathan-authoritative-store-persistent-store)
-    - [Dobby Data Model](#dobby-data-model)
+    - [Leviathan CEN Layer](#leviathan-cen-layer)
+        - [Leviathan CEN Map: The top level structure:](#leviathan-cen-map-the-top-level-structure)
+        - [Leviathan CEN Authoritative Store: persistent store](#leviathan-cen-authoritative-store-persistent-store)
+        - [Dobby CEN Data Model](#dobby-cen-data-model)
+    - [Leviathan CIN Layer](#leviathan-cin-layer)
+        - [Leviathan CIN Map: The top level structure:](#leviathan-cin-map-the-top-level-structure)
+        - [Leviathan CIN Authoritative Store: persistent store](#leviathan-cin-authoritative-store-persistent-store)
+        - [Leviathan CIN Dobby Data Model](#leviathan-cin-dobby-data-model)
+    - [Sequence diagrams](#sequence-diagrams)
+        - [Import CENs and building CINs](#import-cens-and-building-cins)
+            - [New version](#new-version)
+            - [Current version](#current-version)
 
 <!-- markdown-toc end -->
 
@@ -126,9 +134,9 @@ docker_bin | `/usr/bin/docker events --util=""` | command line to read docker ev
 
 Set `docker_bin` to some other Unix utility (e.g., `cat`) if you do not have docker installed and want to experiment with this application.
 
-## Leviathan Erlang Data Structures
 
-### Leviathan Map: The top level structure:
+## Leviathan CEN Layer
+### Leviathan CEN Map: The top level structure:
 
 Key | Value | Description
 --- | ----- | -----------
@@ -150,22 +158,13 @@ Key | Value | Description
 --- | ----- | -----------
 cenID | CEN ID | CEN Identifier
 wire_type | bus, wire, or null | type of wiring used
-contIDs | list of container IDs | containers in the CEN
-ipaddr_b | integer | (only for bus) B part of the IP addresses for CEN
-ipaddress | string | IP address of bridge
-reservedIp | list of strings | Ip addresses in use in this CEN
-
-The list of containers in the CEN and the list of reserved IP addresses
-are in the same order. That is, the first container uses the first IP
-address.
+contIDs | list of {string, string} | identifiers of containers in this CEN: {HostId, ContId}
 
 Example:
 ``` erlang
  #{cenID => "cen1",
    wire_type => bus,
-   contIDs => ["c1","c2","c3"],
-   ipaddr_b => 17,
-   reservedIp => ["10.17.0.1", "10.17.0.2", ...]
+   contIDs => [{"h1", "c1"}, {"h1", "c2"}, {"h1", "c3"}],
  }
 ```
 
@@ -173,8 +172,8 @@ A Container is represented by a map:
 
 Key | Value | Description
 --- | ----- | -----------
-contID | container ID | Container ID
-cens | list of CEN IDs | Container is in these CENs
+contID | {string, string} | Container ID: {HostId, ContId}
+cens | list of Container IDs | Container ids in these CENs
 reservedIdNums | list of integers | Endpoint interfaces Ids used by this Container
 
 The list of CENs and the list of reserved interface Ids are in the same order.
@@ -182,7 +181,7 @@ That is, the first the container uses the first interface Id for the first CEN.
 
 Example:
 ``` erlang
- #{contID => "c1",
+ #{contID => {"h1", "c1"},
    cens => ["cen1","cen2"],
    reservedIdNums => [0, 1, 2, ...]
  }
@@ -203,37 +202,33 @@ Key | Value | Description
 type | cont or cen | the endpoint is a container or CEN
 ID | identifier | name of the CEN or the container ID
 alias | string | (only for containers) interface name in the container
-ip_address | string | (only for containers) IP address for interface
 
 Examples:
 ``` erlang 
 [#{endID =>"c1.0i",
    side => in,
    dest => #{type => cont,
-             id =>"c1",
-             alias =>"eth0",
-             ip_address => "10.8.2.13"}},
+             id => {"h1", "c1"},
+             alias =>"eth0"}},
  #{endID =>"c1.0o",
    side => out,
    dest => #{type => cen,
-             id =>"cen1"}}]
+             id => "cen1"}}]
 ```
 ``` erlang
 [#{endID =>"c2.2i",
    side => in,
    dest => #{type => cont,
-             id =>"c2",
-             alias =>"eth2",
-             ip_address => "10.9.2.13"}},
+             id => {"h1", "c2"},
+             alias =>"eth2"}},
  #{endID =>"c4.0i",
    side => in,
    dest => #{type => cont,
-             id =>"c4",
-             alias =>"eth0",
-             ip_address => "10.9.2.14"}}]
+             id => {"h1", "c4"},
+             alias =>"eth0"}}]
 ```
 
-### Leviathan Authoritative Store: persistent store
+### Leviathan CEN Authoritative Store: persistent store
 
 **leviathan_cen** table:
 
@@ -241,28 +236,23 @@ Key | Value Type | Description
 --- | ----- | -----------
 cen | string | CEN identifier
 data | map | Data describing CEN
-wires | list containing map pairs in a list | Wire follows the same format as described in above.
+wires | list containing map pairs in a list | Wire follows the same format as described above.
 
 Map describing CEN:
 
 Key | Value Type | Description
 --- | ----- | -----------
-contIDs | string | list of Container IDs
+contIDs | list of {string, string} | list of Container IDs ({HostId, ContId})
 wire_type | atom: bus, wire or null | the type of wiring used
-ipaddr_b | integer | (only for bus) B part of the IP addresses for CEN
-ipaddr | string | IP address of bridge
 
 Example table record:
 
 ```erlang
 {leviathan_cen, "cen1",
- #{contIDs => ["cont1","cont2"],
-   ipaddr => "10.10.0.1",
-   ipaddr_b => 10,
+ #{contIDs => [{"h1", "cont1"}, {"h1", "cont2"}],
    wire_type => bus},
  [[#{dest => #{alias => "cen1",
-               id => "cont1",
-               ip_address => "10.10.0.10",
+               id => {"h1", "cont1"},
                type => cont},
      endID => "cont1.0i",
      side => in},
@@ -270,8 +260,7 @@ Example table record:
      endID => "cont1.0o",
      side => out}],
   [#{dest => #{alias => "cen1",
-               id => "cont2",
-               ip_address => "10.10.0.11",
+               id => {"h1", "cont2"},
                type => cont},
      endID => "cont2.0i",
      side => in},
@@ -280,28 +269,21 @@ Example table record:
      side => out}]]}
 ```
 
-**leviathan_cont** table:
+**leviathan_cen_cont** table:
 
 Key | Value Type | Description
 --- | ----- | -----------
-cont | string | Container identifiers
+cont | {string, string} | Container identifier: {HostId, ContId}
 cen | string | CEN id the Container is in
-data | map | Data describing Container
-
-Map describing Container:
-
-Key | Value Type | Description
---- | ----- | -----------
 idnumber | integer | Endpoint interfaces Ids used by the Container in this CEN
-ip_address | string | IP address of the Container
 
 Example table record:
 
 ```erlang
-{leviathan_cont, "cont2", "cen1", #{idnumber => 0,ip_address => "10.10.0.11"}},
+{leviathan_cont, {"h1", "cont2"}, "cen1", 0}
 ```
 
-## Dobby Data Model
+### Dobby CEN Data Model
 
 Identifier names.  Fields starting with a Capital letter are the fillins:
 
@@ -311,7 +293,6 @@ CEN | lev_cen>CEN | lev_cen>cen1
 container | lev_cont>Host>Container | lev_cen>4c01db0b339c
 endpoint | lev_endpoint>Host>Endpoint | lev_endpiont>host1>4c01db0b339c.0i
 bridge | lev_bridge>Host>Bridge | lev_bridge>host1>cen1
-ipaddr | lev_ip>IpAddress | lev_ip>10.9.2.14
 
 Endpoints may be inside the container (in) or outside the container (out).
 
@@ -322,7 +303,11 @@ Key | Value | Description
 wire_type | bus, wire, null | Type of wiring
 status | pending, preparing, ready | Status of the CEN
 
-There is no Container metadata.
+Container metadata:
+
+Key | Value | Description
+--- | ----- | -----------
+host_id | string | identifier of a host that the container is in
 
 Endpoint metadata:
 
@@ -336,11 +321,8 @@ Bridge metadata:
 Key | Value | Description
 --- | ----- | -----------
 status | pending, preparing, ready | Status of the bridge
-ipaddr | String | IP Address of the bridge
 
-Ip Address metadata:
-
-None.
+There is no IpAddress metadata.
 
 Links:
 
@@ -351,8 +333,135 @@ Endpoint(in), Endpoint(in) | connected_to | connection between the in endpoints 
 Endpoint(in), Container | bound_to | endpoint is bound_to the container
 Endpoint(in), Endpoint(out) | veth_peer | endpoints are ethernet peers
 Endpoint(out), Bridge | bound_to | endpoint is bound_to a network bridge
-Endpoint(cont), IpAddress | bound_to | IP Address of container endpoint
 Bridge, Cen | policy_engine | Bridge manages network traffic for Cen
 
 Where Endpoint(in) is an "inside" endpiont, Endpoint(out) is an "outside"
 endpoint, Endpoint(cont) is a container endpoint.
+
+## Leviathan CIN Layer
+### Leviathan CIN Map: The top level structure:
+
+Key | Value | Description
+--- | ----- | -----------
+cins | list of CinMaps | list of CIN maps
+conts | list of ContMaps | list of Containers maps
+
+Example:
+``` erlang
+ #{cins => [CinMap1, CinMap2, ...],
+   conts => [ContMap1, ContMap2, ...]
+ }
+```
+
+CIN map:
+
+Key | Value | Description
+--- | ----- | -----------
+cinID | string | CIN Identifier
+cenID | string | CEN Identifier this CIN covers
+contIDs | list of container IDs | containers ids ({HostId, ContId}) in this CIN
+ipaddr_b | integer | (only for bus) B part of the IP addresses for CIN
+ipaddress | string | IP address of bridge
+
+Example:
+``` erlang
+ #{cinID => "cin1",
+   cenID => "cen1",
+   contIDs => [{"h1", "c1"}, {"h1", "c2"},  {"h1", "c3"}],
+   ipaddr_b => 17,
+   ipaddress => 10.17.0.1
+ }
+```
+
+A Container is represented by a map:
+
+Key | Value | Description
+--- | ----- | -----------
+contID | {string, string} | Container identifier {HostId, ContId}
+cinID | string | CIN id the container is in
+ipaddress | string | IP address of this container in this CIN
+
+Example:
+``` erlang
+ #{contID => {"h1", "c1"},
+   cinID => "cin1",
+   ipaddress => "10.17.0.10"
+ } 
+```
+
+### Leviathan CIN Authoritative Store: persistent store
+
+**leviathan_cin** table:
+
+Key | Value Type | Description
+--- | ----- | -----------
+cin | string | CIN identifier
+data | map | Data describing CIN
+
+CIN description map:
+
+Key | Value Type | Description
+--- | ----- | -----------
+cenID | string | CEN identifier of this CIN
+contIDs | {string, string} | list of Container IDs ({HostId, ContId})
+ipaddr_b | integer | (only for bus) B part of the IP addresses for CEN
+ipaddr | string | IP address of bridge
+
+Example table record:
+
+```erlang
+{leviathan_cin, "cin1",
+ #{cenId => "cen1",
+   contIDs => [{"host1", "cont1"},{"host1", "cont2"}],
+   ipaddr => "10.10.0.1",
+   ipaddr_b => 10}
+```
+
+**leviathan_cin_cont** table:
+
+Key | Value Type | Description
+--- | ----- | -----------
+cont | {string, string} | Container identifier ({HostId, ContId})
+cin | string | CIN id the Container is in
+ip_address | string | IP address of the Container
+
+Example table record:
+
+```erlang
+{leviathan_cin_cont, {"host1", "cont2"}, "cin1", "10.10.0.11"},
+```
+
+### Leviathan CIN Dobby Data Model
+
+Identifier names.  Fields starting with a Capital letter are the fillins:
+
+Type | Name Format | Example
+---- | ----------- | -------
+cin | lev_cin>CEN | lev_cin>cin1
+ipaddr | lev_ip>IpAddress | lev_ip>10.9.2.14
+
+CIN metadata:
+
+Key | Value | Description
+--- | ----- | -----------
+status | pending, preparing, ready | Status of the CIN
+
+There is no Ip Address metadata.
+
+All the links referet to the CEN Layer:
+
+Type, Type | Link Type | Description
+---------- | --------- | -----------
+CIN, IpAddress | bound_to | IP Address of a container/bridge in this CIN (cross layer link)
+CIN, CEN | bound_to | A CEN that this CIN covers
+
+## Sequence diagrams
+### Import CENs and building CINs
+
+#### New version
+![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFABANbGV2aWF0aGFuX2NlbgABGW5fc3RvcmUAIhhpACEZaQAyCAoAgRMGIC0-AIELBTogL2Nlbi9pbXBvcnQKbm90ZSBvdmVyAIE4BywAgS8FLACBDw46IHRoZQCBWQcgc2VuZHNcbiBhIEpTT04gZmlsZSBkZXNjcmliaW5nIENFTnMKCgCBdAUtPgA3EGRlY29kZV9iaW5hcnkoSlNPTikKAIF6DSAtAIEdCUNlbkxNADMWAIINBjoAgT0GX2NlbnMoACkFKQBlE2RieQAPGi0-AIMvBzoAgg8XbWFrZQCBajoiWyJjZW4xIiwiY2VuMiJdIgCCARdwcmVwYXJlKENlbklkcykgW2FzeW5jXQCBEhMAgh4PAIICFiBnZXRfbGV2bWFwAEsIAIJYDgCETQYAgmcFAINZDwCCbwYASB86IACBKgcAgm4NAAspb250AAQxd2lyZQCDXAkAhS8FcmlnaHQgb2YAhRoQTm93AIUpBWJpcmRnZXMgYW5kXG4gaW50ZXJmYWNlcyBhcmUgYnJvdWdodCB1cFxuIGFuZCB3aXJlZCB0b2dldGhlci4AhiAUaQCFckIiJ1siY2luMSI6AIQPCWluMgAIBjJdJwCGIhRpbjogYnVpbGRfY2lucyhDaW5JZFRvAIQkBU1hcACCBQcAhzsFAIhCDQCHMg8AhBEIADAPIGRlaWZpbmVzIHdoaWNoIENlbiwgYSAAiU8GdWxhciBDaW4gd2lsbCBjb250YWluOwCHdAVDaW4gY2FuIGJlAIEXBXQgb24gdG9wIG9mIG9ubHkgb25lIENlbgCHTwxpAIdODWkAh0QXAIksCDogAIdUCACBbgcAh0IaABAaAIc_HmkAhxlEaQCDOwoAh0cWaQCGIwoAgzYGAIdBHQCDISwAixYNaQCFbQxyaQCFcQgAizIFAIVwCwCDRQVnZXQgdGhlaXIgSVBz&s=roundgreen)
+
+#### Current version
+
+![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFCgoAHwYgLT4AFwU6IC9jaW4Kbm90ZSBvdmVyAD0HLAA0BSwgbGV2aWF0aGFuX2NlbjogdGhlAF4HIHNlbmRzXG5hIEpTT04gZmlsZSBkZXNjcmliaW5nIENFTnMKCgB4BS0-ADYQZGVjb2RlX2JpbmFyeShKU09OKQoAXA0gLQCBFQlMTQAzE3N0b3JlOmltcG9ydF9jZW5zKExNKQBbE2RieQAPFy0-AIImBzoAgXsWL3ByZXBhcmUAgV86IlsiY2VuMSIsImNlbjIiXSIAgXcXAGIHKENlbklkcykgW2FzeW5jXQCBFhIAghMPAIF-EiBnZXRfbGV2bWFwAEYIAIJMCwCCLwUAglQFAINFD0xNCgoAQRwAg3QFAIIIBwCCYwoACClvbnQABC53aXJlAINLBgCFEAVyaWdodCBvZgCEexBOb3cAhQoFYmlyZGdlcyBhbmRcbiBpbnRlcmZhY2VzIGFyZSBicm91Z2h0IHVwLlxuIFRoZXkgZ290IElQACsFAIVKBQAoClxuAC8FYXR0YWNoZWQgdG8AWwZyaWRnZXMu&s=roundgreen)
+
