@@ -358,7 +358,7 @@ CIN map:
 Key | Value | Description
 --- | ----- | -----------
 cinID | string | CIN Identifier
-cenID | string | CEN Identifier this CIN covers
+cenIDs | list of strings | Identifiers of CENs that this CIN covers
 contIDs | list of container IDs | containers ids ({HostId, ContId}) in this CIN
 ipaddr_b | integer | (only for bus) B part of the IP addresses for CIN
 ipaddress | string | IP address of bridge
@@ -366,7 +366,7 @@ ipaddress | string | IP address of bridge
 Example:
 ``` erlang
  #{cinID => "cin1",
-   cenID => "cen1",
+   cenIDs => ["cen1"],
    contIDs => [{"h1", "c1"}, {"h1", "c2"},  {"h1", "c3"}],
    ipaddr_b => 17,
    ipaddress => 10.17.0.1
@@ -402,7 +402,7 @@ CIN description map:
 
 Key | Value Type | Description
 --- | ----- | -----------
-cenID | string | CEN identifier of this CIN
+cenIDs | list of strings | identifiers of CENs that this CIN covers
 contIDs | {string, string} | list of Container IDs ({HostId, ContId})
 ipaddr_b | integer | (only for bus) B part of the IP addresses for CEN
 ipaddr | string | IP address of bridge
@@ -411,7 +411,7 @@ Example table record:
 
 ```erlang
 {leviathan_cin, "cin1",
- #{cenId => "cen1",
+ #{cenId => ["cen1"],
    contIDs => [{"host1", "cont1"},{"host1", "cont2"}],
    ipaddr => "10.10.0.1",
    ipaddr_b => 10}
@@ -459,7 +459,7 @@ CIN, CEN | bound_to | A CEN that this CIN covers
 ### Import CENs and building CINs
 
 #### New version
-![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFABANbGV2aWF0aGFuX2NlbgABGW5fc3RvcmUAIhhpACEZaQAyCAoAgRMGIC0-AIELBTogL2Nlbi9pbXBvcnQKbm90ZSBvdmVyAIE4BywAgS8FLACBDw46IHRoZQCBWQcgc2VuZHNcbiBhIEpTT04gZmlsZSBkZXNjcmliaW5nIENFTnMKCgCBdAUtPgA3EGRlY29kZV9iaW5hcnkoSlNPTikKAIF6DSAtAIEdCUNlbkxNADMWAIINBjoAgT0GX2NlbnMoACkFKQBlE2RieQAPGi0-AIMvBzoAgg8XbWFrZQCBajoiWyJjZW4xIiwiY2VuMiJdIgCCARdwcmVwYXJlKENlbklkcykgW2FzeW5jXQCBEhMAgh4PAIICFiBnZXRfbGV2bWFwAEsIAIJYDgCETQYAgmcFAINZDwCCbwYASB86IACBKgcAgm4NAAspb250AAQxd2lyZQCDXAkAhS8FcmlnaHQgb2YAhRoQTm93AIUpBWJpcmRnZXMgYW5kXG4gaW50ZXJmYWNlcyBhcmUgYnJvdWdodCB1cFxuIGFuZCB3aXJlZCB0b2dldGhlci4AhiAUaQCFckIiJ1siY2luMSI6AIQPCWluMgAIBjJdJwCGIhRpbjogYnVpbGRfY2lucyhDaW5JZFRvAIQkBU1hcACCBQcAhzsFAIhCDQCHMg8AhBEIADAPIGRlaWZpbmVzIHdoaWNoIENlbiwgYSAAiU8GdWxhciBDaW4gd2lsbCBjb250YWluOwCHdAVDaW4gY2FuIGJlAIEXBXQgb24gdG9wIG9mIG9ubHkgb25lIENlbgCHTwxpAIdODWkAh0QXAIksCDogAIdUCACBbgcAh0IaABAaAIc_HmkAhxlEaQCDOwoAh0cWaQCGIwoAgzYGAIdBHQCDISwAixYNaQCFbQxyaQCFcQgAizIFAIVwCwCDRQVnZXQgdGhlaXIgSVBz&s=roundgreen)
+![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFABANbGV2aWF0aGFuX2NlbgABGW5fc3RvcmUAIhhpACEZaQAyCAoAgRMGIC0-AIELBTogL2Nlbi9pbXBvcnQKbm90ZSBvdmVyAIE4BywAgS8FLACBDw46IHRoZQCBWQcgc2VuZHMgYSBKU09OIGZpbGUgZGVzY3JpYmluZyBDRU5zCgoAgXIFLT4ANRBkZWNvZGVfYmluYXJ5KEpTT04pCgCBeA0gLQCBGwlDZW5MTQAzFgCCCwY6AIE7Bl9jZW5zKAApBSkAZRNkYnkADxotPgCDLQc6AIINF21ha2UAgWk5J1siY2VuMSIsImNlbjIiXScAggAXcHJlcGFyZShDZW5JZHMpIFthc3luY10AgRETAIIdDwCCARYgZ2V0X2xldm1hcABLCACCVw4AhEoGAIJmBQCDVg8Agm4GAEgfOiAAgSoHAIJtDQALKW9udAAEMXdpcmUAg1sJAIUsBXJpZ2h0IG9mAIUXEE5vdwCFJgViaXJkZ2VzIGFuZFxuIGludGVyZmFjZXMgYXJlIGJyb3VnaHQgdXBcbiBhbmQgd2lyZWQgdG9nZXRoZXIuAIYdFGkAhXBBJ1siY2luMSI6AIQQB10sICJjaW4yAAoHMiJdAIQMFmluOiBidWlsZF9jaW5zKENpbklkVG8AhCcGTWFwAIIKBwCHPQUAiEQNAIc0DwCEFggAMBAgZGVpZmluZXMAhzYFLCBhIACJTQZ1bGFyIENpbiB3aWxsIGNvbnRhaW47AIcjDGkAhyINaQCHGBcAiH4IOiAAhygIAIE_BwCHFhoAEBoAhxMeaQCGbkNpAIcrBmkAhxgZaQCFdwoAgwYGAIcVHQCCcCwAimcNaQCFQQxyaQCFRQgAiwMFAIVECwCDGAVnZXQgdGhlaXIgSVBz&s=roundgreen)
 
 #### Current version
 
