@@ -360,16 +360,16 @@ Key | Value | Description
 cinID | string | CIN Identifier
 cenIDs | list of strings | Identifiers of CENs that this CIN covers
 contIDs | list of container IDs | containers ids ({HostId, ContId}) in this CIN
-ipaddr_b | integer | (only for bus) B part of the IP addresses for CIN
-ipaddress | string | IP address of bridge
+ip_b | integer | (only for bus) B part of the IP addresses for CIN
+ip | string | IP address of bridge
 
 Example:
 ``` erlang
  #{cinID => "cin1",
    cenIDs => ["cen1"],
    contIDs => [{"h1", "c1"}, {"h1", "c2"},  {"h1", "c3"}],
-   ipaddr_b => 17,
-   ipaddress => 10.17.0.1
+   ip_b => 17,
+   ip => 10.17.0.1
  }
 ```
 
@@ -379,13 +379,13 @@ Key | Value | Description
 --- | ----- | -----------
 contID | {string, string} | Container identifier {HostId, ContId}
 cinID | string | CIN id the container is in
-ipaddress | string | IP address of this container in this CIN
+ip | string | IP address of this container in this CIN
 
 Example:
 ``` erlang
  #{contID => {"h1", "c1"},
    cinID => "cin1",
-   ipaddress => "10.17.0.10"
+   ip => "10.17.0.10"
  } 
 ```
 
@@ -404,8 +404,8 @@ Key | Value Type | Description
 --- | ----- | -----------
 cenIDs | list of strings | identifiers of CENs that this CIN covers
 contIDs | {string, string} | list of Container IDs ({HostId, ContId})
-ipaddr_b | integer | (only for bus) B part of the IP addresses for CEN
-ipaddr | string | IP address of bridge
+i_b | integer | (only for bus) B part of the IP addresses for CEN
+ip | string | IP address of bridge
 
 Example table record:
 
@@ -413,8 +413,8 @@ Example table record:
 {leviathan_cin, "cin1",
  #{cenId => ["cen1"],
    contIDs => [{"host1", "cont1"},{"host1", "cont2"}],
-   ipaddr => "10.10.0.1",
-   ipaddr_b => 10}
+   ip => "10.10.0.1",
+   ip_b => 10}
 ```
 
 **leviathan_cin_cont** table:
@@ -423,7 +423,7 @@ Key | Value Type | Description
 --- | ----- | -----------
 cont | {string, string} | Container identifier ({HostId, ContId})
 cin | string | CIN id the Container is in
-ip_address | string | IP address of the Container
+ip | string | IP address of the Container
 
 Example table record:
 

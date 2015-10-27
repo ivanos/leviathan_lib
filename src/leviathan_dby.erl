@@ -13,14 +13,15 @@
          get_cont/2,
          get_wires/1,
          set_cen_status/2,
-         get_next_cin_ip/0]).
+         get_next_cin_ip/0,
+         get_cen_containers/1]).
 
 -define(PUBLISHER, atom_to_binary(?MODULE, utf8)).
 -define(REGISTRY, <<"lev_registry">>).
 -define(CIN_COUNT, <<"cin_count">>).
 
 -include("leviathan_logger.hrl").
--include_lib("leviathan_lib/include/leviathan_lib.hrl").
+-include("leviathan_lib.hrl").
 
 % -----------------------------------------------------------------------------
 %
@@ -105,6 +106,11 @@ get_next_cin_ip() ->
     % increment count
     ok = dby:publish(?PUBLISHER, {?REGISTRY, [{?CIN_COUNT, CinCount + 1}]}, [persistent]),
     leviathan_cin:cen_ip_address(CinCount).
+
+-spec get_cen_containers(string()) -> [{HostId :: string(), ContId :: string()}]
+                                          | not_found.
+get_cen_containers(CenId) ->
+    #{}.
 
 % formatters
 
