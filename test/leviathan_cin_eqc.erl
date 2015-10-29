@@ -1,17 +1,23 @@
 -module(leviathan_cin_eqc).
 
--export([prop_cin_lm/0]).
+-export([prop_cin_lm_built_correctly/0,
+         prop_cin_lm_stored_correctly/0]).
 
 -compile([export_all]).
 
 -include_lib("eqc/include/eqc.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
+-define(HOST, <<"host1">>).
 -define(assertEqualLists(A,B), ?assertEqual(lists:sort(A), lists:sort(B))).
 
 %% -------------------------------------------------------------------------------
 %% Generators
 %% -------------------------------------------------------------------------------
+
+gen_cins_cens_and_cins_subset() ->
+    ?LET({CinsWithCens, CensWithConts}, gen_cins_and_cens(),
+         {CinsWithCens, CensWithConts,  sublist(maps:keys(CinsWithCens))}).
 
 gen_cins_and_cens() ->
     ?LET(CinIds, gen_cin_ids(), gen_cins_and_cens(CinIds)).
@@ -26,10 +32,9 @@ gen_cin_ids() ->
 gen_cen_ids(CinIds) ->
     shuffle(["cen" ++ integer_to_list(N) || N <- lists:seq(1, length(CinIds))]).
 
-gen_cins(CinIds, CenIds) ->
-    lists:foldl(fun({CinId, CenId}, Acc) ->
-                        maps:put(CinId, [CenId], Acc)
-              end, #{}, lists:zip(CinIds, CenIds)).
+gen_cins(CinIds, CenIds0) ->
+    CenIds1 = lists:map(fun(Id) -> [Id] end, CenIds0),
+    maps:from_list(lists:zip(CinIds, CenIds1)).
 
 gen_cens(CenIds) ->
     maps:from_list([{Id, gen_cont_ids(Id)} || Id <- CenIds]).
@@ -56,19 +61,44 @@ unique_and_shuffeled(Gen) ->
 %% Properties
 %% -----------------------------------------------------------------------------
 
-prop_cin_lm() ->
+prop_cin_lm_built_correctly() ->
     ?SETUP(
        mkfn_qc_setup(),
        ?FORALL({CinsWithCens, CensWithConts},
                gen_cins_and_cens(),
                begin
+                   %% GIVEN
                    leviathan_mnesia:clear(),
                    mock_dobby_get_cen_conts(CensWithConts),
+
+                   %% WHEN
                    CinLM = leviathan_cin2:build_cins(CinsWithCens),
+
+                   %% THEN
                    collect(maps:size(CinsWithCens),
                            cin_lm_correct(CinLM, CinsWithCens, CensWithConts))
                end)).
 
+prop_cin_lm_stored_correctly() ->
+    ?SETUP(
+       mkfn_qc_setup(),
+       ?FORALL({CinsWithCens, CensWithConts, CinsSubset},
+               gen_cins_cens_and_cins_subset(),
+               begin
+                   %% GIVEN
+                   leviathan_mnesia:clear(),
+                   mock_dobby_get_cen_conts(CensWithConts),
+                   CinLM = leviathan_cin2:build_cins(CinsWithCens),
+
+                   %% WHEN
+                   ok = leviathan_cin_store:import_cins(?HOST, CinLM),
+
+                   %% THEN
+                   ECinLM = filter_cin_lm(CinLM, CinsSubset),
+                   ACinLM = leviathan_cin_store:get_levmap(CinsSubset),
+                   collect({maps:size(CinsWithCens), length(CinsSubset)},
+                           cin_lms_equal(ECinLM, ACinLM))
+               end)).
 
 %% -----------------------------------------------------------------------------
 %% Properties Helpers
@@ -118,6 +148,41 @@ mock_dobby_get_cen_conts(CensWithConts) ->
                                      maps:get(CenId, CensWithConts)
                              end).
 
+filter_cin_lm(#{cins := Cins, conts := Conts}, CinsToKeep) ->
+    FilterFn = fun(#{cinID := Id}) ->
+                       lists:member(Id, CinsToKeep)
+               end,
+    #{cins => lists:filter(FilterFn, Cins),
+      conts => lists:filter(FilterFn, Conts)}.
+    
+
+cin_lms_equal(#{cins := ECins, conts := EConts} = _ExpectedLM,
+              #{cins := ACins, conts := AConts} = _ActualLM) ->
+    CinsFn = mkfn_assert_equal_maps_with_lists([cenIDs, contIDs]),
+    ContsFn = mkfn_assert_equal_maps_with_lists([]),
+    ok == assert_equal_lists(ECins, ACins, CinsFn) andalso
+        ok == assert_equal_lists(EConts, AConts, ContsFn).
+
+
+%% -----------------------------------------------------------------------------
+%% Assertion Helpers
+%% -----------------------------------------------------------------------------
+
+assert_equal_lists(EList, AList, AssertFun) ->
+    lists:foreach(fun({Expected, Actual}) ->
+                          AssertFun(Expected, Actual)
+                  end, lists:zip(lists:sort(EList), lists:sort(AList))).
+
+mkfn_assert_equal_maps_with_lists(KeysForLists) ->
+    fun(Expected, Actual) ->
+            assert_equal_maps_with_lists(KeysForLists, Expected, Actual)
+    end.
+
+assert_equal_maps_with_lists(KeysForLists, ECens, ACens) ->
+    ?assertEqual(maps:without(KeysForLists, ECens),
+                 maps:without(KeysForLists, ACens)),
+    [?assertEqualLists(maps:get(K, ECens), maps:get(K, ACens))
+     || K <- KeysForLists].
 
 %% -----------------------------------------------------------------------------
 %% Setup Helpers

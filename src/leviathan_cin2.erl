@@ -10,6 +10,24 @@
 -include("leviathan.hrl").
 
 %% -------------------------------------------------------------------------------
+%% Types
+%% -------------------------------------------------------------------------------
+
+-type cont_id() :: [{HostId :: string(), ContId :: string()}].
+-type cin_map() :: #{cinID => string(),
+                     cenIDs => [string()],
+                     contIDs => [cont_id()] ,
+                     ip_b => 0..255,
+                     ip => inet:ip4_address()}.
+-type cont_map() :: #{contID => cont_id(),
+                      cinID => string(),
+                      ip => inet:ip4_address()}.
+-type cin_lm() :: #{cins => [cin_map()] | [],
+                    conts => [cont_map()] | []}.
+
+-export_type([cont_id/0, cin_map/0, cont_map/0, cin_lm/0]).
+
+%% -------------------------------------------------------------------------------
 %% API
 %% -------------------------------------------------------------------------------
 

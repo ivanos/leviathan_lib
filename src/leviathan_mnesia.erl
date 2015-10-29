@@ -22,6 +22,12 @@ tabledefs() ->
         {leviathan_cont, [{attributes, record_info(fields, leviathan_cont)},
                           {disc_copies, [node()]},
                           {type, bag}]},
+        {leviathan_cin,  [{attributes, record_info(fields, leviathan_cin)},
+                          {disc_copies, [node()]},
+                          {type, set}]},
+        {leviathan_cin_cont, [{attributes, record_info(fields, leviathan_cin_cont)},
+                              {disc_copies, [node()]},
+                              {type, bag}]},
         {counter,        [{attributes, record_info(fields, counter)},
                           {disc_copies, [node()]},
                           {type, set}]}

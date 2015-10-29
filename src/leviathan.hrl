@@ -26,5 +26,15 @@
                          data :: #{idnumber => integer(),
                                    ip_address => string()}}).
 
+-record(leviathan_cin, {cin :: string(),
+                        data :: #{cenIDs => [string()],
+                                  contIDs => [string()],
+                                  ip_b => 0..255,
+                                  ip => inet:ip4_address()}}).
+
+-record(leviathan_cin_cont, {cont :: string(),
+                             cin :: string(),
+                             ip :: inet:ip4_address()}).
+
 % persistent counters
 -record(counter, {id :: atom(), count :: integer()}).

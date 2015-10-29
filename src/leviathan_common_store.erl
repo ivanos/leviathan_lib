@@ -21,9 +21,9 @@ next_count(Key, InitialValue) ->
          end,
     leviathan_db:transaction(Fn).
 
-update_count(Key, NewValue) ->
-    leviathan_db:write(#counter{id = Key, count = NewValue}).
-
 %% -----------------------------------------------------------------------------
 %% Local Functions
 %% -----------------------------------------------------------------------------
+
+update_count(Key, NewValue) ->
+    leviathan_db:write(#counter{id = Key, count = NewValue}).

@@ -8,6 +8,7 @@
          select/2,
          exists/1,
          delete/1,
+         match_object/1,
          delete_object/1,
          foldl/3,
          clear/0]).
@@ -43,6 +44,9 @@ exists(Key) ->
 
 delete(Key) ->
     ok = mnesia:delete(Key).
+
+match_object(Record) ->
+    mnesia:match_object(Record).
 
 delete_object(Record) ->
     ok = mnesia:delete_object(Record).

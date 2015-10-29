@@ -404,7 +404,7 @@ Key | Value Type | Description
 --- | ----- | -----------
 cenIDs | list of strings | identifiers of CENs that this CIN covers
 contIDs | {string, string} | list of Container IDs ({HostId, ContId})
-i_b | integer | (only for bus) B part of the IP addresses for CEN
+ip_b | integer | (only for bus) B part of the IP addresses for CEN
 ip | string | IP address of bridge
 
 Example table record:
