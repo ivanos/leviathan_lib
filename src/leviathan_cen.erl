@@ -38,7 +38,7 @@ decode_binary(Binary) ->
 
 % Add a container to a CEN
 add_container_to_cen(HostId, ContainerId, CenId) ->
-    ?INFO("Add container to cen: Container(~s, ~s), Cen(~s)",
+    INFO("Add container to cen: Container(~s, ~s), Cen(~s)",
                                             [HostId, ContainerId, CenId]),
     lm_update_cens(HostId, CenId, ContainerId, fun lm_add_container/3).
 

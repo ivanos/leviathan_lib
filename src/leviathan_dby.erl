@@ -8,13 +8,17 @@
          update_cens/2,
          import_switch/2]).
 
+-export([import_cins/2,
+         set_cin_status/2,
+         update_cins/2]).
+
 -export([dby_cen_id/1,
          get_cen/1,
          get_cont/2,
          get_wires/1,
          set_cen_status/2,
          get_next_cin_ip/0,
-         get_cen_containers/1]).
+         get_cont_endpoint/2]).
 
 -define(PUBLISHER, atom_to_binary(?MODULE, utf8)).
 -define(REGISTRY, <<"lev_registry">>).
@@ -107,15 +111,49 @@ get_next_cin_ip() ->
     ok = dby:publish(?PUBLISHER, {?REGISTRY, [{?CIN_COUNT, CinCount + 1}]}, [persistent]),
     leviathan_cin:cen_ip_address(CinCount).
 
--spec get_cen_containers(string()) -> [{HostId :: string(), ContId :: string()}]
-                                          | not_found.
-get_cen_containers(CenId) ->
-    #{}.
+
+-spec get_cont_endpoint(Side :: in | out, ContId :: string()) -> Result when
+      Result :: InEndpoint | OutEndpoint,
+      InEndpoint :: #{},
+      OutEndpoint :: #{}.
+
+get_cont_endpoint(in, ContId) ->
+    dby:search(fun in_endpoint/4,
+               #{endID => null,
+                 dest => #{type => cont, id => ContId, alias => null}},
+               dby_cont_id("host1", ContId), [{max_depth, 1}]);
+get_cont_endpoint(out, ContId) ->
+    error(not_implemented).
 
 % formatters
 
 dby_cen_id(CenId) ->
     dby_id([<<"lev_cen">>, CenId]).
+
+dby_cin_id(CinId) ->
+    dby_id([<<"lev_cin">>, CinId]).
+
+% -----------------------------------------------------------------------------
+%
+% CIN API
+%
+% -----------------------------------------------------------------------------
+
+-spec import_cins(HostId :: string(), CinLM :: leviathan_cin2:cin_lm()) -> ok.
+
+import_cins(HostId, CinLM) ->
+    error(not_implemented).
+
+
+-spec set_cin_status(CinId :: string(), Status) -> ok when
+      Status :: preparing | pending | ready.
+
+set_cin_status(CinId, Status) ->
+    set_status(dby_cin_id(CinId), Status).
+
+
+update_cins(HostId, Instructions) ->
+    error(not_implemented).
 
 % -----------------------------------------------------------------------------
 %
@@ -543,6 +581,16 @@ wires_wire(_, ?MATCH_IPADDR(IpAddr),
     {continue, Acc#{ipaddrmap := put_ipaddr(EndId, IpAddr, IpAddrMap)}};
 wires_wire(_, _, _, Acc) ->
     {continue, Acc}.
+
+
+%% dby:search function to return list of containers linked to an identifier.
+in_endpoint(_, ?MATCH_CONTAINER(ContId), [], #{id := ContId} = Acc) ->
+    {continue, Acc};
+in_endpoint(_, ?MATCH_IN_ENDPOINT(EndId, Alias), _, #{dest := Dest} = Acc) ->
+    {stop, Acc#{endID => EndId, dest => Dest#{alias => Alias}}};
+in_endpoint(_, _, _, Acc) ->
+    {continue, Acc}.
+
 
 ipaddr_for_wireend(WireEnd = #{endID := EndId, dest := Dest}, IpAddrMap) ->
     case maps:get(EndId, IpAddrMap, not_found) of

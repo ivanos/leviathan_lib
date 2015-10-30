@@ -46,6 +46,9 @@ new_bus(CenId,IPAddress)->
      leviathan_ip:addr_add_dev(IPAddress ++ "/16",CenId),
      leviathan_ifconfig:dev_up(CenId)].
 
+set_bus_ip(BusId, Ip) ->
+    [leviathan_ip:addr_add_dev(Ip ++ "/16", BusId)].
+
 delete_bus(CenId)->
     [leviathan_ifconfig:dev_down(CenId),
      leviathan_brctl:delbr(CenId)].

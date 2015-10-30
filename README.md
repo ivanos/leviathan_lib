@@ -359,7 +359,7 @@ cinID | string | CIN Identifier
 cenIDs | list of strings | Identifiers of CENs that this CIN covers
 contIDs | list of container IDs | containers ids ({HostId, ContId}) in this CIN
 ip_b | integer | (only for bus) B part of the IP addresses for CIN
-ip | string | IP address of bridge
+ip | string or 'no_ip' atom | IP address of bridge
 
 Example:
 ``` erlang
@@ -377,12 +377,14 @@ Key | Value | Description
 --- | ----- | -----------
 contID | {string, string} | Container identifier {HostId, ContId}
 cinID | string | CIN id the container is in
+interface_alias | string | alias of the container interface in this CIN
 ip | string | IP address of this container in this CIN
 
 Example:
 ``` erlang
  #{contID => {"h1", "c1"},
    cinID => "cin1",
+   interface_alias => "cen1"
    ip => "10.17.0.10"
  } 
 ```
@@ -421,12 +423,19 @@ Key | Value Type | Description
 --- | ----- | -----------
 cont | {string, string} | Container identifier ({HostId, ContId})
 cin | string | CIN id the Container is in
-ip | string | IP address of the Container
+data | map | Data describing Cont
+
+Cont description map:
+
+Key | Value Type | Description
+--- | ----- | -----------
+interface_alias | string | alias of the container interface in this CIN
+ip | string | IP address of bridge
 
 Example table record:
 
 ```erlang
-{leviathan_cin_cont, {"host1", "cont2"}, "cin1", "10.10.0.11"},
+{leviathan_cin_cont, {"host1", "cont2"}, "cin1", {ip => "10.10.0.11", interface_alias => "cen1"}},
 ```
 
 ### Leviathan CIN Dobby Data Model
@@ -461,7 +470,7 @@ CIN, CEN | bound_to | A CEN that this CIN covers
 ### Import CENs and building CINs
 
 #### New version
-![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFABANbGV2aWF0aGFuX2NlbgABGW5fc3RvcmUAIhhpACEZaQAyCAoAgRMGIC0-AIELBTogL2Nlbi9pbXBvcnQKbm90ZSBvdmVyAIE4BywAgS8FLACBDw46IHRoZQCBWQcgc2VuZHMgYSBKU09OIGZpbGUgZGVzY3JpYmluZyBDRU5zCgoAgXIFLT4ANRBkZWNvZGVfYmluYXJ5KEpTT04pCgCBeA0gLQCBGwlDZW5MTQAzFgCCCwY6AIE7Bl9jZW5zKAApBSkAZRNkYnkADxotPgCDLQc6AIINF21ha2UAgWk5J1siY2VuMSIsImNlbjIiXScAggAXcHJlcGFyZShDZW5JZHMpIFthc3luY10AgRETAIIdDwCCARYgZ2V0X2xldm1hcABLCACCVw4AhEoGAIJmBQCDVg8Agm4GAEgfOiAAgSoHAIJtDQALKW9udAAEMXdpcmUAg1sJAIUsBXJpZ2h0IG9mAIUXEE5vdwCFJgViaXJkZ2VzIGFuZFxuIGludGVyZmFjZXMgYXJlIGJyb3VnaHQgdXBcbiBhbmQgd2lyZWQgdG9nZXRoZXIuAIYdFGkAhXBBJ1siY2luMSI6AIQQB10sICJjaW4yAAoHMiJdAIQMFmluOiBidWlsZF9jaW5zKENpbklkVG8AhCcGTWFwAIIKBwCHPQUAiEQNAIc0DwCEFggAMBAgZGVpZmluZXMAhzYFLCBhIACJTQZ1bGFyIENpbiB3aWxsIGNvbnRhaW47AIcjDGkAhyINaQCHGBcAiH4IOiAAhygIAIE_BwCHFhoAEBoAhxMeaQCGbkNpAIcrBmkAhxgZaQCFdwoAgwYGAIcVHQCCcCwAimcNaQCFQQxyaQCFRQgAiwMFAIVECwCDGAVnZXQgdGhlaXIgSVBz&s=roundgreen)
+![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFABANbGV2aWF0aGFuX2NlbgABGW5fc3RvcmUAIhhpACEZaQAyCAoAgRMGIC0-AIELBTogL2Nlbi9pbXBvcnQKbm90ZSBvdmVyAIE4BywAgS8FLACBDw46IHRoZQCBWQcgc2VuZHMgYSBKU09OIGZpbGUgZGVzY3JpYmluZyBDRU5zCgoAgXIFLT4ANRBkZWNvZGVfYmluYXJ5KEpTT04pCgCBeA0gLQCBGwlDZW5MTQAzFgCCCwY6AIE7Bl9jZW5zKAApBSkAZRNkYnkADxotPgCDLQc6AIINF21ha2UAgWk5J1siY2VuMSIsImNlbjIiXScAggAXcHJlcGFyZShDZW5JZHMpIFthc3luY10AgRETAIIdDwCCARYgZ2V0X2xldm1hcABLCACCVw4AhEoGAIJmBQCDVg8Agm4GAEgfOiAAgSoHAIJtDQALKW9udAAEMXdpcmUAg1sJAIUsBXJpZ2h0IG9mAIUXEE5vdwCFJgViaXJkZ2VzIGFuZFxuIGludGVyZmFjZXMgYXJlIGJyb3VnaHQgdXBcbiBhbmQgd2lyZWQgdG9nZXRoZXIuAIYdFGkAhXBBJ1siY2luMSI6AIQQB10sICJjaW4yAAoHMiJdAIQMFmluOiBidWlsZF9jaW5zKENpbklkVG8AhCcGTWFwAIIKBwCHPQUAiEQNAIc0DwCEFggAMBAgZGVpZmluZXMAhzYFLCBhIACJTQZ1bGFyIENpbiB3aWxsIGNvbnRhaW47Cmxvb3AgZm9yIGVhY2ggAIUuBSBpbgBFEQogICAAiRgOAIcFEgCFJAVjZW4AhXMGKQAkD2RieQCFExBpAIUdBk1hcCBhcyBkZWZpbmVkIGJ5AIo6D2VuZACBZDAATwZpcyB1cwCEBAUgZXh0cmFjdCBDb250SWQAhEMFIFdpcmVUeXBlAIEzUQCFVgkAgV0pV2lyZXMAgTZPAE0HcmUAgXQRYWxpYXNlcyBvZgCMAgUAhz4FAIZJCwCLNwxpAIs2DWkAiywXAI0SCDogAIs8CACFUwcAiyoaABAaAIsnHmkAiwJDaQCLPwZpAIssGWkAigsKAIcaBgCLKR0AhwQsAI57DWkAiVUMcmkAiVkIAI8XBQCJWAsAhywFZ2V0IHRoZWlyIElQcw&s=roundgreen)
 
 #### Current version
 
