@@ -322,8 +322,6 @@ Key | Value | Description
 --- | ----- | -----------
 status | pending, preparing, ready | Status of the bridge
 
-There is no IpAddress metadata.
-
 Links:
 
 Type, Type | Link Type | Description
@@ -437,7 +435,7 @@ Identifier names.  Fields starting with a Capital letter are the fillins:
 
 Type | Name Format | Example
 ---- | ----------- | -------
-cin | lev_cin>CEN | lev_cin>cin1
+cin | lev_cin>CIN | lev_cin>cin1
 ipaddr | lev_ip>IpAddress | lev_ip>10.9.2.14
 
 CIN metadata:
@@ -448,12 +446,16 @@ status | pending, preparing, ready | Status of the CIN
 
 There is no Ip Address metadata.
 
-All the links referet to the CEN Layer:
+All the links refer to the CEN Layer:
 
 Type, Type | Link Type | Description
 ---------- | --------- | -----------
-CIN, IpAddress | bound_to | IP Address of a container/bridge in this CIN (cross layer link)
+CIN, IpAddress | bound_to | IP Address of a  this CIN (cross layer link)
+Container, IpAddress | bound_to | IP Address of a container in this CIN (cross layer link)
+Bridge, IpAddress | bound_to | IP Address of a bridge in this CIN (corss layer link)
 CIN, CEN | bound_to | A CEN that this CIN covers
+
+`Container` and `Bridge` identifiers are created in the CEN Layer.
 
 ## Sequence diagrams
 ### Import CENs and building CINs

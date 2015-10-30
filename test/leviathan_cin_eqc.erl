@@ -1,7 +1,7 @@
 -module(leviathan_cin_eqc).
 
--export([prop_cin_lm_built_correctly/0,
-         prop_cin_lm_stored_correctly/0]).
+-export([prop_cin_is_built/0,
+         prop_cin_is_stored/0]).
 
 -compile([export_all]).
 
@@ -61,7 +61,7 @@ unique_and_shuffeled(Gen) ->
 %% Properties
 %% -----------------------------------------------------------------------------
 
-prop_cin_lm_built_correctly() ->
+prop_cin_is_built() ->
     ?SETUP(
        mkfn_qc_setup(),
        ?FORALL({CinsWithCens, CensWithConts},
@@ -79,7 +79,7 @@ prop_cin_lm_built_correctly() ->
                            cin_lm_correct(CinLM, CinsWithCens, CensWithConts))
                end)).
 
-prop_cin_lm_stored_correctly() ->
+prop_cin_is_stored() ->
     ?SETUP(
        mkfn_qc_setup(),
        ?FORALL({CinsWithCens, CensWithConts, CinsSubset},

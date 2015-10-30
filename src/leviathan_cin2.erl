@@ -1,11 +1,13 @@
 -module(leviathan_cin2).
 
--export([build_cins/1]).
+-export([build_cins/1,
+         prepare_cins/1]).
 
--define(LM_EMPTY, #{cins => [], conts => []}).
+-define(LM_EMPTY, ?LM([], [])).
 -define(LM(Cins, Conts), #{cins => Cins, conts => Conts}).
 
 -define(MATCH_LM(Cins, Conts), #{cins := Cins, conts := Conts}).
+-define(MATCH_EMPTY_LM, ?MATCH_LM([], [])).
 
 -include("leviathan.hrl").
 
@@ -31,8 +33,16 @@
 %% API
 %% -------------------------------------------------------------------------------
 
+-spec build_cins(#{CinId :: string() => CenIds :: [string()]}) -> cin_lm().
+
 build_cins(CinToCensMap) ->
     maps:fold(fun build_cin/3, ?LM_EMPTY, CinToCensMap).
+
+
+-spec prepare_cins(CinIds :: [string()]) -> ok.
+
+prepare_cins(CinIds) ->
+    ok.
 
 %% -----------------------------------------------------------------------------
 %% Local Functions: building cins
@@ -50,13 +60,13 @@ cin_map(CinId, [CenId] = CenIds) ->
       cenIDs => CenIds,
       contIDs => ContIds,
       ip_b => IpB,
-      ip => ip_address(IpB, length(ContIds))}.
+      ip => cin_ip_address(IpB)}.
 
 cont_maps(#{cinID := CinId, contIDs := ContIds, ip_b := IpB}) ->
     Fn = fun(ContId, ContCount) ->
                  {#{contID => ContId,
                    cinID => CinId,
-                   ip => ip_address(IpB, ContCount)},
+                   ip => cont_ip_address(IpB, ContCount)},
                   ContCount + 1}
          end,
     element(1, lists:mapfoldl(Fn, 1, ContIds)).
@@ -66,27 +76,30 @@ cont_maps(#{cinID := CinId, contIDs := ContIds, ip_b := IpB}) ->
 %% -----------------------------------------------------------------------------
 
 next_cin_ip_b() ->
-    leviathan_common_store:next_count(cip_ip_b, 10).
+    leviathan_common_store:next_count(cin_ip_b, 10).
+
+cin_ip_address(CenB) ->
+    inet_parse:ntoa({10, CenB, 0, 1}).
 
 %% Generate an IP address in the form:
 %% 10.NN.C1.C2
 %% where NN is in the range 10-250 and C1.C2 is 0.10-255.240
 %% NN is derived from the IpB, C1.C2 from ContCount
 %% IpB is the "B" part of the address computed by next_cen_ip_b/0
-ip_address(IpB, ContCount) when ContCount =< 65511 ->
+cont_ip_address(IpB, ContCount) when ContCount =< 65511 ->
     C = ContCount + 9, %% offset
     <<C1:8, C2:8>> = <<C:16>>,
     inet_parse:ntoa({10, IpB, C1, C2});
-ip_address(IpB, UsedIps) when is_list(UsedIps) andalso length(UsedIps) =< 6551 ->
-    ip_address(IpB, UsedIps, (length(UsedIps) + 1) rem 65511).
+cont_ip_address(IpB, UsedIps) when is_list(UsedIps) andalso length(UsedIps) =< 6551 ->
+    cont_ip_address(IpB, UsedIps, (length(UsedIps) + 1) rem 65511).
 
-ip_address(IpB, UsedIps, N) ->
-    Ip = ip_address(IpB, N),
+cont_ip_address(IpB, UsedIps, N) ->
+    Ip = cont_ip_address(IpB, N),
     case lists:member(Ip, UsedIps) of
         false ->
             Ip;
         true ->
-            ip_address(IpB, UsedIps, N+1)
+            cont_ip_address(IpB, UsedIps, N+1)
     end.
 
 
