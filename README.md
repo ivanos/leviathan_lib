@@ -356,19 +356,36 @@ CIN map:
 Key | Value | Description
 --- | ----- | -----------
 cinID | string | CIN Identifier
-cenIDs | list of strings | Identifiers of CENs that this CIN covers
 contIDs | list of container IDs | containers ids ({HostId, ContId}) in this CIN
 ip_b | integer | (only for bus) B part of the IP addresses for CIN
-ip | string or 'no_ip' atom | IP address of bridge
+addressing | map | A map that describes IP addressing in this CIN
 
-Example:
+CIN addressing map:
+
+Key | Value | Description
+--- | ----- | -----------
+CenId (string) | {string, string &#124; null} | a pair consisting of the bridge interface for a CEN and its IP address
+
+```erlang
+ #{CenId => {BridgeInterface, BridgeIp}}
+```
+
+Examples of CIN maps:
 ``` erlang
  #{cinID => "cin1",
-   cenIDs => ["cen1"],
    contIDs => [{"h1", "c1"}, {"h1", "c2"},  {"h1", "c3"}],
    ip_b => 17,
-   ip => 10.17.0.1
- }
+   addressing => #{"cen1" => {"cen1_br", 10.17.0.1}}
+  }
+```
+
+``` erlang
+ #{cinID => "cin1",
+   contIDs => [{"h1", "c1"}, {"h1", "c2"},  {"h1", "c3"}],
+   ip_b => 17,
+   addressing => #{"cen1" => {"cen1", 10.17.0.1},
+                   "cen2" => {"cen2", 10.17.0.2}}
+  }
 ```
 
 A Container is represented by a map:
@@ -376,17 +393,27 @@ A Container is represented by a map:
 Key | Value | Description
 --- | ----- | -----------
 contID | {string, string} | Container identifier {HostId, ContId}
-cinID | string | CIN id the container is in
-interface_alias | string | alias of the container interface in this CIN
-ip | string | IP address of this container in this CIN
+cinID | string | CIN identifier the container is in
+addressing | map | A map that describes IP addressing of the Containers in this CIN
 
-Example:
+Key | Value | Description
+--- | ----- | -----------
+CenId (string) | {string, string &#124; null} | a pair consisting of the Container interface in a CEN and its IP address
+
+Examples of Container maps:
 ``` erlang
  #{contID => {"h1", "c1"},
    cinID => "cin1",
-   interface_alias => "cen1"
-   ip => "10.17.0.10"
- } 
+   addressing => #{"cen1" => {"eth0", 10.17.0.10}}
+  } 
+```
+
+``` erlang
+ #{contID => {"h1", "c1"},
+   cinID => "cin1",
+   addressing => #{"cen1" => {"eth0", 10.17.0.10},
+                   "cen2" => {"eth1", 10.17.0.11}}
+  } 
 ```
 
 ### Leviathan CIN Authoritative Store: persistent store
@@ -402,19 +429,19 @@ CIN description map:
 
 Key | Value Type | Description
 --- | ----- | -----------
-cenIDs | list of strings | identifiers of CENs that this CIN covers
 contIDs | {string, string} | list of Container IDs ({HostId, ContId})
-ip_b | integer | (only for bus) B part of the IP addresses for CEN
-ip | string | IP address of bridge
+ip_b | integer | (only for bus) B part of the IP addresses for CIN
+addressing | map | A map that describes IP addressing in this CIN
 
 Example table record:
 
 ```erlang
 {leviathan_cin, "cin1",
- #{cenId => ["cen1"],
-   contIDs => [{"host1", "cont1"},{"host1", "cont2"}],
-   ip => "10.10.0.1",
-   ip_b => 10}
+  #{contIDs => [{"host1", "cont1"},{"host1", "cont2"}],
+    ip_b => 10,
+    addressing => #{"cen1" => {"cen1_br", 10.17.0.1}}
+   }
+}
 ```
 
 **leviathan_cin_cont** table:
@@ -422,20 +449,21 @@ Example table record:
 Key | Value Type | Description
 --- | ----- | -----------
 cont | {string, string} | Container identifier ({HostId, ContId})
-cin | string | CIN id the Container is in
-data | map | Data describing Cont
+cin | string | CIN identifier the Container is in
+data | map | Data describing the Container
 
-Cont description map:
+Container description map:
 
 Key | Value Type | Description
 --- | ----- | -----------
-interface_alias | string | alias of the container interface in this CIN
-ip | string | IP address of bridge
+addressing | map | A map that describes IP addressing of the Containers in this CIN
 
 Example table record:
 
 ```erlang
-{leviathan_cin_cont, {"host1", "cont2"}, "cin1", {ip => "10.10.0.11", interface_alias => "cen1"}},
+{leviathan_cin_cont, {"host1", "cont2"}, "cin1",
+ #{"cen1" => {"eth0", 10.17.0.10}}
+}
 ```
 
 ### Leviathan CIN Dobby Data Model
@@ -455,16 +483,16 @@ status | pending, preparing, ready | Status of the CIN
 
 There is no Ip Address metadata.
 
-All the links refer to the CEN Layer:
+Links:
 
 Type, Type | Link Type | Description
 ---------- | --------- | -----------
-CIN, IpAddress | bound_to | IP Address of a  this CIN (cross layer link)
+CIN, IpAddress | part_of | IP Address of a container/bridge in this CIN (IP Address is in the CIN)
 Container, IpAddress | bound_to | IP Address of a container in this CIN (cross layer link)
 Bridge, IpAddress | bound_to | IP Address of a bridge in this CIN (corss layer link)
-CIN, CEN | bound_to | A CEN that this CIN covers
+CIN, CEN | part_of | A CEN that this CIN covers
 
-`Container` and `Bridge` identifiers are created in the CEN Layer.
+`Container`, `CEN` and `Bridge` identifiers are created in the CEN Layer.
 
 ## Sequence diagrams
 ### Import CENs and building CINs
