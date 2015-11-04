@@ -27,14 +27,23 @@
                                    ip_address => string()}}).
 
 -record(leviathan_cin, {cin :: string(),
-                        data :: #{cenIDs => [string()],
-                                  contIDs => [string()],
+                        data :: #{contIDs => [leviathan_cin2:cont_id()],
                                   ip_b => 0..255,
-                                  ip => inet:ip4_address()}}).
+                                  addressing => leviathan_cin2:addressing()}}).
 
--record(leviathan_cin_cont, {cont :: string(),
+-record(leviathan_cin_cont, {cont :: leviathan_cin2:cont_id(),
                              cin :: string(),
-                             ip :: inet:ip4_address()}).
+                             addressing :: leviathan_cin2:addressing()}).
 
 % persistent counters
 -record(counter, {id :: atom(), count :: integer()}).
+
+
+
+
+
+
+
+
+
+

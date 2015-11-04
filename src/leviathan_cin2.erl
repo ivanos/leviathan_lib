@@ -15,15 +15,21 @@
 %% Types
 %% -------------------------------------------------------------------------------
 
--type cont_id() :: [{HostId :: string(), ContId :: string()}].
+-type cont_id() :: {HostId :: string(), ContId :: string()}.
+
+-type addressing() :: #{CenId :: string() =>
+                                 {InterfaceName :: string(),
+                                  IpAddress :: inet:ip4_address() | no_ip}}.
+
 -type cin_map() :: #{cinID => string(),
-                     cenIDs => [string()],
-                     contIDs => [cont_id()] ,
+                     contIDs => [cont_id()] | [],
                      ip_b => 0..255,
-                     ip => inet:ip4_address() | no_ip}.
+                     addressing => addressing()}.
+
 -type cont_map() :: #{contID => cont_id(),
                       cinID => string(),
-                      ip => inet:ip4_address()}.
+                      addressing => addressing()}.
+
 -type cin_lm() :: #{cins => [cin_map()] | [],
                     conts => [cont_map()] | []}.
 
@@ -45,54 +51,106 @@ prepare(CinIds) ->
     do_prepare(leviathan_cin_store:get_levmap(CinIds)).
 
 %% -----------------------------------------------------------------------------
-%% Local Functions: building cins
+%% Local Functions: building CIN LM
 %% -----------------------------------------------------------------------------
 
-build_cin(CinId, CenIds, ?MATCH_LM(Cins, Conts)) ->
-    CinMap = cin_map(CinId, CenIds),
-    ContsMap = cont_maps(CinMap),
-    ?LM([CinMap | Cins], ContsMap ++ Conts).
+build_cin(CinId, CenIds, ?MATCH_LM(CinMaps, ContMaps)) ->
+    CinMap = make_cin_map(CinId, CenIds),
+    ?LM([CinMap | CinMaps], make_cont_maps(CinMap) ++ ContMaps).
 
-cin_map(CinId, [CenId] = CenIds) ->
-    #{contIDs := ContIds, wire_type := WireType} = leviathan_dby:get_cen(CenId),
+%% -----------------------------------------------------------------------------
+%% Local Functions: building CIN maps
+%% -----------------------------------------------------------------------------
+
+make_cin_map(CinId, CenIds) ->
+    Cens = get_cens(CenIds),
     IpB = next_cin_ip_b(),
     #{cinID => CinId,
-      cenIDs => CenIds,
-      contIDs => ContIds,
+      contIDs => get_cen_containers(Cens),
       ip_b => IpB,
-      ip => cin_ip_address(IpB, WireType)}.
+      addressing => make_cin_addressing(IpB, Cens)}.
 
-cont_maps(#{cinID := CinId, cenIDs := CenIds, contIDs := ContIds, ip_b := IpB}) ->
-    ContToInterface = map_cont_to_interface(get_cen_wires(CenIds)),
-    Fn = fun(ContId, ContCount) ->
-                 {#{contID => ContId,
-                    cinID => CinId,
-                    interface_alias => maps:get(ContId, ContToInterface),
-                    ip => cont_ip_address(IpB, ContCount)},
-                  ContCount + 1}
+get_cens(CenIds) ->
+    lists:map(fun(CenId) -> leviathan_dby:get_cen(CenId) end, CenIds).
+
+get_cen_containers(Cens) ->
+    lists:foldl(fun(#{contIDs := ContIds}, Acc) ->
+                        ContIds ++ Acc
+                end, [], Cens).
+
+make_cin_addressing(IpB, Cens) ->
+    Fn = fun(#{cenID := CenId, wire_type := WireType}, CinCount) ->
+                 IntfAndIp = {get_cen_gateway_interface(CenId),
+                              cin_ip_address(IpB, WireType, CinCount)},
+                 {{CenId, IntfAndIp}, CinCount + 1}
          end,
+    {CinAddressing, _} = lists:mapfoldl(Fn, 1, Cens),
+    maps:from_list(CinAddressing).
+
+get_cen_gateway_interface(CenId) ->
+    CenId.
+
+%% -----------------------------------------------------------------------------
+%% Local Functions: building Container maps
+%% -----------------------------------------------------------------------------
+
+make_cont_maps(#{cinID := CinId,
+                 contIDs := ContIds,
+                 ip_b := IpB,
+                 addressing := CinAddressing}) ->
+    CenIdsInCin = maps:keys(CinAddressing),
+    ContToWires = map_cont_to_wires(get_cen_wires(CenIdsInCin)),
+    Fn = mkfn_make_cont_map(CinId, IpB, ContToWires),
     element(1, lists:mapfoldl(Fn, 1, ContIds)).
 
-%% TODO: extract mkfn_create_cont_map/2
+mkfn_make_cont_map(CinId, IpB, ContToWires) ->
+    fun(ContId, ContCount) ->
+            ContWires = maps:get(ContId, ContToWires),
+            {#{contID => ContId,
+               cinID => CinId,
+               addressing => make_cont_addressing(IpB, ContCount,
+                                                  ContWires)},
+             ContCount + length(ContWires)}
+    end.
 
+make_cont_addressing(IpB, InitContCount, ContWires) ->
+    Fn = fun([
+              #{dest := #{alias := ContInterface}},
+              #{dest := #{id := CenId}}
+             ], ContCount) ->
+                 IntfAndIp = {ContInterface,
+                              cont_ip_address(IpB, ContCount)},
+                 {{CenId, IntfAndIp}, ContCount + 1}
+         end,
+    {ContAdddressing, _} = lists:mapfoldl(Fn, InitContCount, ContWires),
+    maps:from_list(ContAdddressing).
+    
 get_cen_wires(CenIds) ->
     lists:foldl(fun(CenId, Acc) ->
                         leviathan_dby:get_wires(CenId) ++ Acc
                 end, [], CenIds).
 
-map_cont_to_interface(Wires) ->
-    map_cont_to_interface(Wires, #{}).
+map_cont_to_wires(Wires) ->
+    map_cont_to_wires(Wires, #{}).
 
-map_cont_to_interface([[#{dest := #{type := cont} = Dest}, _] | Rest],
-                      Acc) ->
-    map_cont_to_interface(Rest, add_cont_to_interface_mapping(Dest, Acc));
-map_cont_to_interface([[_, #{dest := Dest}] | Rest], Acc) ->
-    map_cont_to_interface(Rest, add_cont_to_interface_mapping(Dest, Acc));
-map_cont_to_interface([], Acc) ->
+map_cont_to_wires(
+  [[
+    #{side := in, dest := #{id := ContId}} = InEnd,
+    #{side := out} = OutEnd
+   ] | Rest], Acc) ->
+    map_cont_to_wires(Rest, map_cont_to_wires(ContId, [InEnd, OutEnd], Acc));
+map_cont_to_wires(
+  [[
+    #{side := out} = OutEnd,
+    #{side := in, dest := #{id := ContId}} = InEnd
+   ] | Rest], Acc) ->
+    map_cont_to_wires(Rest, map_cont_to_wires(ContId, [InEnd, OutEnd], Acc));
+map_cont_to_wires([], Acc) ->
     Acc.
 
-add_cont_to_interface_mapping(#{id := ContId, alias := Alias}, Mappings) ->
-    maps:put(ContId, Alias, Mappings).
+map_cont_to_wires(ContId, Wire, Acc) ->
+    Wires = maps:get(ContId, Acc, []),
+    maps:put(ContId, [Wire | Wires], Acc).
 
 
 %% -----------------------------------------------------------------------------
@@ -140,9 +198,13 @@ prepare_cont(ContId, Alias, Ip) ->
 next_cin_ip_b() ->
     leviathan_common_store:next_count(cin_ip_b, 10).
 
-cin_ip_address(CenB, bus) ->
+%% @doc Generate an IP address of a CIN.
+%%
+%% Current implementation supports only one bridge with an IP address
+%% in a CIN.
+cin_ip_address(CenB, bus, 1) ->
     inet_parse:ntoa({10, CenB, 0, 1});
-cin_ip_address(_, _) ->
+cin_ip_address(_, _, _) ->
     no_ip.
 
 %% Generate an IP address in the form:

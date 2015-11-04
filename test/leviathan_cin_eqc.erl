@@ -15,16 +15,20 @@
 %% Generators
 %% -------------------------------------------------------------------------------
 
-gen_cins_cens_and_cins_subset() ->
-    ?LET({CinsWithCens, CensWithConts}, gen_cins_and_cens(),
-         {CinsWithCens, CensWithConts,  sublist(maps:keys(CinsWithCens))}).
+gen_cins_cens_wires_and_cins_subset() ->
+    ?LET({CinsWithCens, CenMaps, Wires}, gen_cins_cens_and_wires(),
+         {CinsWithCens, CenMaps, Wires, sublist(maps:keys(CinsWithCens))}).
 
-gen_cins_and_cens() ->
-    ?LET(CinIds, gen_cin_ids(), gen_cins_and_cens(CinIds)).
+gen_cins_cens_and_wires() ->
+    ?LET(CinIds, gen_cin_ids(), gen_cins_cens_and_wires(CinIds)).
 
-gen_cins_and_cens(CinIds) ->
-    ?LET(CenIds, gen_cen_ids(CinIds), {gen_cins(CinIds, CenIds),
-                                       gen_cens(CenIds)}).
+gen_cins_cens_and_wires(CinIds) ->
+    ?LET(CenIds, gen_cen_ids(CinIds), gen_cins_cens_and_wires(CinIds, CenIds)).
+
+gen_cins_cens_and_wires(CinIds, CenIds) ->
+    ?LET(CenMaps, gen_cens(CenIds), {gen_cins(CinIds, CenIds),
+                                     CenMaps,
+                                     gen_wires(CenMaps)}).
 
 gen_cin_ids() ->
     unique_and_shuffeled(gen_cin_id()).
@@ -37,12 +41,39 @@ gen_cins(CinIds, CenIds0) ->
     maps:from_list(lists:zip(CinIds, CenIds1)).
 
 gen_cens(CenIds) ->
-    maps:from_list([{Id, gen_cont_ids(Id)} || Id <- CenIds]).
+    maps:from_list([{Id, gen_cen(Id)} || Id <- CenIds]).
+
+gen_cen(CenId) ->
+    maps:from_list([{cenID, CenId},
+                    {contIDs, gen_cont_ids(CenId)},
+                    {wire_type, gen_wire_type()}]).
 
 gen_cont_ids(Base) ->
     ?LET(I,
          choose(1, 10),
          [{gen_host_id(), gen_cont_id(Base, N)} || N <- lists:seq(1, I)]).
+
+gen_wires(CenMaps) ->
+    maps:from_list([{Id, gen_cen_wires(maps:get(Id, CenMaps))}
+                    || Id <- maps:keys(CenMaps)]).
+
+gen_cen_wires(#{cenID := CenId, contIDs := ContIds}) ->
+    [gen_wire(CenId, ContId) || ContId <- ContIds].
+
+gen_wire(CenId, ContId) ->
+    [#{side => in,
+       dest => #{type => cont,
+                 alias => gen_cont_interface_id(CenId),
+                 id => ContId}},
+     #{side => out,
+       dest => #{type => cen,
+                 id => CenId}}].
+
+gen_cont_interface_id(CenId) ->
+    CenId.
+
+gen_wire_type() ->
+    bus.
 
 gen_host_id() ->
     "host1".
@@ -64,30 +95,32 @@ unique_and_shuffeled(Gen) ->
 prop_cin_is_built() ->
     ?SETUP(
        mkfn_qc_setup(),
-       ?FORALL({CinsWithCens, CensWithConts},
-               gen_cins_and_cens(),
+       ?FORALL({CinsWithCens, CenMaps, Wires} = Generated,
+               gen_cins_cens_and_wires(),
                begin
                    %% GIVEN
                    leviathan_mnesia:clear(),
-                   mock_dobby_get_cen_conts(CensWithConts),
+                   mock_dobby_get_cen(CenMaps),
+                   mock_dobby_get_wires(Wires),
 
                    %% WHEN
                    CinLM = leviathan_cin2:build_cins(CinsWithCens),
 
                    %% THEN
                    collect(maps:size(CinsWithCens),
-                           cin_lm_correct(CinLM, CinsWithCens, CensWithConts))
+                           cin_lm_correct(CinLM, Generated))
                end)).
 
 prop_cin_is_stored() ->
     ?SETUP(
        mkfn_qc_setup(),
-       ?FORALL({CinsWithCens, CensWithConts, CinsSubset},
-               gen_cins_cens_and_cins_subset(),
+       ?FORALL({CinsWithCens, CenMaps, Wires, CinsSubset},
+               gen_cins_cens_wires_and_cins_subset(),
                begin
                    %% GIVEN
                    leviathan_mnesia:clear(),
-                   mock_dobby_get_cen_conts(CensWithConts),
+                   mock_dobby_get_cen(CenMaps),
+                   mock_dobby_get_wires(Wires),
                    CinLM = leviathan_cin2:build_cins(CinsWithCens),
 
                    %% WHEN
@@ -104,52 +137,12 @@ prop_cin_is_published() ->
     true.
 
 %% -----------------------------------------------------------------------------
-%% Properties Helpers
+%% Properties Helpers: CIN LM top level assertions
 %% -----------------------------------------------------------------------------
 
-cin_lm_correct(#{cins := CinMaps, conts := ContMaps}, CinsWithCens, CensWithConts) ->
-    cin_maps_correct(CinMaps, CinsWithCens, CensWithConts) andalso
-        cont_maps_correct(ContMaps, CinsWithCens, CensWithConts).
-
-cin_maps_correct(CinMaps, CinsWithCens, CensWithConts) ->
-    length(CinMaps) == maps:size(CinsWithCens) andalso
-        lists:all(mkfn_cin_map_correct(CinsWithCens, CensWithConts),
-                  CinMaps).
-
-cont_maps_correct(ContMaps, CinsWithCens, CensWithConts) ->
-    length(ContMaps) == maps:fold(fun(_CenId, Conts, ContsCnt) ->
-                                          ContsCnt + length(Conts)
-                                  end, 0, CensWithConts)
-        andalso lists:all(mkfn_cont_map_correct(CinsWithCens, CensWithConts), ContMaps).
-
-mkfn_cin_map_correct(CinsWithCens, CensWithConts) ->
-    fun(#{cinID := CinId,
-          cenIDs := [CenId],
-          contIDs := ContIds,
-          ip_b := IpB,
-          ip := Ip}) ->
-            ?assertEqual([CenId], maps:get(CinId, CinsWithCens)),
-            ?assertEqualLists(ContIds, maps:get(CenId, CensWithConts)),
-            ?assertMatch({ok, {_, IpB, _, _}}, inet_parse:address(Ip)),
-            true
-    end.
-
-mkfn_cont_map_correct(CinsWithCens, CensWithConts) ->
-    fun(#{contID := ContId,
-          cinID := CinId,
-          ip := Ip}) ->
-            [CenId] = maps:get(CinId, CinsWithCens),
-            ContIds = maps:get(CenId, CensWithConts),
-            ?assert(lists:member(ContId, ContIds)),
-            ?assertMatch({ok, _}, inet_parse:address(Ip)),
-            true
-    end.
-
-mock_dobby_get_cen_conts(CensWithConts) ->
-    ok = meck:expect(leviathan_dby, get_cen_conts,
-                             fun(CenId) ->
-                                     maps:get(CenId, CensWithConts)
-                             end).
+cin_lm_correct(#{cins := CinMaps, conts := ContMaps}, Generated) ->
+    cin_maps_correct(CinMaps, Generated) andalso
+        cont_maps_correct({CinMaps, ContMaps}, Generated).
 
 filter_cin_lm(#{cins := Cins, conts := Conts}, CinsToKeep) ->
     FilterFn = fun(#{cinID := Id}) ->
@@ -157,15 +150,130 @@ filter_cin_lm(#{cins := Cins, conts := Conts}, CinsToKeep) ->
                end,
     #{cins => lists:filter(FilterFn, Cins),
       conts => lists:filter(FilterFn, Conts)}.
-    
 
 cin_lms_equal(#{cins := ECins, conts := EConts} = _ExpectedLM,
               #{cins := ACins, conts := AConts} = _ActualLM) ->
-    CinsFn = mkfn_assert_equal_maps_with_lists([cenIDs, contIDs]),
+    CinsFn = mkfn_assert_equal_maps_with_lists([contIDs]),
     ContsFn = mkfn_assert_equal_maps_with_lists([]),
     ok == assert_equal_lists(ECins, ACins, CinsFn) andalso
         ok == assert_equal_lists(EConts, AConts, ContsFn).
 
+%% -----------------------------------------------------------------------------
+%% Properties Helpers: cin maps of CIN LM assertions
+%% -----------------------------------------------------------------------------
+
+cin_maps_correct(CinMaps, {CinsWithCens, _, _} = Generated) ->
+    length(CinMaps) == maps:size(CinsWithCens) andalso
+        lists:all(mkfn_cin_map_correct(Generated), CinMaps).
+
+mkfn_cin_map_correct({CinsWithCens, CenMaps, _}) ->
+    fun(#{cinID := CinId,
+          contIDs := ContIds,
+          ip_b := IpB,
+          addressing := Addressing}) ->
+            CenIdsInCin = maps:get(CinId, CinsWithCens),
+            ?assertEqualLists(gather_cens_conts(CenIdsInCin, CenMaps),
+                              ContIds),
+            lists:foreach(
+              mkfn_cin_addressing_correct({IpB, Addressing}, CenMaps),
+              CenIdsInCin),
+            true
+    end.
+
+gather_cens_conts(CenIds, CenMaps) ->
+    lists:foldl(fun(CenId, Acc) ->
+                        CenMap = maps:get(CenId, CenMaps),
+                        Acc ++ maps:get(contIDs, CenMap)
+                end, [], CenIds).
+
+%% @private Assert the bridge interface for a CIN is set up correctly.
+mkfn_cin_addressing_correct({IpB, Addressing}, CenMaps) ->
+    fun(CenId) ->
+            #{cenID := EBridgeInterface} = maps:get(CenId, CenMaps),
+            {ABridgeInterface, Ip} = maps:get(CenId, Addressing),
+            ?assertEqual(EBridgeInterface, ABridgeInterface),
+            ?assertMatch({ok, {_, IpB, _, _}}, inet_parse:address(Ip))
+    end.
+
+%% -----------------------------------------------------------------------------
+%% Properties Helpers: cont maps of CIN LM assertions
+%% -----------------------------------------------------------------------------
+
+cont_maps_correct({CinMaps, ContMaps}, Generated = {_, CenMaps, _}) ->
+    length(ContMaps) == count_conts_in_cens(CenMaps)
+        andalso lists:all(mkfn_cont_map_correct(CinMaps, Generated),
+                          ContMaps).
+
+count_conts_in_cens(CenMaps) ->
+    maps:fold(fun(_CenId, #{contIDs := Conts}, Acc) ->
+                      Acc + length(Conts)
+              end, 0, CenMaps).
+
+
+mkfn_cont_map_correct(CinMaps, {CinsWithCens, CenMaps, Wires}) ->
+    fun(#{contID := ContId,
+          cinID := CinId,
+          addressing := Addressing}) ->
+            IpB = get_cin_ip_b(CinId, CinMaps),
+            CenIdsInCin = maps:get(CinId, CinsWithCens),
+            lists:any(mkfn_cont_in_cen_conts(ContId, CenMaps),
+                      CenIdsInCin),
+            lists:foreach(
+              mkfn_cont_addressing_correct({ContId, IpB, Addressing},
+                                           Wires),
+              CenIdsInCin),
+            true
+    end.
+
+get_cin_ip_b(CinId, CinMaps) ->
+    [#{ip_b := IpB}] = [M || M <- CinMaps,
+                             maps:get(cinID, M) =:= CinId],
+    IpB.
+    
+
+mkfn_cont_in_cen_conts(ContId, CenMaps) ->
+    fun(CenId) ->
+            ContIds = maps:get(contIDs, maps:get(CenId, CenMaps)),
+            lists:member(ContId, ContIds)
+    end.
+
+%% @private Assert the container iterface is set up correctly.
+mkfn_cont_addressing_correct({ContId, IpB, Addressing}, Wires) ->
+    %% TODO: addressing is based not one one wire!!!!
+    fun(CenId) ->
+            [
+              #{side := in, dest := #{alias := EContInterface}},
+              #{side := out}
+            ] = find_cont_wire(ContId, maps:get(CenId, Wires)),
+            {AContInterface, Ip} = maps:get(CenId, Addressing),
+            ?assertEqual(EContInterface, AContInterface),
+            ?assertMatch({ok, {_, IpB, _, _}}, inet_parse:address(Ip))
+    end.
+
+find_cont_wire(ContId, Wires) ->
+    Fn = fun([#{side := in, dest := #{id := Id}},
+              #{side := out}]) when Id =:= ContId ->
+                 false;
+            (_) ->
+                 true
+         end,
+    hd(lists:dropwhile(Fn, Wires)).
+
+%% -----------------------------------------------------------------------------
+%% Properties Helpers: mocking
+%% -----------------------------------------------------------------------------
+
+mock_dobby_get_cen(CenMaps) ->
+    ok = meck:expect(leviathan_dby, get_cen,
+                             fun(CenId) ->
+                                     maps:get(CenId, CenMaps)
+                             end).
+
+mock_dobby_get_wires(Wires) ->
+    ok = meck:expect(leviathan_dby, get_wires,
+                     fun(CenId) ->
+                             maps:get(CenId, Wires)
+                     end).
 
 %% -----------------------------------------------------------------------------
 %% Assertion Helpers
@@ -181,10 +289,10 @@ mkfn_assert_equal_maps_with_lists(KeysForLists) ->
             assert_equal_maps_with_lists(KeysForLists, Expected, Actual)
     end.
 
-assert_equal_maps_with_lists(KeysForLists, ECens, ACens) ->
-    ?assertEqual(maps:without(KeysForLists, ECens),
-                 maps:without(KeysForLists, ACens)),
-    [?assertEqualLists(maps:get(K, ECens), maps:get(K, ACens))
+assert_equal_maps_with_lists(KeysForLists, Expected, Actual) ->
+    ?assertEqual(maps:without(KeysForLists, Expected),
+                 maps:without(KeysForLists, Actual)),
+    [?assertEqualLists(maps:get(K, Expected), maps:get(K, Actual))
      || K <- KeysForLists].
 
 %% -----------------------------------------------------------------------------
