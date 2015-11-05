@@ -102,7 +102,7 @@ prop_cin_is_built() ->
                    per_property_setup(CenMaps, Wires),
 
                    %% WHEN
-                   CinLM = leviathan_cin2:build_cins(CinsWithCens),
+                   CinLM = leviathan_cin:build_cins(CinsWithCens),
 
                    %% THEN
                    collect(maps:size(CinsWithCens),
@@ -117,7 +117,7 @@ prop_cin_is_stored() ->
                begin
                    %% GIVEN
                    per_property_setup(CenMaps, Wires),
-                   CinLM = leviathan_cin2:build_cins(CinsWithCens),
+                   CinLM = leviathan_cin:build_cins(CinsWithCens),
 
                    %% WHEN
                    ok = leviathan_cin_store:import_cins(?HOST, CinLM),
@@ -137,12 +137,12 @@ prop_cin_is_published() ->
                begin
                    %% GIVEN
                    per_property_setup(CenMaps, Wires),
-                   CinLM0 = leviathan_cin2:build_cins(CinsWithCens),
+                   CinLM0 = leviathan_cin:build_cins(CinsWithCens),
                    CinLM1 = filter_cin_lm(CinLM0, CinsSubset),
                    ok = leviathan_cin_store:import_cins(?HOST, CinLM0),
 
                    %% WHEN
-                   leviathan_cin2:prepare(CinsSubset),
+                   leviathan_cin:prepare(CinsSubset),
 
                    %% THEN
                    network_configured_correctly(CinLM1)

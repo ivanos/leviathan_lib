@@ -16,7 +16,7 @@
 %% API
 %% -------------------------------------------------------------------------------
 
--spec import_cins(HostId :: string(), leviathan_cin2:cin_lm()) -> ok.
+-spec import_cins(HostId :: string(), leviathan_cin:cin_lm()) -> ok.
 
 import_cins(_, ?MATCH_LM_EMPTY) ->
     ok;
@@ -26,7 +26,7 @@ import_cins(_HostId, ?MATCH_LM(CinMaps, ContMaps)) ->
     leviathan_db:transaction(fun() -> leviathan_db:write(Recs) end).
 
 
--spec get_levmap([CinId :: string()]) -> leviathan_cin2:cin_lm().
+-spec get_levmap([CinId :: string()]) -> leviathan_cin:cin_lm().
 
 get_levmap([]) ->
     ?LM([], []);

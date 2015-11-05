@@ -24,13 +24,13 @@
                              idnumber :: non_neg_integer()}).
 
 -record(leviathan_cin, {cin :: string(),
-                        data :: #{contIDs => [leviathan_cin2:cont_id()],
+                        data :: #{contIDs => [leviathan_cin:cont_id()],
                                   ip_b => 0..255,
-                                  addressing => leviathan_cin2:addressing()}}).
+                                  addressing => leviathan_cin:addressing()}}).
 
--record(leviathan_cin_cont, {cont :: leviathan_cin2:cont_id(),
+-record(leviathan_cin_cont, {cont :: leviathan_cin:cont_id(),
                              cin :: string(),
-                             addressing :: leviathan_cin2:addressing()}).
+                             addressing :: leviathan_cin:addressing()}).
 
 % persistent counters
 -record(counter, {id :: atom(), count :: integer()}).

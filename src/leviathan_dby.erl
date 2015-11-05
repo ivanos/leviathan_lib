@@ -139,7 +139,7 @@ dby_cin_id(CinId) ->
 %
 % -----------------------------------------------------------------------------
 
--spec import_cins(HostId :: string(), CinLM :: leviathan_cin2:cin_lm()) -> ok.
+-spec import_cins(HostId :: string(), CinLM :: leviathan_cin:cin_lm()) -> ok.
 
 import_cins(HostId, CinLM) ->
     error(not_implemented).
