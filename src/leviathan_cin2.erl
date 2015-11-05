@@ -169,27 +169,38 @@ set_cin_status(CinMaps, Status) ->
                   end, CinMaps).
 
 prepare_cins(CinMaps) ->
-    lists:foreach(fun(#{cenIDs := [Id], ip := Ip}) ->
-                          prepare_cin(Id, Ip)
+    lists:foreach(fun(#{addressing := Addressing}) ->
+                          prepare_cin(Addressing)
                   end, CinMaps).
 
-prepare_cin(_, no_ip) ->
-    ok;
-prepare_cin(CenId, Ip) ->
-    Cmd = leviathan_linux:set_bus_ip(CenId, Ip),
-    leviathan_linux:eval(Cmd),
-    ok.
+prepare_cin(CinAddressing) ->
+    case maps:keys(CinAddressing) of
+        [CenId] ->
+            {BridgeInterface, Ip} = maps:get(CenId, CinAddressing),
+            Cmd = leviathan_linux:set_bus_ip(BridgeInterface, Ip),
+            leviathan_linux:eval(Cmd);
+        _ ->
+            erlang:error(cins_spanning_cens_not_implemented)
+    end.
 
 prepare_conts(ContMaps) ->
-    lists:foreach(
-      fun(#{contID := {_HostId, BareContId}, ip := Ip, interface_alias := Alias}) ->
-              prepare_cont(BareContId, Alias, Ip)
-      end, ContMaps).
+    Fn = fun(#{contID := {_HostId, BareContId},
+               addressing := Addressing}) ->
+                 prepare_cont(BareContId, Addressing)
+         end,
+    lists:foreach(Fn, ContMaps).
 
-prepare_cont(ContId, Alias, Ip) ->
-    CmdBundle = leviathan_linux:set_ip_address(ContId, Alias, Ip),
-    leviathan_linux:eval(CmdBundle),
-    ok.
+prepare_cont(ContId, ContAddressing) ->
+    case maps:keys(ContAddressing) of
+        [CenId] ->
+            {ContInterface, Ip} = maps:get(CenId, ContAddressing),
+            CmdBundle = leviathan_linux:set_ip_address(ContId,
+                                                       ContInterface,
+                                                       Ip),
+            leviathan_linux:eval(CmdBundle);
+        _ ->
+            erlang:error(cins_spanning_cens_not_implemented)
+    end.
 
 %% -----------------------------------------------------------------------------
 %% Local Functions: addressing

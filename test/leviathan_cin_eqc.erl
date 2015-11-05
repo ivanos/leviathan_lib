@@ -83,7 +83,7 @@ gen_cin_id() ->
 
 gen_cont_id(Base, N) ->
     Base ++ "-cont" ++ integer_to_list(N).
-    
+
 unique_and_shuffeled(Gen) ->
     ?LET(I, list(Gen), shuffle(lists:usort(I))).
 
@@ -99,9 +99,7 @@ prop_cin_is_built() ->
                gen_cins_cens_and_wires(),
                begin
                    %% GIVEN
-                   leviathan_mnesia:clear(),
-                   mock_dobby_get_cen(CenMaps),
-                   mock_dobby_get_wires(Wires),
+                   per_property_setup(CenMaps, Wires),
 
                    %% WHEN
                    CinLM = leviathan_cin2:build_cins(CinsWithCens),
@@ -118,9 +116,7 @@ prop_cin_is_stored() ->
                gen_cins_cens_wires_and_cins_subset(),
                begin
                    %% GIVEN
-                   leviathan_mnesia:clear(),
-                   mock_dobby_get_cen(CenMaps),
-                   mock_dobby_get_wires(Wires),
+                   per_property_setup(CenMaps, Wires),
                    CinLM = leviathan_cin2:build_cins(CinsWithCens),
 
                    %% WHEN
@@ -134,10 +130,26 @@ prop_cin_is_stored() ->
                end)).
 
 prop_cin_is_published() ->
-    true.
+    ?SETUP(
+       mkfn_qc_setup(),
+       ?FORALL({CinsWithCens, CenMaps, Wires, CinsSubset},
+               gen_cins_cens_wires_and_cins_subset(),
+               begin
+                   %% GIVEN
+                   per_property_setup(CenMaps, Wires),
+                   CinLM0 = leviathan_cin2:build_cins(CinsWithCens),
+                   CinLM1 = filter_cin_lm(CinLM0, CinsSubset),
+                   ok = leviathan_cin_store:import_cins(?HOST, CinLM0),
+
+                   %% WHEN
+                   leviathan_cin2:prepare(CinsSubset),
+
+                   %% THEN
+                   network_configured_correctly(CinLM1)
+               end)).
 
 %% -----------------------------------------------------------------------------
-%% Properties Helpers: CIN LM top level assertions
+%% Properties Helpers: top level CIN LM
 %% -----------------------------------------------------------------------------
 
 cin_lm_correct(#{cins := CinMaps, conts := ContMaps}, Generated) ->
@@ -158,8 +170,15 @@ cin_lms_equal(#{cins := ECins, conts := EConts} = _ExpectedLM,
     ok == assert_equal_lists(ECins, ACins, CinsFn) andalso
         ok == assert_equal_lists(EConts, AConts, ContsFn).
 
+network_configured_correctly(#{cins := CinMaps, conts := ContMaps}) ->
+    ?assertEqual(length(CinMaps),
+                 meck:num_calls(leviathan_linux, set_bus_ip, '_')),
+    ?assertEqual(length(ContMaps),
+                 meck:num_calls(leviathan_linux, set_ip_address , '_')),
+    true.
+
 %% -----------------------------------------------------------------------------
-%% Properties Helpers: cin maps of CIN LM assertions
+%% Properties Helpers: cin maps of CIN LM
 %% -----------------------------------------------------------------------------
 
 cin_maps_correct(CinMaps, {CinsWithCens, _, _} = Generated) ->
@@ -196,7 +215,7 @@ mkfn_cin_addressing_correct({IpB, Addressing}, CenMaps) ->
     end.
 
 %% -----------------------------------------------------------------------------
-%% Properties Helpers: cont maps of CIN LM assertions
+%% Properties Helpers: cont maps of CIN LM
 %% -----------------------------------------------------------------------------
 
 cont_maps_correct({CinMaps, ContMaps}, Generated = {_, CenMaps, _}) ->
@@ -239,7 +258,6 @@ mkfn_cont_in_cen_conts(ContId, CenMaps) ->
 
 %% @private Assert the container iterface is set up correctly.
 mkfn_cont_addressing_correct({ContId, IpB, Addressing}, Wires) ->
-    %% TODO: addressing is based not one one wire!!!!
     fun(CenId) ->
             [
               #{side := in, dest := #{alias := EContInterface}},
@@ -263,13 +281,28 @@ find_cont_wire(ContId, Wires) ->
 %% Properties Helpers: mocking
 %% -----------------------------------------------------------------------------
 
-mock_dobby_get_cen(CenMaps) ->
+mock(dby) ->
+    ok = meck:new(dby),
+    ok = meck:expect(dby, install, 1, {module, ok});
+mock(leviathan_linux) ->
+    ok = meck:new(leviathan_linux, [passthrough]),
+    ok = meck:expect(leviathan_linux, eval, 1, ok);
+mock(leviathan_dby) ->
+    ok = meck:new(leviathan_dby, [non_strict]),
+    ok = meck:expect(leviathan_dby, set_cin_status, 2, ok);
+mock(leviathan_docker) ->
+    ok = meck:new(leviathan_docker, [non_strict]),
+    ok = meck:expect(leviathan_docker, inspect_pid, fun(ContId) ->
+                                                            ContId
+                                                    end).
+
+expect_dobby_get_cen(CenMaps) ->
     ok = meck:expect(leviathan_dby, get_cen,
                              fun(CenId) ->
                                      maps:get(CenId, CenMaps)
                              end).
 
-mock_dobby_get_wires(Wires) ->
+expect_dobby_get_wires(Wires) ->
     ok = meck:expect(leviathan_dby, get_wires,
                      fun(CenId) ->
                              maps:get(CenId, Wires)
@@ -299,6 +332,12 @@ assert_equal_maps_with_lists(KeysForLists, Expected, Actual) ->
 %% Setup Helpers
 %% -----------------------------------------------------------------------------
 
+per_property_setup(CenMaps, Wires) ->
+    ok = leviathan_db:clear(),
+    expect_dobby_get_cen(CenMaps),
+    expect_dobby_get_wires(Wires),
+    ok = meck:reset(leviathan_linux).
+
 mkfn_qc_setup() ->
     fun() ->
             {MocksToUnload, AppsToStop} = setup(),
@@ -306,14 +345,12 @@ mkfn_qc_setup() ->
     end.
 
 setup() ->
-    ok = meck:new(dby),
-    ok = meck:expect(dby, install, 1, {module, ok}),
-    ok = meck:new(Mods = [leviathan_dby], [non_strict]),
+    Mods = [dby, leviathan_dby, leviathan_linux, leviathan_docker],
+    [mock(M) || M <- Mods],
     {ok, Apps} = application:ensure_all_started(erl_mnesia),
     leviathan_mnesia:start(),
-    {[dby | Mods], Apps}.
+    {Mods, Apps}.
 
 teardown(Mods, Apps) ->
     lists:foreach(fun application:stop/1, Apps),
     [meck:unload(M) || M <- Mods].
-    
