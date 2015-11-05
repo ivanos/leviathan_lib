@@ -186,6 +186,11 @@ prepare_cin(CinAddressing) ->
 prepare_conts(ContMaps) ->
     Fn = fun(#{contID := {_HostId, BareContId},
                addressing := Addressing}) ->
+                 prepare_cont(BareContId, Addressing);
+            %% The below clause should be removed when the CEN layer is
+            %% adjusted to the new ContId format that is {HostId, ContId}
+            (#{contID := BareContId,
+               addressing := Addressing}) ->
                  prepare_cont(BareContId, Addressing)
          end,
     lists:foreach(Fn, ContMaps).

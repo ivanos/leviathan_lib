@@ -25,7 +25,7 @@
 
 import_file(Host, Filename) ->
     LM = decode_file(Filename),
-    ok = leviathan_store:import_cens(Host, LM),
+    ok = leviathan_cen_store:import_cens(Host, LM),
     ok = leviathan_dby:import_cens(Host, LM).
 
 decode_file(Filename) ->
@@ -66,7 +66,7 @@ destroy_cen(CenId) ->
 % 2. test_cens/0 returns the cen IDs of the cens in the .json file, so
 %    you can use that to save typing
 % 3. (optional) inspect the levmap:
-%       leviathan_store:get_levmap(leviathan_cen:test_cens()).
+%       leviathan_cen_store:get_levmap(leviathan_cen:test_cens()).
 % 4. test prepare:
 %       leviathan_cen:test_local_prepare_lev(leviathan_cen:test_cens()).
 
@@ -76,11 +76,11 @@ test_cens() ->
 
 % call main entry point to run prepare
 test_local_prepare_lev(CenIds)->
-    prepare_lev(leviathan_store:get_levmap(CenIds)).
+    prepare_lev(leviathan_cen_store:get_levmap(CenIds)).
 
 % prepare cens from a list of cen ids
 prepare(CenIds) ->
-    prepare_lev(leviathan_store:get_levmap(CenIds)).
+    prepare_lev(leviathan_cen_store:get_levmap(CenIds)).
 
 prepare_deltas(Deltas) ->
     ok = lists:foreach(fun prepare_instruction/1, Deltas).
@@ -96,7 +96,7 @@ prepare_instruction({add, cont_in_cen, _}) ->
     % no-op
     ok;
 prepare_instruction({add, bridge, {CenId, IpAddr}}) ->
-    prepare_bus(CenId, IpAddr);
+    prepare_bus(CenId);
 prepare_instruction({destroy, cen, _}) ->
     % no-op
     ok;
@@ -134,24 +134,20 @@ cens_status(#{cens := Cens}, Status) ->
         end, Cens).
 
 prepare_cens(#{cens := Cens}) ->
-    %%     make any necessary Ethernet buses
-    %%     if a Cen has more than 2 containers, we'll create a bus
-    %%
-    lists:foreach(
-        fun(CenMap)->
-            #{cenID := CenId,
-             wire_type := CenType,
-             ip_address := IpAddress} = CenMap,
-            case CenType of
-                bus ->
-                    prepare_bus(CenId, IpAddress);
-                _ ->
-                    ok %% don't create a bus
-            end
-        end, Cens).
+    %% make any necessary Ethernet buses
+    %% if a Cen has more than 2 containers, we'll create a bus
+    Fn = fun(#{cenID := CenId, wire_type := CenType}) ->
+                 case CenType of
+                     bus ->
+                         prepare_bus(CenId);
+                     _ ->
+                         ok %% don't create a bus
+                 end
+         end,
+    lists:foreach(Fn, Cens).
 
-prepare_bus(CenId, IPAddress) ->
-    CmdBundle = leviathan_linux:new_bus(CenId, IPAddress),
+prepare_bus(CenId) ->
+    CmdBundle = leviathan_linux:new_bus(CenId),
     leviathan_linux:eval(CmdBundle),
     ok.
 
@@ -179,21 +175,15 @@ prepare_wire_end(#{endID := EndId, dest := #{type := cen, id := CenId}}) ->
     CmdBundle = leviathan_linux:peer2cen(CenId,EndId),
     leviathan_linux:eval(CmdBundle);				      
 prepare_wire_end(#{endID := EndId,
-                dest := #{type := cont, id := ContId, alias := Alias}} = WireEnd) ->
+                dest := #{type := cont, id := ContId, alias := Alias}}) ->
     CmdBundle = leviathan_linux:peer2cont(ContId, EndId, Alias),
-    leviathan_linux:eval(CmdBundle),
-    case WireEnd of
-	#{endID := EndId,
-	  dest := Dest} ->
-	    leviathan_cin:prepare_wire_end(Dest);
-	_ -> ok  %% No IP Address
-    end.
+    leviathan_linux:eval(CmdBundle).
 
 %% === DESTROY ===== %%%
 
 % destroy cens from a list of cen ids
 destroy(CenIds) ->
-    destroy_lev(leviathan_store:get_levmap(CenIds)).
+    destroy_lev(leviathan_cen_store:get_levmap(CenIds)).
 
 %
 % Top Level Processor
@@ -257,10 +247,10 @@ destroy_wire_end(#{dest := #{type := cont, id := ContId, alias := Alias}}) ->
 
 % Update a Cen with Fn.
 lm_update_cens(HostId, CenId, ContId, Fn) ->
-    LM0 = leviathan_store:get_levmap([CenId]),
+    LM0 = leviathan_cen_store:get_levmap([CenId]),
     LM1 = Fn(CenId, ContId, LM0),
     Deltas = lm_compare(LM0, LM1),
-    ok = leviathan_store:update_cens(HostId, Deltas),
+    ok = leviathan_cen_store:update_cens(HostId, Deltas),
     ok = leviathan_dby:update_cens(HostId, Deltas),
     ok = prepare_deltas(Deltas).
 
@@ -274,10 +264,10 @@ lm_add_container(CenId, ContId, LM0) ->
 
 % add cen
 lm_add_cen(HostId, CenId) ->
-    LM0 = leviathan_store:get_levmap([CenId]),
+    LM0 = leviathan_cen_store:get_levmap([CenId]),
     LM1 = add_cen(CenId, LM0),
     Deltas = lm_compare(LM0, LM1),
-    ok = leviathan_store:update_cens(HostId, Deltas),
+    ok = leviathan_cen_store:update_cens(HostId, Deltas),
     ok = leviathan_dby:update_cens(HostId, Deltas),
     ok = prepare_deltas(Deltas).
 
@@ -287,8 +277,7 @@ add_cen(CenId, LM = ?LM_CENS(Cens)) ->
         true ->
             LM;
         false ->
-            IpB = leviathan_cin:next_cenb(),
-            LM?LM_SET_CENS([cen(CenId, bus, [], IpB) | Cens])
+            LM?LM_SET_CENS([cen(CenId, bus, []) | Cens])
     end.
 
 % returns filter function matching CenId
@@ -321,22 +310,15 @@ add_container_to_censmap(CenId, ContId, LM = ?LM_CENS(Cens0)) ->
     LM?LM_SET_CENS(Cens1).
 
 mk_add_container_to_censmap_fun(ContId) ->
-    fun(Cen = #{contIDs := ContIds0,
-                ipaddr_b := IpB,
-                reservedIps := ReservedIps0}) ->
+    fun(Cen = #{contIDs := ContIds0}) ->
             case lists:member(ContId, ContIds0) of
                 true ->
                     [Cen];
                 false ->
                     ContIds1 = ContIds0 ++ [ContId],
-                    ReservedIps1 = ReservedIps0
-                        ++ [next_ip_in_cen(IpB, ReservedIps0)],
-                    [Cen#{contIDs := ContIds1, reservedIps := ReservedIps1}]
+                    [Cen#{contIDs := ContIds1}]
             end
     end.
-
-next_ip_in_cen(IpB, ReservedIps0) ->
-    binary_to_list(leviathan_cin:ip_address(IpB, ReservedIps0)).
 
 %% add container to Cont map
 add_container_to_contsmap(ContId, CenId, LM = ?LM_CONTS(Conts0)) ->
@@ -378,13 +360,10 @@ lm_remove_container(CenId, ContId, LM) ->
 
 % remove container from cens maps
 remove_container_from_censmap(CenId, ContId, LM = ?LM_CENS(Cens0)) ->
-    Cens1 = update_censmap(CenId, Cens0,
-        fun(Cen = #{contIDs := ContIds0, reservedIps := ReservedIps0}) ->
-            {ContIds1, ReservedIps1} =
-                            list_delete2(ContId, ContIds0, ReservedIps0),
-            [Cen#{contIDs := ContIds1, reservedIps := ReservedIps1}]
-        end),
-    LM?LM_SET_CENS(Cens1).
+    Fn = fun(Cen = #{contIDs := ContIds}) ->
+                    [Cen#{contIDs := lists:delete(ContId, ContIds)}]
+            end,
+    LM?LM_SET_CENS(update_censmap(CenId, Cens0, Fn)).
 
 % remove container from Cont map
 remove_container_from_contsmap(ContId, CenId, LM = ?LM_CONTS(Conts0)) ->
@@ -585,30 +564,17 @@ decode_jiffy(CensJson) ->
 
 % cens
 cens_from_jiffy(CensJson) ->
-    Cens = lists:foldl(
-        fun(#{<<"cenID">> := Cen, <<"containerIDs">> := Conts}, Acc) ->
-            [cen(binary_to_list(Cen),
-                 bus,
-                 Conts,
-                 leviathan_cin:next_cenb()) | Acc]
-        end, [], CensJson),
-    Cens.
+    lists:foldl(
+      fun(#{<<"cenID">> := Cen, <<"containerIDs">> := Conts}, Acc) ->
+              [cen(binary_to_list(Cen), bus, Conts) | Acc]
+      end, [], CensJson).
+    
 
-cen(Cen, WireType, Conts, IpAddrB) ->
+cen(Cen, WireType, Conts) ->
     #{cenID => Cen,
       wire_type => WireType,
-      contIDs => list_binary_to_list(Conts),
-      ipaddr_b => IpAddrB,
-      ip_address => binary_to_list(leviathan_cin:bridge_ip_address(IpAddrB)),
-      reservedIps => list_binary_to_list(container_ip_addrs(IpAddrB, Conts))}.
+      contIDs => list_binary_to_list(Conts)}.
 
-container_ip_addrs(IpAddrB, Conts) ->
-    lists:map(
-        fun(Count) ->
-            leviathan_cin:ip_address(IpAddrB, Count)
-        end, lists:seq(1, length(Conts))).
-
-% conts
 conts_from_jiffy(CensJson) ->
     Pairs = cen_cont_pairs(CensJson),
     Index = lists:foldl(
@@ -682,33 +648,22 @@ id_number_for_cen(CenId, #{cens := Cens, reservedIdNums := ReservedIds}) ->
     list_lookup2(CenId, Cens, ReservedIds).
 
 % ContInfo :: [{contid, id}]
-wire_cen(Cen = #{cenID := CenId}, ContsInfo) ->
-    IpAddrs = ipaddrs_for_conts(Cen, ContsInfo),
-    lists:foldl(mk_wire_cont_to_cen_fun(CenId),
-                [], lists:zip(ContsInfo, IpAddrs)).
-
-ipaddrs_for_conts(#{reservedIps := ReservedIps, contIDs := ContIds},
-                  ContsInfo) ->
-    lists:map(
-      fun({ContId, _}) ->
-              list_lookup2(ContId, ContIds, ReservedIps)
-      end, ContsInfo).
+wire_cen(#{cenID := CenId}, ContsInfo) ->
+    lists:foldl(mk_wire_cont_to_cen_fun(CenId), [], ContsInfo).
 
 mk_wire_cont_to_cen_fun(CenId) ->
-    fun({{ContId, Id}, Ip}, Acc) ->
-            Wire = [mk_in_endpoint(CenId, ContId, Id, Ip),
+    fun({ContId, Id}, Acc) ->
+            Wire = [mk_in_endpoint(CenId, ContId, Id),
                     mk_out_endpoint(CenId, ContId, Id)],
             [Wire| Acc]
     end.
 
-mk_in_endpoint(CenId, ContId, IdNumber, Ip) ->
+mk_in_endpoint(CenId, ContId, IdNumber) ->
     #{endID => in_endpoint_name(ContId, IdNumber),
       side => in,
       dest => #{type => cont,
                 id => ContId,
-                alias => CenId,
-                ip_address => Ip}
-     }.
+                alias => CenId}}.
 
 mk_out_endpoint(CenId, ContId, IdNumber) ->
     #{endID => out_endpoint_name(ContId, IdNumber),

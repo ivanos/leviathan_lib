@@ -15,16 +15,13 @@
 % map of cen to containers
 -record(leviathan_cen, {cen :: string(),
                         data :: #{contIDs => [string()],
-                                  wire_type => wire_type(),
-                                  ipaddr_b => non_neg_integer(),
-                                  ipaddr => string()},
+                                  wire_type => wire_type()},
                         wires :: [[in_endpoint() | out_endpoint()]]}).
 
 % connection between cen and container
--record(leviathan_cont, {cont :: string(),
-                         cen :: string(),
-                         data :: #{idnumber => integer(),
-                                   ip_address => string()}}).
+-record(leviathan_cen_cont, {cont :: string(),
+                             cen :: string(),
+                             idnumber :: non_neg_integer()}).
 
 -record(leviathan_cin, {cin :: string(),
                         data :: #{contIDs => [leviathan_cin2:cont_id()],
