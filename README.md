@@ -14,10 +14,16 @@ Erlang code specific to Leviathan: Docker Container Network Orchestrator
         - [Leviathan CEN Map: The top level structure:](#leviathan-cen-map-the-top-level-structure)
         - [Leviathan CEN Authoritative Store: persistent store](#leviathan-cen-authoritative-store-persistent-store)
         - [Dobby CEN Data Model](#dobby-cen-data-model)
+        - [Sequence Diagrams](#sequence-diagrams)
+            - [Import CENs step](#import-cens-step)
+            - [Make CENs step](#make-cens-step)
     - [Leviathan CIN Layer](#leviathan-cin-layer)
         - [Leviathan CIN Map: The top level structure:](#leviathan-cin-map-the-top-level-structure)
         - [Leviathan CIN Authoritative Store: persistent store](#leviathan-cin-authoritative-store-persistent-store)
         - [Leviathan CIN Dobby Data Model](#leviathan-cin-dobby-data-model)
+        - [Sequence Diagrams](#sequence-diagrams)
+            - [Import CINs step](#import-cins-step)
+            - [Make CINs step](#make-cins-step)
     - [Sequence diagrams](#sequence-diagrams)
         - [Import CENs and building CINs](#import-cens-and-building-cins)
             - [New version](#new-version)
@@ -336,6 +342,14 @@ Bridge, Cen | policy_engine | Bridge manages network traffic for Cen
 Where Endpoint(in) is an "inside" endpiont, Endpoint(out) is an "outside"
 endpoint, Endpoint(cont) is a container endpoint.
 
+### Sequence Diagrams
+
+#### Import CENs step
+![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFABANbGV2aWF0aGFuX2NlbiBhcyBDRU4ABxpfc3RvcmUgYXMgU3RvcmUAMxdkYnkgYXMgRGJ5CgoAgQoGIC0-AIECBTogL2Nlbi9pbXBvcnQKbm90ZSBvdmVyAIEvBywAgSYFLCBDRU46IHRoZQCBRgcgc2VuZHMgYSBKU09OIGZpbGUgZGVzY3JpYmluZyBDRU5zCgoAgV8FLT4ANQZkZWNvZGVfYmluYXJ5KEpTT04pCkNFTi0AfAlDZW5MTQArCQCBRgU6IACBDwZfY2VucygAHAUpAE0JRGJ5AAUbLT4Agm8HOg&s=roundgreen)
+
+#### Make CENs step
+![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFABANbGV2aWF0aGFuX2NlbiBhcyBDRU4ABxpfc3RvcmUgYXMgU3RvcmUAMxdkYnkgYXMgRGJ5CgoAgQoGIC0-AIECBTogL2Nlbi9tYWtlCm5vdGUgb3ZlcgCBLQcsAIEkBSwgQ0VOOiB0aGUAgUQHIHNlbmRzICdbImNlbjEiLCJjZW4yIl0nCgCBUgUtPgAqBnByZXBhcmUoQ2VuSWRzKSBbYXN5bmNdAB4HLT4AghEHOgoKQ0VOIC0-AIE6BjogZ2V0X2xldm1hcAAzCAoAgVUFAC4GRU46IENlbkxNAC4JRGJ5OiBzZXQgc3RhdHVzIG9mAIElBkVOcyBhcwCBAAdpbmcAXwgAgREMX2NlbnMoAEsFKQAKFm9udAAEHXdpcmUAMhAAcx9yZWFkeQCCZgZyaWdodCBvZgCCXAZOb3cAgmEFYmlyZGdlcyBhbmRcbiBpbnRlcmZhY2VzIGFyZSBicm91Z2h0IHVwXG4gYW5kIHdpcmVkIHRvZ2V0aGVyLg&s=roundgreen)
+
 ## Leviathan CIN Layer
 ### Leviathan CIN Map: The top level structure:
 
@@ -493,6 +507,14 @@ Bridge, IpAddress | bound_to | IP Address of a bridge in this CIN (corss layer l
 CIN, CEN | part_of | A CEN that this CIN covers
 
 `Container`, `CEN` and `Bridge` identifiers are created in the CEN Layer.
+
+### Sequence Diagrams
+
+#### Import CINs step
+![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFABANbGV2aWF0aGFuX2NpbiBhcyBDSU4ABxpfc3RvcmUgYXMgU3RvcmUAMxdkYnkgYXMgRGJ5CgoAgQoGIC0-AIECBTogL2Npbi9pbXBvcnQKbm90ZSBvdmVyAIEvBywAgSYFLCBDSU46IHRoZQCBRgcgc2VuZHMgJ1siY2luMSI6WyJjZW4xIl0sICJjaW4yAAoHMiJdXScKAIFnBS0-AD0GYnVpbGRfY2lucyhDaW5JZFRvQ2VuSWRzTWFwKQBxDElOLACBSgY6IAAYECBkZWlmaW5lcyBDRU5zLCBhIACCZwZ1bGFyIENpbiB3aWxsIGNvbnRhaW47Cgpsb29wIGZvciBlYWNoIABqBSBpbgBGEQogICAgQ0lOIC0-IERieTogZ2V0X2NlbigAgRwFKQAaBURieSAtAIFDCENlbk1hcCBhcyBkZWZpbmVkIGJ5AIMwDGVuCmVuZACBPRgANwZpcyB1c2VkIHRvIGdldCBDb250SWRzIGFuZCBjcmVhdGUgQWRkcmVzc2luZwCBPwUAgn4FSU5zAIEZPndpcmVzAIFAGVdpcmVzAIEhNwA1B3JlAIFPCQCBLRsAgx0GZXJzAIMLBUlOcwoAgnsFAIUQCUNpbkxNAIQ3CQCECAcAhSMGAIQ6CUxNKQCEWQkAgzIFAAcZLT4AhwMHOg&s=roundgreen)
+
+#### Make CINs step
+![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFABANbGV2aWF0aGFuX2NpbiBhcyBDSU4ABxpfc3RvcmUgYXMgU3RvcmUAMxdkYnkgYXMgRGJ5CgoAgQoGIC0-AIECBTogL2Npbi9tYWtlCm5vdGUgb3ZlcgCBLQcsAIEkBSwgQ0lOOiB0aGUAgUQHIHNlbmRzICdbImNpbjEiLCJjaW4yIl0nCgoAgVMFLT4AKwZwcmVwYXJlKENpbklkcykgW2FzeW5jXQAeBy0-AIISBzoKQ0lOIC0-AIE6BjogZ2V0X2xldm1hcAAyCAoAgVUFAC0GSU46IENpbkxNAC4IAIEXBWRvXwBjC0xNKQoATQhEYnk6IHNldCBzdGF0dXNlcyBvZgCBRQZJTnMgaW4ARwYgYXMAgSgHaW5nAE0NAIE-B19jaW5zAFQIAAsVb250ABEQAFIqcmVhZHkKAIJ0DElOLACCCQhub3cAgngFYnJpZGdlcyBhbmQAgwgFY29udGFpbmVycyBoYXZlIHRoZWlyIElQcw&s=roundgreen)
 
 ## Sequence diagrams
 ### Import CENs and building CINs
