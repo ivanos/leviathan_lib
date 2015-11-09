@@ -306,14 +306,11 @@ cens_from_lm(Host, #{censmap := #{cens := Cens}}) ->
 
 % prepare to publish one cen
 pub_cen(Host, #{cenID := CenId,
-          wire_type := bus,
-          contIDs := ContIds,
-          ip_address := BridgeIpAddr}) ->
+                wire_type := bus,
+                contIDs := ContIds}) ->
     [
         link_cen_to_containers(Host, CenId, ContIds, bus),
-        dby_bridge(Host, list_to_binary(CenId),
-            [status_md(pending),
-             cen_ip_addr_md(list_to_binary(BridgeIpAddr))]),
+        dby_bridge(Host, list_to_binary(CenId), [status_md(pending)]),
         dby_bridge_to_cen(Host, list_to_binary(CenId), list_to_binary(CenId))
     ];
 pub_cen(Host, #{cenID := CenId,
@@ -385,12 +382,9 @@ endpoint(Host, #{endID := EndId,
                  side := Side,
                  dest := #{type := cont,
                            id := ContId,
-                           alias := Eth,
-                           ip_address := IpAddr}}) ->
+                           alias := Eth}}) ->
     [
         dby_endpoint(Host, list_to_binary(EndId), Side, [alias_md(list_to_binary(Eth)), status_md(pending)]),
-        dby_ipaddr(list_to_binary(IpAddr)),
-        dby_endpoint_to_ipaddr(Host, list_to_binary(EndId), list_to_binary(IpAddr)),
         dby_endpoint_to_container(Host, list_to_binary(EndId), list_to_binary(ContId))
     ];
 endpoint(Host, #{endID := EndId,

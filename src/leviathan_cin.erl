@@ -80,12 +80,16 @@ get_cen_containers(Cens) ->
 
 make_cin_addressing(IpB, Cens) ->
     Fn = fun(#{cenID := CenId, wire_type := WireType}, CinCount) ->
-                 IntfAndIp = {get_cen_gateway_interface(CenId),
-                              cin_ip_address(IpB, WireType, CinCount)},
-                 {{CenId, IntfAndIp}, CinCount + 1}
+                 Interface = get_cen_gateway_interface(CenId),
+                 Ip = cin_ip_address(IpB, WireType, CinCount),
+                 {make_cin_addressing_item(CenId, Interface, Ip),
+                  CinCount + 1}
          end,
     {CinAddressing, _} = lists:mapfoldl(Fn, 1, Cens),
     maps:from_list(CinAddressing).
+
+make_cin_addressing_item(CenId, BridgeInterface, Ip) ->
+    {CenId, #{interface => BridgeInterface, ip => Ip}}.
 
 get_cen_gateway_interface(CenId) ->
     CenId.
@@ -115,15 +119,21 @@ mkfn_make_cont_map(CinId, IpB, ContToWires) ->
 
 make_cont_addressing(IpB, InitContCount, ContWires) ->
     Fn = fun([
-              #{dest := #{alias := ContInterface}},
+              #{endID := EndId, dest := #{alias := ContInterface}},
               #{dest := #{id := CenId}}
              ], ContCount) ->
-                 IntfAndIp = {ContInterface,
-                              cont_ip_address(IpB, ContCount)},
-                 {{CenId, IntfAndIp}, ContCount + 1}
+                 Ip = cont_ip_address(IpB, ContCount),
+                 {make_cont_addressing_item(CenId,
+                                            EndId,
+                                            ContInterface,
+                                            Ip),
+                  ContCount + 1}
          end,
     {ContAdddressing, _} = lists:mapfoldl(Fn, InitContCount, ContWires),
     maps:from_list(ContAdddressing).
+
+make_cont_addressing_item(CenId, EndId, ContInterface, Ip) ->
+    {CenId, #{endID => EndId, interface => ContInterface, ip => Ip}}.
 
 get_cen_wires(CenIds) ->
     lists:foldl(fun(CenId, Acc) ->
@@ -176,7 +186,8 @@ prepare_cins(CinMaps) ->
 prepare_cin(CinAddressing) ->
     case maps:keys(CinAddressing) of
         [CenId] ->
-            {BridgeInterface, Ip} = maps:get(CenId, CinAddressing),
+            #{interface := BridgeInterface,
+              ip := Ip} = maps:get(CenId, CinAddressing),
             Cmd = leviathan_linux:set_bus_ip(BridgeInterface, Ip),
             leviathan_linux:eval(Cmd);
         _ ->
@@ -198,7 +209,8 @@ prepare_conts(ContMaps) ->
 prepare_cont(ContId, ContAddressing) ->
     case maps:keys(ContAddressing) of
         [CenId] ->
-            {ContInterface, Ip} = maps:get(CenId, ContAddressing),
+            #{interface := ContInterface,
+              ip := Ip} = maps:get(CenId, ContAddressing),
             CmdBundle = leviathan_linux:set_ip_address(ContId,
                                                        ContInterface,
                                                        Ip),

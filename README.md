@@ -378,18 +378,14 @@ CIN addressing map:
 
 Key | Value | Description
 --- | ----- | -----------
-CenId (string) | {string, string &#124; null} | a pair consisting of the bridge interface for a CEN and its IP address
-
-```erlang
- #{CenId => {BridgeInterface, BridgeIp}}
-```
+CenId (string) | #{interface => sring, ip => string &#124; null} | a map consisting of the bridge interface for a CEN and its IP address
 
 Examples of CIN maps:
 ``` erlang
  #{cinID => "cin1",
    contIDs => [{"h1", "c1"}, {"h1", "c2"},  {"h1", "c3"}],
    ip_b => 17,
-   addressing => #{"cen1" => {"cen1_br", 10.17.0.1}}
+   addressing => #{"cen1" => #{interface => "cen1_br", ip => "10.17.0.1""}}
   }
 ```
 
@@ -397,8 +393,8 @@ Examples of CIN maps:
  #{cinID => "cin1",
    contIDs => [{"h1", "c1"}, {"h1", "c2"},  {"h1", "c3"}],
    ip_b => 17,
-   addressing => #{"cen1" => {"cen1", 10.17.0.1},
-                   "cen2" => {"cen2", 10.17.0.2}}
+   addressing => #{"cen1" => #{interface => "cen1", ip => "10.17.0.1"},
+                   "cen2" => #{interface => "cen2", ip => "10.17.0.2"}}}
   }
 ```
 
@@ -408,25 +404,25 @@ Key | Value | Description
 --- | ----- | -----------
 contID | {string, string} | Container identifier {HostId, ContId}
 cinID | string | CIN identifier the container is in
-addressing | map | A map that describes IP addressing of the Containers in this CIN
+addressing | map | A map that describes IP addressing of the Container in this CIN
 
 Key | Value | Description
 --- | ----- | -----------
-CenId (string) | {string, string &#124; null} | a pair consisting of the Container interface in a CEN and its IP address
+CenId (string) | #{endID => string, interface => sring, ip => string &#124; null} | a map consisting of the Container inside endpoint id, its interface, and the IP address of the endpoint in this CEN
 
 Examples of Container maps:
 ``` erlang
  #{contID => {"h1", "c1"},
    cinID => "cin1",
-   addressing => #{"cen1" => {"eth0", 10.17.0.10}}
+   addressing => #{"cen1" => #{endID => "c1.0i", interface => "eth0", ip => "10.17.0.10"}}
   } 
 ```
 
 ``` erlang
  #{contID => {"h1", "c1"},
    cinID => "cin1",
-   addressing => #{"cen1" => {"eth0", 10.17.0.10},
-                   "cen2" => {"eth1", 10.17.0.11}}
+   addressing => #{"cen1" => #{endID => "c1.0i", interface => "eth0", ip => "10.17.0.10"},
+                   "cen2" => #{endID => "c1.1i", interface => "eth1", ip => "10.17.0.11"}}
   } 
 ```
 
@@ -453,7 +449,7 @@ Example table record:
 {leviathan_cin, "cin1",
   #{contIDs => [{"host1", "cont1"},{"host1", "cont2"}],
     ip_b => 10,
-    addressing => #{"cen1" => {"cen1_br", 10.17.0.1}}
+    addressing => #{"cen1" => #{interface => "cen1_br", ip => "10.17.0.1""}}
    }
 }
 ```
@@ -476,7 +472,7 @@ Example table record:
 
 ```erlang
 {leviathan_cin_cont, {"host1", "cont2"}, "cin1",
- #{"cen1" => {"eth0", 10.17.0.10}}
+   addressing => #{"cen1" => #{endID => "c1.0i", interface => "cen1", ip => "10.17.0.10"}}
 }
 ```
 
@@ -502,11 +498,11 @@ Links:
 Type, Type | Link Type | Description
 ---------- | --------- | -----------
 CIN, IpAddress | part_of | IP Address of a container/bridge in this CIN (IP Address is in the CIN)
-Container, IpAddress | bound_to | IP Address of a container in this CIN (cross layer link)
+Endpoint(in), IpAddress | bound_to | IP Address of a container in this CIN (cross layer link)
 Bridge, IpAddress | bound_to | IP Address of a bridge in this CIN (corss layer link)
 CIN, CEN | part_of | A CEN that this CIN covers
 
-`Container`, `CEN` and `Bridge` identifiers are created in the CEN Layer.
+`Endpoint(in)`, `CEN` and `Bridge` identifiers are created in the CEN Layer.
 
 ### Sequence Diagrams
 

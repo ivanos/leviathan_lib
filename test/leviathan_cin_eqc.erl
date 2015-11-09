@@ -61,16 +61,23 @@ gen_cen_wires(#{cenID := CenId, contIDs := ContIds}) ->
     [gen_wire(CenId, ContId) || ContId <- ContIds].
 
 gen_wire(CenId, ContId) ->
-    [#{side => in,
+    [#{endID => gen_endpoint_id(ContId, in),
+       side => in,
        dest => #{type => cont,
                  alias => gen_cont_interface_id(CenId),
                  id => ContId}},
-     #{side => out,
+     #{endID => gen_endpoint_id(ContId, out),
+       side => out,
        dest => #{type => cen,
                  id => CenId}}].
 
 gen_cont_interface_id(CenId) ->
     CenId.
+
+gen_endpoint_id({_, BareContId}, in) ->
+    lists:flatten([BareContId, $., "0i"]);
+gen_endpoint_id({_, BareContId}, out) ->
+    lists:flatten([BareContId, $., "0i"]).
 
 gen_wire_type() ->
     bus.
@@ -209,7 +216,8 @@ gather_cens_conts(CenIds, CenMaps) ->
 mkfn_cin_addressing_correct({IpB, Addressing}, CenMaps) ->
     fun(CenId) ->
             #{cenID := EBridgeInterface} = maps:get(CenId, CenMaps),
-            {ABridgeInterface, Ip} = maps:get(CenId, Addressing),
+            #{interface := ABridgeInterface,
+              ip := Ip} = maps:get(CenId, Addressing),
             ?assertEqual(EBridgeInterface, ABridgeInterface),
             ?assertMatch({ok, {_, IpB, _, _}}, inet_parse:address(Ip))
     end.
@@ -260,10 +268,14 @@ mkfn_cont_in_cen_conts(ContId, CenMaps) ->
 mkfn_cont_addressing_correct({ContId, IpB, Addressing}, Wires) ->
     fun(CenId) ->
             [
-              #{side := in, dest := #{alias := EContInterface}},
-              #{side := out}
+             #{endID := EEndId, side := in,
+               dest := #{alias := EContInterface}},
+             #{side := out}
             ] = find_cont_wire(ContId, maps:get(CenId, Wires)),
-            {AContInterface, Ip} = maps:get(CenId, Addressing),
+            #{endID := AEndId,
+              interface := AContInterface,
+              ip := Ip} = maps:get(CenId, Addressing),
+            ?assertEqual(EEndId, AEndId),
             ?assertEqual(EContInterface, AContInterface),
             ?assertMatch({ok, {_, IpB, _, _}}, inet_parse:address(Ip))
     end.
