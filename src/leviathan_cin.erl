@@ -55,15 +55,15 @@ prepare(CinIds) ->
 %% -----------------------------------------------------------------------------
 
 build_cin(CinId, CenIds, ?MATCH_LM(CinMaps, ContMaps)) ->
-    CinMap = make_cin_map(CinId, CenIds),
-    ?LM([CinMap | CinMaps], make_cont_maps(CinMap) ++ ContMaps).
+    Cens = get_cens(CenIds),
+    CinMap = make_cin_map(CinId, Cens),
+    ?LM([CinMap | CinMaps], make_cont_maps(CinMap, Cens) ++ ContMaps).
 
 %% -----------------------------------------------------------------------------
 %% Local Functions: building CIN maps
 %% -----------------------------------------------------------------------------
 
-make_cin_map(CinId, CenIds) ->
-    Cens = get_cens(CenIds),
+make_cin_map(CinId, Cens) ->
     IpB = next_cin_ip_b(),
     #{cinID => CinId,
       contIDs => get_cen_containers(Cens),
@@ -98,12 +98,9 @@ get_cen_gateway_interface(CenId) ->
 %% Local Functions: building Container maps
 %% -----------------------------------------------------------------------------
 
-make_cont_maps(#{cinID := CinId,
-                 contIDs := ContIds,
-                 ip_b := IpB,
-                 addressing := CinAddressing}) ->
-    CenIdsInCin = maps:keys(CinAddressing),
-    ContToWires = map_cont_to_wires(get_cen_wires(CenIdsInCin)),
+make_cont_maps(#{cinID := CinId, contIDs := ContIds, ip_b := IpB},
+               Cens) ->
+    ContToWires = map_cont_to_wires(get_cen_wires(Cens)),
     Fn = mkfn_make_cont_map(CinId, IpB, ContToWires),
     element(1, lists:mapfoldl(Fn, 1, ContIds)).
 
@@ -135,10 +132,10 @@ make_cont_addressing(IpB, InitContCount, ContWires) ->
 make_cont_addressing_item(CenId, EndId, ContInterface, Ip) ->
     {CenId, #{endID => EndId, interface => ContInterface, ip => Ip}}.
 
-get_cen_wires(CenIds) ->
-    lists:foldl(fun(CenId, Acc) ->
-                        leviathan_dby:get_wires(CenId) ++ Acc
-                end, [], CenIds).
+get_cen_wires(Cens) ->
+    lists:foldl(fun(Cen, Acc) ->
+                        leviathan_dby:get_wires(Cen) ++ Acc
+                end, [], Cens).
 
 map_cont_to_wires(Wires) ->
     map_cont_to_wires(Wires, #{}).

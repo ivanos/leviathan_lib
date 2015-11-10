@@ -470,9 +470,8 @@ md_wire_type(<<"bus">>) ->
 
 % search
 
-bridge(_,?MATCH_BRIDGE(BridgeId, IPAddress),[], Acc)-> 
-    {continue, Acc#{bridgeID := binary_to_list(BridgeId),
-                    ip_address := binary_to_list(IPAddress)}};
+bridge(_,?MATCH_BRIDGE(BridgeId),[], Acc)->
+    {continue, Acc#{bridgeID := binary_to_list(BridgeId)}};
 bridge(_, _, _, Acc) ->
     {continue, Acc}.
     
@@ -528,23 +527,25 @@ wires(_, _, _, Acc) ->
     {continue, Acc}.
 
 %   bridge <-> endpoint (outside) <-> endpoint (inside) <-> cont
-wires_bus(_, ?MATCH_BRIDGE(_, _), [_], Acc) ->
+wires_bus(_, ?MATCH_BRIDGE(_), [_], Acc) ->
     % don't follow links from Bridge
     % we want to approach the bridge from the other direction of the loop
     {skip, Acc};
-wires_bus(_, ?MATCH_BRIDGE(BridgeId, _),
-                [{_, ?MATCH_OUT_ENDPOINT(OutEndId), _},
-                 {_, ?MATCH_IN_ENDPOINT(InEndId, Alias), _},
-                 {_, ?MATCH_CONTAINER(ContId), _} | _],
-                                                 Acc = #{wires := Wires}) ->
+wires_bus(_, ?MATCH_BRIDGE(BridgeId),
+          [{_, ?MATCH_OUT_ENDPOINT(OutEndId), _},
+           {_, ?MATCH_IN_ENDPOINT(InEndId, Alias), _},
+           {_, ?MATCH_CONTAINER(ContId), _} | _],
+          Acc = #{wires := Wires}) ->
     Wire = [
-        #{endID => binary_to_list(InEndId),
-          dest => #{type => cont,
-                    id => binary_to_list(ContId),
-                    alias => binary_to_list(Alias)}},
-        #{endID => binary_to_list(OutEndId),
-          dest => #{type => cen,
-                    id => binary_to_list(BridgeId)}}],
+            #{endID => binary_to_list(InEndId),
+              side => in,
+              dest => #{type => cont,
+                        id => binary_to_list(ContId),
+                        alias => binary_to_list(Alias)}},
+            #{endID => binary_to_list(OutEndId),
+              side => out,
+              dest => #{type => cen,
+                        id => binary_to_list(BridgeId)}}],
     {continue, Acc#{wires := [Wire | Wires]}};
 wires_bus(_, ?MATCH_IPADDR(IpAddr),
                 [{_, ?MATCH_ENDPOINT(EndId), _} | _],

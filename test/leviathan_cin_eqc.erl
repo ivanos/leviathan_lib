@@ -316,7 +316,7 @@ expect_dobby_get_cen(CenMaps) ->
 
 expect_dobby_get_wires(Wires) ->
     ok = meck:expect(leviathan_dby, get_wires,
-                     fun(CenId) ->
+                     fun(#{cenID := CenId, wire_type := bus}) ->
                              maps:get(CenId, Wires)
                      end).
 

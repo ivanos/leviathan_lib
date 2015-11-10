@@ -11,9 +11,8 @@
                                    ?MDVALUE(<<"contID">>, ContId)}).
 
 % mattern match for a bridge, the bridge id, and the ip address
--define(MATCH_BRIDGE(BridgeId, IPAddress), #{?MDTYPE(<<"bridge">>),
-                                  ?MDVALUE(<<"bridgeID">>, BridgeId),
-				  ?MDVALUE(<<"ipaddr">>, IPAddress)}).
+-define(MATCH_BRIDGE(BridgeId), #{?MDTYPE(<<"bridge">>),
+                                  ?MDVALUE(<<"bridgeID">>, BridgeId)}).
 
 % pattern match for a CEN, the CEN id, and the wire type
 -define(MATCH_CEN(CenId, WireType), #{?MDTYPE(<<"cen">>),
