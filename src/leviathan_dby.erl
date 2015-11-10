@@ -142,7 +142,9 @@ dby_cin_id(CinId) ->
 -spec import_cins(HostId :: string(), CinLM :: leviathan_cin:cin_lm()) -> ok.
 
 import_cins(HostId, CinLM) ->
-    error(not_implemented).
+    ToPublish = [cins_from_lm(HostId, CinLM),
+                 cins_conts_from_lm(HostId, CinLM)],
+    ok = dby:publish(?PUBLISHER, lists:flatten(ToPublish), [persistent]).
 
 
 -spec set_cin_status(CinId :: string(), Status) -> ok when
@@ -154,6 +156,44 @@ set_cin_status(CinId, Status) ->
 
 update_cins(HostId, Instructions) ->
     error(not_implemented).
+
+%% -----------------------------------------------------------------------------
+%% Internal functions: CIN Layer
+%% -----------------------------------------------------------------------------
+
+cins_from_lm(Host, #{cins := CinMaps}) ->
+    lists:map(fun(Cin) -> pub_cin(Host, Cin) end, CinMaps).
+
+pub_cin(Host, #{cinID := CinId, addressing := Addressing}) ->
+    Fn = fun(CenId, #{interface := BridgeId, ip := Ip}, Acc) ->
+                 [
+                  dby_ipaddr(Ip),
+                  dby_cen_to_cin(CenId, CinId),
+                  dby_ipaddr_to_cin(Ip, CinId),
+                  dby_ipaddr_to_bridge(Host, Ip, BridgeId)
+                  | Acc
+                 ]
+         end,
+    [
+     dby_cin(CinId, [status_md(pending)]),
+     maps:fold(Fn, [], Addressing)
+    ].
+
+
+cins_conts_from_lm(Host, #{conts := ContMaps}) ->
+    lists:map(fun(Cont) -> pub_cin_conts(Host, Cont) end, ContMaps).
+
+pub_cin_conts(Host, #{cinID := CinId, addressing := Addressing}) ->
+    Fn = fun(_CenId, #{endID := EndpointId, ip := Ip}, Acc) ->
+                 [
+                  dby_ipaddr(Ip),
+                  dby_ipaddr_to_cin(Ip, CinId),
+                  dby_endpoint_to_ipaddr(Host, EndpointId, Ip)
+                  | Acc
+                 ]
+         end,
+    maps:fold(Fn, [], Addressing).
+
 
 % -----------------------------------------------------------------------------
 %
@@ -228,6 +268,10 @@ dby_cen(CenId, Metadata) when is_binary(CenId) ->
     {dby_cen_id(CenId), [{<<"cenID">>, CenId},
 			 {<<"type">>, <<"cen">>}] ++ Metadata}.
 
+dby_cin(CinId, Metadata) when is_binary(CinId) ->
+    {dby_cin_id(CinId), [{<<"cinID">>, CinId},
+                         {<<"type">>, <<"cin">>}] ++ Metadata}.
+
 dby_bridge(Host, BridgeId, Metadata) when is_binary(BridgeId) ->
     {dby_bridge_id(Host, BridgeId), [{<<"bridgeID">>, BridgeId},
 				     {<<"type">>, <<"bridge">>}] ++ Metadata}.
@@ -283,6 +327,15 @@ dby_bridge_to_cen(Host, BridgeId, CenId) ->
 dby_endpoint_to_endpoint(Host, EndpointId1, EndpointId2, Type) ->
     dby_link(dby_endpoint_id(Host, EndpointId1),
              dby_endpoint_id(Host, EndpointId2), Type).
+
+dby_ipaddr_to_bridge(Host, Ip, BridgeId) ->
+    dby_link(dby_ipaddr_id(Ip), dby_bridge_id(Host, BridgeId), <<"bound_to">>).
+
+dby_cen_to_cin(CenId, CinId) ->
+    dby_link(dby_cen_id(CenId), dby_cin_id(CinId), <<"part_of">>).
+
+dby_ipaddr_to_cin(Ip, CinId) ->
+    dby_link(dby_ipaddr_id(Ip), dby_cin_id(CinId), <<"part_of">>).
 
 % helper
 dby_link(E1, E2, Type) ->
