@@ -1,7 +1,8 @@
 -module(leviathan_cin).
 
 -export([build_cins/1,
-         prepare/1]).
+         prepare/1,
+         destroy/1]).
 
 -define(LM_EMPTY, ?LM([], [])).
 -define(LM(Cins, Conts), #{cins => Cins, conts => Conts}).
@@ -49,6 +50,12 @@ build_cins(CinToCensMap) ->
 
 prepare(CinIds) ->
     do_prepare(leviathan_cin_store:get_levmap(CinIds)).
+
+
+-spec destroy(CinIds :: [string()]) -> ok.
+
+destroy(CinIds) ->
+    do_destroy(leviathan_cin_store:get_levmap(CinIds)).
 
 %% -----------------------------------------------------------------------------
 %% Local Functions: building CIN LM
@@ -170,11 +177,6 @@ do_prepare(?MATCH_LM(CinMaps, ContMaps)) ->
     prepare_conts(ContMaps),
     set_cin_status(CinMaps, ready).
 
-set_cin_status(CinMaps, Status) ->
-    lists:foreach(fun(#{cinID := CinId}) ->
-                          leviathan_dby:set_cin_status(CinId, Status)
-                  end, CinMaps).
-
 prepare_cins(CinMaps) ->
     lists:foreach(fun(#{addressing := Addressing}) ->
                           prepare_cin(Addressing)
@@ -217,6 +219,58 @@ prepare_cont(ContId, ContAddressing) ->
     end.
 
 %% -----------------------------------------------------------------------------
+%% Local Functions: destroying CINs
+%% -----------------------------------------------------------------------------
+
+do_destroy(?MATCH_LM(CinMaps, ContMaps)) ->
+    set_cin_status(CinMaps, destroy),
+    destroy_cins(CinMaps),
+    destroy_conts(ContMaps),
+    set_cin_status(CinMaps, pending).
+
+destroy_cins(CinMaps) ->
+    lists:foreach(fun(#{addressing := Addressing}) ->
+                          destroy_cin(Addressing)
+                  end, CinMaps).
+
+destroy_cin(CinAddressing) ->
+    case maps:keys(CinAddressing) of
+        [CenId] ->
+            #{interface := BridgeInterface,
+              ip := Ip} = maps:get(CenId, CinAddressing),
+            Cmd = leviathan_linux:delete_bus_ip(BridgeInterface, Ip),
+            leviathan_linux:eval(Cmd);
+        _ ->
+            erlang:error(cins_spanning_cens_not_implemented)
+    end.
+
+destroy_conts(ContMaps) ->
+    Fn = fun(#{contID := {_HostId, BareContId},
+               addressing := Addressing}) ->
+                 destroy_cont(BareContId, Addressing);
+            %% The below clause should be removed when the CEN layer is
+            %% adjusted to the new ContId format that is {HostId, ContId}
+            (#{contID := BareContId,
+               addressing := Addressing}) ->
+                 destroy_cont(BareContId, Addressing)
+         end,
+    lists:foreach(Fn, ContMaps).
+
+destroy_cont(ContId, ContAddressing) ->
+    case maps:keys(ContAddressing) of
+        [CenId] ->
+            #{interface := ContInterface,
+              ip := Ip} = maps:get(CenId, ContAddressing),
+            CmdBundle = leviathan_linux:delete_ip_address(ContId,
+                                                          ContInterface,
+                                                          Ip),
+            leviathan_linux:eval(CmdBundle);
+        _ ->
+            erlang:error(cins_spanning_cens_not_implemented)
+    end.
+    
+
+%% -----------------------------------------------------------------------------
 %% Local Functions: addressing
 %% -----------------------------------------------------------------------------
 
@@ -252,3 +306,8 @@ cont_ip_address(IpB, UsedIps, N) ->
         true ->
             cont_ip_address(IpB, UsedIps, N+1)
     end.
+
+set_cin_status(CinMaps, Status) ->
+    lists:foreach(fun(#{cinID := CinId}) ->
+                          leviathan_dby:set_cin_status(CinId, Status)
+                  end, CinMaps).
