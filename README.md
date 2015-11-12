@@ -8,7 +8,8 @@ Erlang code specific to Leviathan: Docker Container Network Orchestrator
     - [Application Environment Variables](#application-environment-variables)
     - [CENs](#cens)
     - [JSON format example](#json-format-example)
-    - [Top level API](#top-level-api)
+    - [CENs top level API](#cens-top-level-api)
+    - [CINs top level API](#cins-top-level-api)
     - [Environment Variables](#environment-variables)
     - [Leviathan CEN Layer](#leviathan-cen-layer)
         - [Leviathan CEN Map: The top level structure:](#leviathan-cen-map-the-top-level-structure)
@@ -24,10 +25,6 @@ Erlang code specific to Leviathan: Docker Container Network Orchestrator
         - [Sequence Diagrams](#sequence-diagrams)
             - [Import CINs step](#import-cins-step)
             - [Make CINs step](#make-cins-step)
-    - [Sequence diagrams](#sequence-diagrams)
-        - [Import CENs and building CINs](#import-cens-and-building-cins)
-            - [New version](#new-version)
-            - [Current version](#current-version)
 
 <!-- markdown-toc end -->
 
@@ -119,19 +116,35 @@ Where:
 * `cenID` is the CEN identifier
 * `containerIDs` is a list of container identifiers
 
-## Top level API
+## CENs top level API
 Function | Args | Description
 -------- | ---- | -----------
-`leviathan_cen:import_file/2` | Hostname, Filename | imports CEN JSON file into Dobby
+`leviathan_cen:import_file/2` | Hostname, Filename | constructs a CEN Leviathan Map from the file and imports it into the Authoritative Store and Dobby
 `leviathan_cen:decode_file/1` | Filename | creates a Leviathan Map from CEN JSON file
 `leviathan_cen:lm_compare/2` | OldLeviathanMap1, NewLeviathanMap2 | generates a delta list to transition from the old map to the new map
 `leviathan_cen:add_container_to_cen/3` | Hostname, ContainerId, CenId | add a container to the CEN in Dobby and reconfigure the host
 `leviathan_cen:remove_container_from_cen/3` | Hostname, ContainerId, CenId | remove a container from a CEN in Dobby and reconfigure the host
+`leviathan_cen:prepare/1` | list of CEN identifiers | configures networking for the CENs by creating bridges and wires
+`leviathan_cen:destroy/1` | list of CIN identifiers | destroys the network configuration for the CINs
 `leviathan_dby:import_cens/2` | Hostname, Filename | imports a Leviathan Map into Dobby
 `leviathan_dby:update_cens/2` | Hostname, Delta | applies deltas from `leviathan_cen:lm_compare/2` to Dobby
-`leviathan_store:import_cens/2` | Hostname, Filename | imports a Leviathan Map into Authoritative Store
-`leviathan_store:update_cens/2` | Hostname, Delta | applies deltas from `leviathan_cen:lm_compare/2` to Authoritative Store
-`leviathan_store:get_levmap/1` | List of CEN Ids | constructs Leviathan Map for CENs
+`leviathan_dby:set_cen_status/2` | CEN identifier, `preparing | pending | delta` | sets a CEN status in Dobby
+`leviathan_cen_store:import_cens/2` | Hostname, Filename | imports a Leviathan Map into Authoritative Store
+`leviathan_cen_store:update_cens/2` | Hostname, Delta | applies deltas from `leviathan_cen:lm_compare/2` to Authoritative Store
+`leviathan_cen_store:get_levmap/1` | List of CEN Ids | constructs Leviathan Map for CENs
+
+## CINs top level API
+Function | Args | Description
+-------- | ---- | -----------
+`leviathan_cin:build_cins/1` | mappings between CINs and and CENs spanning given CIN  | creates CIN Leviathan Map
+`leviathan_cin:prepare/1` | list of CIN identifiers | configures networking for the CINs by assigning IP addresses
+`leviathan_cin:destroy/1` | list of CIN identifiers | destroys the network configuration for the CINs
+`leviathan_dby:import_cins/2` | Hostname, CIN Leviathan Map | imports a Leviathan Map into Dobby
+`leviathan_dby:update_cins/2` | Hostname, Delta | applies deltas from `leviathan_cin:lm_compare/2` to Dobby (not implemented)
+`leviathan_dby:set_cin_status/2` | CIN identifier, `preparing | pending | delta` | sets a CIN status in Dobby
+`leviathan_cin_store:import_cins/2` | Hostname, CIN Leviathan Map | imports a Leviathan Map into Authoritative Store
+`leviathan_cin_store:update_cens/2` | Hostname, Delta | applies deltas from `leviathan_cin:lm_compare/2` to Authoritative Store (not implemented)
+`leviathan_cin_store:get_levmap/1` | List of CIN identifiers | constructs Leviathan Map for CINs
 
 ## Environment Variables
 Variable | Value | Description
@@ -510,15 +523,4 @@ CIN, CEN | part_of | A CEN that this CIN covers
 ![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFABANbGV2aWF0aGFuX2NpbiBhcyBDSU4ABxpfc3RvcmUgYXMgU3RvcmUAMxdkYnkgYXMgRGJ5CgoAgQoGIC0-AIECBTogL2Npbi9pbXBvcnQKbm90ZSBvdmVyAIEvBywAgSYFLCBDSU46IHRoZQCBRgcgc2VuZHMgJ1siY2luMSI6WyJjZW4xIl0sICJjaW4yAAoHMiJdXScKAIFnBS0-AD0GYnVpbGRfY2lucyhDaW5JZFRvQ2VuSWRzTWFwKQBxDElOLACBSgY6IAAYECBkZWlmaW5lcyBDRU5zLCBhIACCZwZ1bGFyIENpbiB3aWxsIGNvbnRhaW47Cgpsb29wIGZvciBlYWNoIABqBSBpbgBGEQogICAgQ0lOIC0-IERieTogZ2V0X2NlbigAgRwFKQAaBURieSAtAIFDCENlbk1hcCBhcyBkZWZpbmVkIGJ5AIMwDGVuCmVuZACBPRgANwZpcyB1c2VkIHRvIGdldCBDb250SWRzIGFuZCBjcmVhdGUgQWRkcmVzc2luZwCBPwUAgn4FSU5zAIEZPndpcmVzAIFAGVdpcmVzAIEhNwA1B3JlAIFPCQCBLRsAgx0GZXJzAIMLBUlOcwoAgnsFAIUQCUNpbkxNAIQ3CQCECAcAhSMGAIQ6CUxNKQCEWQkAgzIFAAcZLT4AhwMHOg&s=roundgreen)
 
 #### Make CINs step
-![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFABANbGV2aWF0aGFuX2NpbiBhcyBDSU4ABxpfc3RvcmUgYXMgU3RvcmUAMxdkYnkgYXMgRGJ5CgoAgQoGIC0-AIECBTogL2Npbi9tYWtlCm5vdGUgb3ZlcgCBLQcsAIEkBSwgQ0lOOiB0aGUAgUQHIHNlbmRzICdbImNpbjEiLCJjaW4yIl0nCgoAgVMFLT4AKwZwcmVwYXJlKENpbklkcykgW2FzeW5jXQAeBy0-AIISBzoKQ0lOIC0-AIE6BjogZ2V0X2xldm1hcAAyCAoAgVUFAC0GSU46IENpbkxNAC4IAIEXBWRvXwBjC0xNKQoATQhEYnk6IHNldCBzdGF0dXNlcyBvZgCBRQZJTnMgaW4ARwYgYXMAgSgHaW5nAE0NAIE-B19jaW5zAFQIAAsVb250ABEQAFIqcmVhZHkKAIJ0DElOLACCCQhub3cAgngFYnJpZGdlcyBhbmQAgwgFY29udGFpbmVycyBoYXZlIHRoZWlyIElQcw&s=roundgreen)
-
-## Sequence diagrams
-### Import CENs and building CINs
-
-#### New version
-![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFABANbGV2aWF0aGFuX2NlbgABGW5fc3RvcmUAIhhpACEZaQAyCAoAgRMGIC0-AIELBTogL2Nlbi9pbXBvcnQKbm90ZSBvdmVyAIE4BywAgS8FLACBDw46IHRoZQCBWQcgc2VuZHMgYSBKU09OIGZpbGUgZGVzY3JpYmluZyBDRU5zCgoAgXIFLT4ANRBkZWNvZGVfYmluYXJ5KEpTT04pCgCBeA0gLQCBGwlDZW5MTQAzFgCCCwY6AIE7Bl9jZW5zKAApBSkAZRNkYnkADxotPgCDLQc6AIINF21ha2UAgWk5J1siY2VuMSIsImNlbjIiXScAggAXcHJlcGFyZShDZW5JZHMpIFthc3luY10AgRETAIIdDwCCARYgZ2V0X2xldm1hcABLCACCVw4AhEoGAIJmBQCDVg8Agm4GAEgfOiAAgSoHAIJtDQALKW9udAAEMXdpcmUAg1sJAIUsBXJpZ2h0IG9mAIUXEE5vdwCFJgViaXJkZ2VzIGFuZFxuIGludGVyZmFjZXMgYXJlIGJyb3VnaHQgdXBcbiBhbmQgd2lyZWQgdG9nZXRoZXIuAIYdFGkAhXBBJ1siY2luMSI6AIQQB10sICJjaW4yAAoHMiJdAIQMFmluOiBidWlsZF9jaW5zKENpbklkVG8AhCcGTWFwAIIKBwCHPQUAiEQNAIc0DwCEFggAMBAgZGVpZmluZXMAhzYFLCBhIACJTQZ1bGFyIENpbiB3aWxsIGNvbnRhaW47Cmxvb3AgZm9yIGVhY2ggAIUuBSBpbgBFEQogICAAiRgOAIcFEgCFJAVjZW4AhXMGKQAkD2RieQCFExBpAIUdBk1hcCBhcyBkZWZpbmVkIGJ5AIo6D2VuZACBZDAATwZpcyB1cwCEBAUgZXh0cmFjdCBDb250SWQAhEMFIFdpcmVUeXBlAIEzUQCFVgkAgV0pV2lyZXMAgTZPAE0HcmUAgXQRYWxpYXNlcyBvZgCMAgUAhz4FAIZJCwCLNwxpAIs2DWkAiywXAI0SCDogAIs8CACFUwcAiyoaABAaAIsnHmkAiwJDaQCLPwZpAIssGWkAigsKAIcaBgCLKR0AhwQsAI57DWkAiVUMcmkAiVkIAI8XBQCJWAsAhywFZ2V0IHRoZWlyIElQcw&s=roundgreen)
-
-#### Current version
-
-![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFCgoAHwYgLT4AFwU6IC9jaW4Kbm90ZSBvdmVyAD0HLAA0BSwgbGV2aWF0aGFuX2NlbjogdGhlAF4HIHNlbmRzXG5hIEpTT04gZmlsZSBkZXNjcmliaW5nIENFTnMKCgB4BS0-ADYQZGVjb2RlX2JpbmFyeShKU09OKQoAXA0gLQCBFQlMTQAzE3N0b3JlOmltcG9ydF9jZW5zKExNKQBbE2RieQAPFy0-AIImBzoAgXsWL3ByZXBhcmUAgV86IlsiY2VuMSIsImNlbjIiXSIAgXcXAGIHKENlbklkcykgW2FzeW5jXQCBFhIAghMPAIF-EiBnZXRfbGV2bWFwAEYIAIJMCwCCLwUAglQFAINFD0xNCgoAQRwAg3QFAIIIBwCCYwoACClvbnQABC53aXJlAINLBgCFEAVyaWdodCBvZgCEexBOb3cAhQoFYmlyZGdlcyBhbmRcbiBpbnRlcmZhY2VzIGFyZSBicm91Z2h0IHVwLlxuIFRoZXkgZ290IElQACsFAIVKBQAoClxuAC8FYXR0YWNoZWQgdG8AWwZyaWRnZXMu&s=roundgreen)
-
+![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFABANbGV2aWF0aGFuX2NpbiBhcyBDSU4ABxpfc3RvcmUgYXMgU3RvcmUAMxdkYnkgYXMgRGJ5CgoAgQoGIC0-AIECBTogL2Npbi9pbXBvcnQKbm90ZSBvdmVyAIEvBywAgSYFLCBDSU46IHRoZQCBRgcgc2VuZHMgJ3siY2luMSI6WyJjZW4xIl0sICJjaW4yAAoHMiJdfScKAIFnBS0-AD0GYnVpbGRfY2lucyhDaW5JZFRvQ2VuSWRzTWFwKQBxDElOLACBSgY6IAAYECBkZWlmaW5lcyBDRU5zLCBhIACCZwZ1bGFyIENpbiB3aWxsIGNvbnRhaW47Cgpsb29wIGZvciBlYWNoIABqBSBpbgBGEQogICAgQ0lOIC0-IERieTogZ2V0X2NlbigAgRwFKQAaBURieSAtAIFDCENlbk1hcCBhcyBkZWZpbmVkIGJ5AIMwDGVuCmVuZACBPRgANwZpcyB1c2VkIHRvIGdldCBDb250SWRzIGFuZCBjcmVhdGUgQWRkcmVzc2luZwCBPwUAgn4FSU5zAIEZPndpcmVzAIFAGVdpcmVzAIEhNwA1B3JlAIFPCQCBLRsAgx0GZXJzAIMLBUlOcwoAgnsFAIUQCUNpbkxNAIQ3CQCECAcAhSMGAIQ6CUxNKQCEWQkAgzIFAAcZLT4AhwMHOg&s=roundgreen).

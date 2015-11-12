@@ -34,13 +34,3 @@
 
 % persistent counters
 -record(counter, {id :: atom(), count :: integer()}).
-
-
-
-
-
-
-
-
-
-
