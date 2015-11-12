@@ -264,36 +264,37 @@ dby_of_port_id(SwitchId, N) ->
 dby_of_flow_table_id(SwitchId, N) ->
     <<SwitchId/binary, "-table-", (integer_to_binary(N))/binary>>.
 
-dby_cen(CenId, Metadata) when is_binary(CenId) ->
-    {dby_cen_id(CenId), [{<<"cenID">>, CenId},
+dby_cen(CenId, Metadata) ->
+    {dby_cen_id(CenId), [{<<"cenID">>, iolist_to_binary([CenId])},
 			 {<<"type">>, <<"cen">>}] ++ Metadata}.
 
-dby_cin(CinId, Metadata) when is_binary(CinId) ->
-    {dby_cin_id(CinId), [{<<"cinID">>, CinId},
+dby_cin(CinId, Metadata) ->
+    {dby_cin_id(CinId), [{<<"cinID">>, iolist_to_binary([CinId])},
                          {<<"type">>, <<"cin">>}] ++ Metadata}.
 
-dby_bridge(Host, BridgeId, Metadata) when is_binary(BridgeId) ->
-    {dby_bridge_id(Host, BridgeId), [{<<"bridgeID">>, BridgeId},
+dby_bridge(Host, BridgeId, Metadata) ->
+    {dby_bridge_id(Host, BridgeId), [{<<"bridgeID">>, iolist_to_binary([BridgeId])},
 				     {<<"type">>, <<"bridge">>}] ++ Metadata}.
 
-dby_cont(Host, ContId, Metadata) when is_binary(ContId) ->
-    {dby_cont_id(Host, ContId), [{<<"contID">>, ContId},
+dby_cont(Host, ContId, Metadata) ->
+    {dby_cont_id(Host, ContId), [{<<"contID">>, iolist_to_binary([ContId])},
                                 {<<"type">>, <<"container">>}] ++ Metadata}.
 
-dby_endpoint(Host, EndID, Side, Metadata) when is_binary(EndID) ->
+dby_endpoint(Host, EndID, Side, Metadata) ->
     {dby_endpoint_id(Host, EndID), [{<<"type">>, <<"endpoint">>},
                                       endpoint_side_md(Side),
-                                     {<<"endID">>, EndID}] ++ Metadata}.
+                                    {<<"endID">>, iolist_to_binary([EndID])}]
+     ++ Metadata}.
 
-dby_ipaddr(IpAddr) when is_binary(IpAddr) ->
+dby_ipaddr(IpAddr) ->
     {dby_ipaddr_id(IpAddr), [{<<"type">>, <<"ipaddr">>},
-                             {<<"ipaddr">>, IpAddr}]}.
+                             {<<"ipaddr">>, iolist_to_binary([IpAddr])}]}.
 
 dby_switch(Host, #{<<"contID">> := ContId, <<"datapath_id">> := DatapathId}) ->
     {dby_switch_id(Host, ContId),
      [{<<"contID">>, ContId},
       {<<"type">>, <<"of_switch">>},
-      {<<"datapath_id">>, DatapathId}]}.
+      {<<"datapath_id">>, iolist_to_binary([DatapathId])}]}.
 
 dby_of_port(SwitchId, N) ->
     {dby_of_port_id(SwitchId, N),
