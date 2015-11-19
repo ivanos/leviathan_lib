@@ -8,19 +8,24 @@
          update_cens/2,
          import_switch/2]).
 
+-export([import_cins/2,
+         set_cin_status/2,
+         update_cins/2]).
+
 -export([dby_cen_id/1,
          get_cen/1,
          get_cont/2,
          get_wires/1,
          set_cen_status/2,
-         get_next_cin_ip/0]).
+         get_next_cin_ip/0,
+         get_cont_endpoint/2]).
 
 -define(PUBLISHER, atom_to_binary(?MODULE, utf8)).
 -define(REGISTRY, <<"lev_registry">>).
 -define(CIN_COUNT, <<"cin_count">>).
 
 -include("leviathan_logger.hrl").
--include_lib("leviathan_lib/include/leviathan_lib.hrl").
+-include("leviathan_lib.hrl").
 
 % -----------------------------------------------------------------------------
 %
@@ -106,10 +111,89 @@ get_next_cin_ip() ->
     ok = dby:publish(?PUBLISHER, {?REGISTRY, [{?CIN_COUNT, CinCount + 1}]}, [persistent]),
     leviathan_cin:cen_ip_address(CinCount).
 
+
+-spec get_cont_endpoint(Side :: in | out, ContId :: string()) -> Result when
+      Result :: InEndpoint | OutEndpoint,
+      InEndpoint :: #{},
+      OutEndpoint :: #{}.
+
+get_cont_endpoint(in, ContId) ->
+    dby:search(fun in_endpoint/4,
+               #{endID => null,
+                 dest => #{type => cont, id => ContId, alias => null}},
+               dby_cont_id("host1", ContId), [{max_depth, 1}]);
+get_cont_endpoint(out, ContId) ->
+    error(not_implemented).
+
 % formatters
 
 dby_cen_id(CenId) ->
     dby_id([<<"lev_cen">>, CenId]).
+
+dby_cin_id(CinId) ->
+    dby_id([<<"lev_cin">>, CinId]).
+
+% -----------------------------------------------------------------------------
+%
+% CIN API
+%
+% -----------------------------------------------------------------------------
+
+-spec import_cins(HostId :: string(), CinLM :: leviathan_cin:cin_lm()) -> ok.
+
+import_cins(HostId, CinLM) ->
+    ToPublish = [cins_from_lm(HostId, CinLM),
+                 cins_conts_from_lm(HostId, CinLM)],
+    ok = dby:publish(?PUBLISHER, lists:flatten(ToPublish), [persistent]).
+
+
+-spec set_cin_status(CinId :: string(), Status) -> ok when
+      Status :: preparing | pending | ready.
+
+set_cin_status(CinId, Status) ->
+    set_status(dby_cin_id(CinId), Status).
+
+
+update_cins(HostId, Instructions) ->
+    error(not_implemented).
+
+%% -----------------------------------------------------------------------------
+%% Internal functions: CIN Layer
+%% -----------------------------------------------------------------------------
+
+cins_from_lm(Host, #{cins := CinMaps}) ->
+    lists:map(fun(Cin) -> pub_cin(Host, Cin) end, CinMaps).
+
+pub_cin(Host, #{cinID := CinId, addressing := Addressing}) ->
+    Fn = fun(CenId, #{interface := BridgeId, ip := Ip}, Acc) ->
+                 [
+                  dby_ipaddr(Ip),
+                  dby_cen_to_cin(CenId, CinId),
+                  dby_ipaddr_to_cin(Ip, CinId),
+                  dby_ipaddr_to_bridge(Host, Ip, BridgeId)
+                  | Acc
+                 ]
+         end,
+    [
+     dby_cin(CinId, [status_md(pending)]),
+     maps:fold(Fn, [], Addressing)
+    ].
+
+
+cins_conts_from_lm(Host, #{conts := ContMaps}) ->
+    lists:map(fun(Cont) -> pub_cin_conts(Host, Cont) end, ContMaps).
+
+pub_cin_conts(Host, #{cinID := CinId, addressing := Addressing}) ->
+    Fn = fun(_CenId, #{endID := EndpointId, ip := Ip}, Acc) ->
+                 [
+                  dby_ipaddr(Ip),
+                  dby_ipaddr_to_cin(Ip, CinId),
+                  dby_endpoint_to_ipaddr(Host, EndpointId, Ip)
+                  | Acc
+                 ]
+         end,
+    maps:fold(Fn, [], Addressing).
+
 
 % -----------------------------------------------------------------------------
 %
@@ -180,32 +264,37 @@ dby_of_port_id(SwitchId, N) ->
 dby_of_flow_table_id(SwitchId, N) ->
     <<SwitchId/binary, "-table-", (integer_to_binary(N))/binary>>.
 
-dby_cen(CenId, Metadata) when is_binary(CenId) ->
-    {dby_cen_id(CenId), [{<<"cenID">>, CenId},
+dby_cen(CenId, Metadata) ->
+    {dby_cen_id(CenId), [{<<"cenID">>, iolist_to_binary([CenId])},
 			 {<<"type">>, <<"cen">>}] ++ Metadata}.
 
-dby_bridge(Host, BridgeId, Metadata) when is_binary(BridgeId) ->
-    {dby_bridge_id(Host, BridgeId), [{<<"bridgeID">>, BridgeId},
+dby_cin(CinId, Metadata) ->
+    {dby_cin_id(CinId), [{<<"cinID">>, iolist_to_binary([CinId])},
+                         {<<"type">>, <<"cin">>}] ++ Metadata}.
+
+dby_bridge(Host, BridgeId, Metadata) ->
+    {dby_bridge_id(Host, BridgeId), [{<<"bridgeID">>, iolist_to_binary([BridgeId])},
 				     {<<"type">>, <<"bridge">>}] ++ Metadata}.
 
-dby_cont(Host, ContId, Metadata) when is_binary(ContId) ->
-    {dby_cont_id(Host, ContId), [{<<"contID">>, ContId},
+dby_cont(Host, ContId, Metadata) ->
+    {dby_cont_id(Host, ContId), [{<<"contID">>, iolist_to_binary([ContId])},
                                 {<<"type">>, <<"container">>}] ++ Metadata}.
 
-dby_endpoint(Host, EndID, Side, Metadata) when is_binary(EndID) ->
+dby_endpoint(Host, EndID, Side, Metadata) ->
     {dby_endpoint_id(Host, EndID), [{<<"type">>, <<"endpoint">>},
                                       endpoint_side_md(Side),
-                                     {<<"endID">>, EndID}] ++ Metadata}.
+                                    {<<"endID">>, iolist_to_binary([EndID])}]
+     ++ Metadata}.
 
-dby_ipaddr(IpAddr) when is_binary(IpAddr) ->
+dby_ipaddr(IpAddr) ->
     {dby_ipaddr_id(IpAddr), [{<<"type">>, <<"ipaddr">>},
-                             {<<"ipaddr">>, IpAddr}]}.
+                             {<<"ipaddr">>, iolist_to_binary([IpAddr])}]}.
 
 dby_switch(Host, #{<<"contID">> := ContId, <<"datapath_id">> := DatapathId}) ->
     {dby_switch_id(Host, ContId),
      [{<<"contID">>, ContId},
       {<<"type">>, <<"of_switch">>},
-      {<<"datapath_id">>, DatapathId}]}.
+      {<<"datapath_id">>, iolist_to_binary([DatapathId])}]}.
 
 dby_of_port(SwitchId, N) ->
     {dby_of_port_id(SwitchId, N),
@@ -240,6 +329,15 @@ dby_endpoint_to_endpoint(Host, EndpointId1, EndpointId2, Type) ->
     dby_link(dby_endpoint_id(Host, EndpointId1),
              dby_endpoint_id(Host, EndpointId2), Type).
 
+dby_ipaddr_to_bridge(Host, Ip, BridgeId) ->
+    dby_link(dby_ipaddr_id(Ip), dby_bridge_id(Host, BridgeId), <<"bound_to">>).
+
+dby_cen_to_cin(CenId, CinId) ->
+    dby_link(dby_cen_id(CenId), dby_cin_id(CinId), <<"part_of">>).
+
+dby_ipaddr_to_cin(Ip, CinId) ->
+    dby_link(dby_ipaddr_id(Ip), dby_cin_id(CinId), <<"part_of">>).
+
 % helper
 dby_link(E1, E2, Type) ->
     {E1, E2, [{<<"type">>, Type}]}.
@@ -262,14 +360,11 @@ cens_from_lm(Host, #{censmap := #{cens := Cens}}) ->
 
 % prepare to publish one cen
 pub_cen(Host, #{cenID := CenId,
-          wire_type := bus,
-          contIDs := ContIds,
-          ip_address := BridgeIpAddr}) ->
+                wire_type := bus,
+                contIDs := ContIds}) ->
     [
         link_cen_to_containers(Host, CenId, ContIds, bus),
-        dby_bridge(Host, list_to_binary(CenId),
-            [status_md(pending),
-             cen_ip_addr_md(list_to_binary(BridgeIpAddr))]),
+        dby_bridge(Host, list_to_binary(CenId), [status_md(pending)]),
         dby_bridge_to_cen(Host, list_to_binary(CenId), list_to_binary(CenId))
     ];
 pub_cen(Host, #{cenID := CenId,
@@ -341,12 +436,9 @@ endpoint(Host, #{endID := EndId,
                  side := Side,
                  dest := #{type := cont,
                            id := ContId,
-                           alias := Eth,
-                           ip_address := IpAddr}}) ->
+                           alias := Eth}}) ->
     [
         dby_endpoint(Host, list_to_binary(EndId), Side, [alias_md(list_to_binary(Eth)), status_md(pending)]),
-        dby_ipaddr(list_to_binary(IpAddr)),
-        dby_endpoint_to_ipaddr(Host, list_to_binary(EndId), list_to_binary(IpAddr)),
         dby_endpoint_to_container(Host, list_to_binary(EndId), list_to_binary(ContId))
     ];
 endpoint(Host, #{endID := EndId,
@@ -432,9 +524,8 @@ md_wire_type(<<"bus">>) ->
 
 % search
 
-bridge(_,?MATCH_BRIDGE(BridgeId, IPAddress),[], Acc)-> 
-    {continue, Acc#{bridgeID := binary_to_list(BridgeId),
-                    ip_address := binary_to_list(IPAddress)}};
+bridge(_,?MATCH_BRIDGE(BridgeId),[], Acc)->
+    {continue, Acc#{bridgeID := binary_to_list(BridgeId)}};
 bridge(_, _, _, Acc) ->
     {continue, Acc}.
     
@@ -490,23 +581,25 @@ wires(_, _, _, Acc) ->
     {continue, Acc}.
 
 %   bridge <-> endpoint (outside) <-> endpoint (inside) <-> cont
-wires_bus(_, ?MATCH_BRIDGE(_, _), [_], Acc) ->
+wires_bus(_, ?MATCH_BRIDGE(_), [_], Acc) ->
     % don't follow links from Bridge
     % we want to approach the bridge from the other direction of the loop
     {skip, Acc};
-wires_bus(_, ?MATCH_BRIDGE(BridgeId, _),
-                [{_, ?MATCH_OUT_ENDPOINT(OutEndId), _},
-                 {_, ?MATCH_IN_ENDPOINT(InEndId, Alias), _},
-                 {_, ?MATCH_CONTAINER(ContId), _} | _],
-                                                 Acc = #{wires := Wires}) ->
+wires_bus(_, ?MATCH_BRIDGE(BridgeId),
+          [{_, ?MATCH_OUT_ENDPOINT(OutEndId), _},
+           {_, ?MATCH_IN_ENDPOINT(InEndId, Alias), _},
+           {_, ?MATCH_CONTAINER(ContId), _} | _],
+          Acc = #{wires := Wires}) ->
     Wire = [
-        #{endID => binary_to_list(InEndId),
-          dest => #{type => cont,
-                    id => binary_to_list(ContId),
-                    alias => binary_to_list(Alias)}},
-        #{endID => binary_to_list(OutEndId),
-          dest => #{type => cen,
-                    id => binary_to_list(BridgeId)}}],
+            #{endID => binary_to_list(InEndId),
+              side => in,
+              dest => #{type => cont,
+                        id => binary_to_list(ContId),
+                        alias => binary_to_list(Alias)}},
+            #{endID => binary_to_list(OutEndId),
+              side => out,
+              dest => #{type => cen,
+                        id => binary_to_list(BridgeId)}}],
     {continue, Acc#{wires := [Wire | Wires]}};
 wires_bus(_, ?MATCH_IPADDR(IpAddr),
                 [{_, ?MATCH_ENDPOINT(EndId), _} | _],
@@ -537,6 +630,16 @@ wires_wire(_, ?MATCH_IPADDR(IpAddr),
     {continue, Acc#{ipaddrmap := put_ipaddr(EndId, IpAddr, IpAddrMap)}};
 wires_wire(_, _, _, Acc) ->
     {continue, Acc}.
+
+
+%% dby:search function to return list of containers linked to an identifier.
+in_endpoint(_, ?MATCH_CONTAINER(ContId), [], #{id := ContId} = Acc) ->
+    {continue, Acc};
+in_endpoint(_, ?MATCH_IN_ENDPOINT(EndId, Alias), _, #{dest := Dest} = Acc) ->
+    {stop, Acc#{endID => EndId, dest => Dest#{alias => Alias}}};
+in_endpoint(_, _, _, Acc) ->
+    {continue, Acc}.
+
 
 ipaddr_for_wireend(WireEnd = #{endID := EndId, dest := Dest}, IpAddrMap) ->
     case maps:get(EndId, IpAddrMap, not_found) of

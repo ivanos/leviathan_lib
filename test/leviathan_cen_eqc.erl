@@ -58,7 +58,7 @@ prop_wires() ->
 
 check_lm(LM) ->
     {Cens, Conts, Wires} = decompose_lm(LM),
-    leviathan_test_utils:check_wires(Cens, Wires),
+    leviathan_test_utils:check_wires(Wires),
     check_cens_conts(Cens, Conts),
     check_wire_count(Cens, Wires),
     true.
@@ -152,12 +152,12 @@ prop_deltas() ->
                     % apply Deltas to dobby one by one
                     lists:foreach(
                       fun(Delta) ->
-                              ok = leviathan_store:update_cens(?HOST, Delta)
+                              ok = leviathan_cen_store:update_cens(?HOST, Delta)
                         end, Deltas),
 
                     % pull LM from store
                     CenIds = cenids_from_lm(LM),
-                    LMFromStore = leviathan_store:get_levmap(CenIds),
+                    LMFromStore = leviathan_cen_store:get_levmap(CenIds),
 
                     % compute delta between new dobby and new LM
                     % (should be no difference)
@@ -183,9 +183,9 @@ prop_levmap() ->
 lev_store_constructs_correct_levmap(Instructions, CensToCheck) ->
     cleanup(),
     LM0 = run_instructions(Instructions, new_lm()),
-    ok = leviathan_store:import_cens(?HOST, LM0),
+    ok = leviathan_cen_store:import_cens(?HOST, LM0),
     compare_lms(filter_levmap(CensToCheck, LM0),
-                leviathan_store:get_levmap(CensToCheck)),
+                leviathan_cen_store:get_levmap(CensToCheck)),
     true.
 
 filter_levmap(CensToKeep, LM) ->

@@ -1,9 +1,8 @@
--module(leviathan_store).
+-module(leviathan_cen_store).
 
 -export([import_cens/2,
          get_levmap/1,
-         update_cens/2,
-         next_count/2]).
+         update_cens/2]).
 
 -define(LM_EMPTY, #{censmap := #{cens := []},
                     contsmap := #{conts := []},
@@ -25,22 +24,16 @@
 import_cens(_, ?LM_EMPTY) ->
     ok;
 import_cens(Host, LM) ->
-    {CensRecords, ContsIpsMap} = cens_and_cont_ips_from_lm(Host, LM),
-    Records = [CensRecords,
-               containers_from_lm(Host, ContsIpsMap, LM)],
-    Fn = fun() ->
-        ok = leviathan_db:write(lists:flatten(Records))
-    end,
-    ok = leviathan_db:transaction(Fn).
+    Records = lists:flatten([create_cen_records(Host, LM),
+                             create_cont_records(Host, LM)]),
+    ok = leviathan_db:transaction(
+           fun() -> leviathan_db:write(Records) end).
 
 get_levmap([]) ->
     ?LM([], [], []);
 get_levmap(CenIds) ->
     Cens = get_cens(CenIds),
-    {Conts, ContsIpsMap} =  get_conts_and_their_ips(Cens),
-    ?LM(fill_reserved_ips_in_cens(Cens, ContsIpsMap),
-        Conts,
-        get_wiremap(CenIds)).
+    ?LM(Cens, get_conts(Cens), get_wiremap(CenIds)).
 
 update_cens(Host, Instructions0) ->
     Instructions = filter_and_sort_update_instructions(Instructions0),
@@ -53,31 +46,17 @@ update_cens(Host, Instructions0) ->
     end,
     ok = leviathan_db:transaction(Fn).
 
-next_count(Key, InitialValue) ->
-    Fn = fun() ->
-        case leviathan_db:read({counter, Key}) of
-            [] ->
-                update_count(Key, InitialValue + 1),
-                InitialValue;
-            [#counter{count = Count}] ->
-                update_count(Key, Count + 1),
-                Count
-        end
-    end,
-    leviathan_db:transaction(Fn).
-
 %% -----------------------------------------------------------------------------
 %% Local Functions: importing cens
 %% -----------------------------------------------------------------------------
 
-cens_and_cont_ips_from_lm(Host, #{censmap := #{cens := Cens},
-                                  wiremap := #{wires := Wires}}) ->
+create_cen_records(Host, #{censmap := #{cens := Cens},
+                           wiremap := #{wires := Wires}}) ->
     GroupedWires = group_wires_by_cen(Wires),
-    Fun = fun(Cen, Acc) ->
-                  {cen_record(Host, Cen, GroupedWires),
-                   conts_ips_from_cen(Cen, Acc)}
+    Fun = fun(Cen) ->
+                  cen_record(Host, Cen, GroupedWires)
           end,
-    lists:mapfoldl(Fun, #{}, Cens).
+    lists:map(Fun, Cens).
 
 group_wires_by_cen(Wires) ->
     lists:foldl(fun group_wires_by_cen/2, #{}, Wires).
@@ -89,44 +68,27 @@ group_wires_by_cen(Wire = [
     CenWires = maps:get(CenId, Acc, []),
     maps:put(CenId, [Wire | CenWires], Acc).
 
-conts_ips_from_cen(#{cenID := CenId, contIDs := ContIds, reservedIps := Ips},
-                   ContsIpsMap) ->
-    lists:foldl(fun({ContId, Ip}, Acc) ->
-                        maps:put({CenId, ContId}, Ip, Acc)
-                end, ContsIpsMap, lists:zip(ContIds, Ips)).
-
 cen_record(_Host, #{cenID := CenId,
                     wire_type := WireType,
-                    contIDs := ContIds,
-                    ipaddr_b := IpAddrB,
-                    ip_address := IpAddr}, Wires) ->
-    #leviathan_cen{
-       cen = CenId,
-       data = #{
-         contIDs => ContIds,
-         wire_type => WireType,
-         ipaddr_b => IpAddrB,
-         ipaddr => IpAddr
-        },
-       wires = maps:get(CenId, Wires, [])
-      }.
+                    contIDs := ContIds},
+           Wires) ->
+    #leviathan_cen{cen = CenId,
+                   data = #{contIDs => ContIds,
+                            wire_type => WireType},
+                   wires = maps:get(CenId, Wires, [])}.
 
-containers_from_lm(Host, ContsIpsMap, #{contsmap := #{conts := Conts}}) ->
-    lists:map(fun(Cont) -> cont_record(Host, Cont, ContsIpsMap) end, Conts).
+create_cont_records(Host, #{contsmap := #{conts := Conts}}) ->
+    lists:map(fun(Cont) -> cont_record(Host, Cont) end, Conts).
 
-cont_record(_Host,
-            #{contID := ContId, cens := CenIds, reservedIdNums := Ids},
-            ContIpsMap) ->
+cont_record(_Host, #{contID := ContId,
+                     cens := CenIds,
+                     reservedIdNums := Ids}) ->
     lists:map(
       fun({CenId, IdNumber}) ->
-              #leviathan_cont{
+              #leviathan_cen_cont{
                  cont = ContId,
                  cen = CenId,
-                 data = #{
-                   idnumber => IdNumber,
-                   ip_address => maps:get({CenId, ContId}, ContIpsMap)
-                  }
-                }
+                 idnumber = IdNumber}
       end, lists:zip(CenIds, Ids)).
 
 %% -----------------------------------------------------------------------------
@@ -146,30 +108,21 @@ get_cen(CenId) ->
     leviathan_db:transaction(Fn).
 
 %% convert a cen record to a cen map
-cen_map(#leviathan_cen{
-           cen = CenId,
-           data = #{contIDs := ContIds,
-                    wire_type := WireType,
-                    ipaddr_b := IpAddrB,
-                    ipaddr := IpAddr}}) ->
-    #{cenID => CenId,
-      wire_type => WireType,
-      contIDs => ContIds,
-      ipaddr_b => IpAddrB,
-      ip_address => IpAddr,
-      reservedIps => to_be_filled}.
+cen_map(#leviathan_cen{cen = CenId, data = #{contIDs := ContIds,
+                                             wire_type := WireType}}) ->
+    #{cenID => CenId, wire_type => WireType, contIDs => ContIds}.
 
-get_conts_and_their_ips(Cens) ->
+get_conts(Cens) ->
     ContIds = contids_from_cens(Cens),
-    Fun = fun(ContId, {ContsAcc, Ips0} = Acc) ->
-                  case get_cont("host1", ContId, Ips0) of
+    Fun = fun(ContId, ContsAcc) ->
+                  case get_cont("host1", ContId) of
                       not_found ->
-                          Acc;
-                      {Cont, Ips1} ->
-                          {[Cont | ContsAcc], Ips1}
+                          ContsAcc;
+                      Cont ->
+                          [Cont | ContsAcc]
                   end
           end,
-    lists:foldl(Fun, {[], #{}}, ContIds).
+    lists:foldl(Fun, [], ContIds).
 
 %% make a list of unique container ids by inspecting the cens
 contids_from_cens(Cens) ->
@@ -178,47 +131,28 @@ contids_from_cens(Cens) ->
                            sets:union(Acc, sets:from_list(ContIds))
                    end, sets:new(), Cens)).
 
-get_cont(_Host, ContId, Ips) ->
+get_cont(_Host, ContId) ->
     Fn = fun() ->
-                 case leviathan_db:read({leviathan_cont, ContId}) of
+                 case leviathan_db:read({leviathan_cen_cont, ContId}) of
                      [] ->
                          not_found;
                      ContRecords ->
-                         cont_map(ContId, ContRecords, Ips)
+                         cont_map(ContId, ContRecords)
                  end
          end,
     leviathan_db:transaction(Fn).
 
 %% convert a list of container records into a cont map
-cont_map(ContId, ContRecords, Ips0) ->
-    Fun = fun(#leviathan_cont{cont = CId,
-                              cen = CenId,
-                              data = #{idnumber := Id, ip_address := Ip}},
-              {ContMap, IpsAcc}) when CId == ContId ->
-
-                  #{cens := Cens, reservedIdNums := Ids} = ContMap,
-                  {ContMap#{cens := Cens ++ [CenId],
-                            reservedIdNums := Ids ++ [Id]},
-                   maps:put({CenId, ContId}, Ip, IpsAcc)}
+cont_map(ContId, ContRecords) ->
+    Fun = fun(#leviathan_cen_cont{cont = CId, cen = CenId, idnumber = Id},
+              #{cens := Cens, reservedIdNums := Ids} = ContMap)
+                when CId == ContId ->
+                  ContMap#{cens := Cens ++ [CenId],
+                           reservedIdNums := Ids ++ [Id]}
           end,
-    lists:foldl(Fun, {#{contID => ContId, cens => [], reservedIdNums => []}, Ips0},
+    lists:foldl(Fun,
+                #{contID => ContId, cens => [], reservedIdNums => []},
                 ContRecords).
-
-%% special case for zero and one containers?
-fill_reserved_ips_in_cens(Cens, ContsIpsMap) ->
-    Fn =
-        fun(#{cenID := CenId, contIDs := ContIds} = Cen) ->
-                ReservedIps = lists:map(
-                                mk_conts_ips_in_cen_fun(CenId, ContsIpsMap),
-                                ContIds),
-                Cen#{reservedIps := ReservedIps}
-        end,
-    lists:map(Fn, Cens).
-
-mk_conts_ips_in_cen_fun(CenId, IpsMap) ->
-    fun(ContId) ->
-            maps:get({CenId, ContId}, IpsMap)
-    end.
 
 %% get_wires/1 returns the list of wires per Cen. Flatten
 %% the list with lists:append/1 rather than with lists:flatten/1 because
@@ -303,7 +237,7 @@ update_instruction(_, {add, bridge, _}) ->
 update_instruction(_, {destroy, cen, #{cenID := CenId}}) ->
     delete_fn({leviathan_cen, CenId});
 update_instruction(_, {destroy, cont_in_cen, {#{contID := ContId},
-                                               #{cenID := CenId}}}) ->
+                                              #{cenID := CenId}}}) ->
     [
      update_fn({leviathan_cen, CenId},
                fun(CenRecord = #leviathan_cen{data = Data0}) ->
@@ -311,10 +245,10 @@ update_instruction(_, {destroy, cont_in_cen, {#{contID := ContId},
                        Data1 = Data0#{contIDs := ContIds -- [ContId]},
                        CenRecord#leviathan_cen{data = Data1}
                end),
-     delete_record_fn({leviathan_cont, ContId},
+     delete_record_fn({leviathan_cen_cont, ContId},
                       fun(ContRecords) ->
                               [Record | _] = lists:dropwhile(
-                                               fun(#leviathan_cont{cen = C}) ->
+                                               fun(#leviathan_cen_cont{cen = C}) ->
                                                        C =/= CenId
                                                end, ContRecords),
                               Record
@@ -369,44 +303,23 @@ cont_id_number(CenId, #{cens := Cens, reservedIdNums := Ids}) ->
                                         end, lists:zip(Cens, Ids)),
     Id.
 
-cont_ip_address(ContId, #{contIDs := Conts, reservedIps := Ips}) ->
-    [{ContId, Ip} | _] = lists:dropwhile(fun({CtId, _Ip}) ->
-                                                 CtId =/= ContId
-                                         end, lists:zip(Conts, Ips)),
-    Ip.
-
 cen_record(_, #{cenID := CenId,
                 wire_type := WireType,
-                contIDs := ContIds,
-                ipaddr_b := BIpAddr,
-                ip_address := IpAddr}) ->
-    #leviathan_cen{
-        cen = CenId,
-        data = #{
-            contIDs => ContIds,
-            wire_type => WireType,
-            ipaddr_b => BIpAddr,
-            ipaddr => IpAddr
-        },
-        wires = []
-    }.
+                contIDs := ContIds}) ->
+                #leviathan_cen{cen = CenId,
+                               data = #{contIDs => ContIds,
+                                        wire_type => WireType},
+                               wires = []}.
 
-cont_record2(_, ContMap = #{contID := ContId}, CenMap = #{cenID := CenId}) ->
-    #leviathan_cont{cont = ContId,
-                    cen = CenId,
-                    data = #{idnumber => cont_id_number(CenId, ContMap),
-                             ip_address => cont_ip_address(ContId, CenMap)
-                            }
-                   }.
+cont_record2(_, ContMap = #{contID := ContId}, #{cenID := CenId}) ->
+    #leviathan_cen_cont{cont = ContId,
+                        cen = CenId,
+                        idnumber = cont_id_number(CenId, ContMap)}.
 
 %% -----------------------------------------------------------------------------
 %% Local Functions: helpers
 %% -----------------------------------------------------------------------------
 
-update_count(Key, NewValue) ->
-    leviathan_db:write(#counter{id = Key, count = NewValue}).
-
-% filter out not_found
 valid_list(GetFn, Keys) ->
     lists:foldl(
         fun(Key, Acc) ->

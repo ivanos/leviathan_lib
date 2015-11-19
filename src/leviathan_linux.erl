@@ -41,14 +41,19 @@ remove_netns(Cid)->
 %  Bus operations:
 %  By definition a bus as more than 2 containers connected 
 %  
-new_bus(CenId,IPAddress)->
+new_bus(CenId)->
     [leviathan_brctl:addbr(CenId),
-     leviathan_ip:addr_add_dev(IPAddress ++ "/16",CenId),
      leviathan_ifconfig:dev_up(CenId)].
 
 delete_bus(CenId)->
     [leviathan_ifconfig:dev_down(CenId),
      leviathan_brctl:delbr(CenId)].
+
+set_bus_ip(BusId, Ip) ->
+    [leviathan_ip:addr_add_dev(Ip ++ "/16", BusId)].
+
+delete_bus_ip(BusId, Ip) ->
+    [leviathan_ip:addr_del_dev(Ip ++ "/16", BusId)].
 
 %
 %
@@ -79,14 +84,26 @@ delete_cont_interface(Cid,Alias)->
 new_bridge(BridgeNum)->
     [leviathan_brctl:addbr(BridgeNum)].
 
-set_ip_address(Cid, Alias, IPAddress)->
+set_ip_address(Cid, Alias, IPAddress) ->
     CPid = leviathan_docker:inspect_pid(Cid),
     %% Use /0 as netmask, since the concept of "local network" doesn't
     %% make sense anymore.  Since the entire world is now our local
     %% network, we don't need a gateway either.
+    {ok, {A, B, _, _}} = inet_parse:address(IPAddress),
+    NetIPAddress = inet_parse:ntoa({A, B, 0, 0}),
     [leviathan_ip:netns_exec_ip_addr_add_dev(CPid,IPAddress ++ "/0",Alias),
      %% Add a route to send everything out through the network interface.
+     leviathan_ip:netns_exec_ip_route_add(CPid, NetIPAddress ++ "/16", Alias),
      leviathan_ip:netns_exec_ip_route_add_default_dev(CPid,Alias)].
+
+delete_ip_address(Cid, Alias, IPAddress) ->
+    CPid = leviathan_docker:inspect_pid(Cid),
+    {ok, {A, B, _, _}} = inet_parse:address(IPAddress),
+    NetIPAddress = inet_parse:ntoa({A, B, 0, 0}),
+    [leviathan_ip:netns_exec_ip_addr_del_dev(CPid,IPAddress ++ "/0",Alias),
+     %% Add a route to send everything out through the network interface.
+     leviathan_ip:netns_exec_ip_route_del(CPid, NetIPAddress ++ "/16", Alias),
+     leviathan_ip:netns_exec_ip_route_del_default_dev(CPid,Alias)].
 
 eval(CmdBundle)->
     EvalBundle = lists:map(fun(X)->Result = leviathan_os:cmd(X), {X,Result} end,CmdBundle),

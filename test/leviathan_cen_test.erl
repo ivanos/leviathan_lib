@@ -65,7 +65,7 @@ each_setup() ->
 
 decode_jiffy1() ->
     Json = [json_cen(<<"cen1">>, [])],
-    Cen1 = cen_map("cen1", [], bus, 10, "10.10.0.1"),
+    Cen1 = cen_map("cen1", [], bus),
     {Cens, Conts, Wires} = decompose_lm(leviathan_cen:decode_jiffy(Json)),
     ?assertEqualLists([Cen1], Cens),
     ?assertEqualLists([], Conts),
@@ -73,7 +73,7 @@ decode_jiffy1() ->
 
 decode_jiffy2() ->
     Json = [json_cen(<<"cen1">>, [<<"c1">>])],
-    Cen1 = cen_map("cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"]),
+    Cen1 = cen_map("cen1", ["c1"], bus),
     Cont1 = cont_map("c1", ["cen1"], [0]),
     {Cens, Conts, Wires} = decompose_lm(leviathan_cen:decode_jiffy(Json)),
     ?assertEqualLists([Cen1], Cens),
@@ -82,17 +82,16 @@ decode_jiffy2() ->
 
 decode_jiffy3() ->
     Json = [json_cen(<<"cen1">>, [<<"c1">>, <<"c2">>])],
-    Cen1 = cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1", ["10.10.0.10",
-                                                                "10.10.0.11"]),
+    Cen1 = cen_map("cen1", ["c1", "c2"], bus),
     Cont1 = cont_map("c1", ["cen1"], [0]),
     Cont2 = cont_map("c2", ["cen1"], [0]),
     Wire1 = [
-        endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
-        endpoint("cen1", "c1.0o", out)
+             endpoint("c1", "c1.0i", in, "cen1"),
+             endpoint("cen1", "c1.0o", out)
     ],
     Wire2 = [
-        endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
-        endpoint("cen1", "c2.0o", out)
+             endpoint("c2", "c2.0i", in, "cen1"),
+             endpoint("cen1", "c2.0o", out)
     ],
     {Cens, Conts, Wires} = decompose_lm(leviathan_cen:decode_jiffy(Json)),
     ?assertEqualLists([Cen1], Cens),
@@ -101,24 +100,21 @@ decode_jiffy3() ->
 
 decode_jiffy4() ->
     Json = [json_cen(<<"cen1">>, [<<"c1">>, <<"c2">>, <<"c3">>])],
-    Cen1 = cen_map("cen1", ["c1", "c2", "c3"], bus, 10, "10.10.0.1",
-                                                            ["10.10.0.10",
-                                                             "10.10.0.11",
-                                                             "10.10.0.12"]),
+    Cen1 = cen_map("cen1", ["c1", "c2", "c3"], bus),
     Cont1 = cont_map("c1", ["cen1"], [0]),
     Cont2 = cont_map("c2", ["cen1"], [0]),
     Cont3 = cont_map("c3", ["cen1"], [0]),
     Wire1 = [
-        endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
-        endpoint("cen1", "c1.0o", out)
+             endpoint("c1", "c1.0i", in, "cen1"),
+             endpoint("cen1", "c1.0o", out)
     ],
     Wire2 = [
-        endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
-        endpoint("cen1", "c2.0o", out)
+             endpoint("c2", "c2.0i", in, "cen1"),
+             endpoint("cen1", "c2.0o", out)
     ],
     Wire3 = [
-        endpoint("c3", "c3.0i", in, "cen1", "10.10.0.12"),
-        endpoint("cen1", "c3.0o", out)
+             endpoint("c3", "c3.0i", in, "cen1"),
+             endpoint("cen1", "c3.0o", out)
     ],
     {Cens, Conts, Wires} = decompose_lm(leviathan_cen:decode_jiffy(Json)),
     ?assertEqualLists([Cen1], Cens),
@@ -128,7 +124,7 @@ decode_jiffy4() ->
 lm_add_container0() ->
     LM = leviathan_cen:lm_add_container("cen1", "c1", new_lm()),
     ExpectedLM = compose_lm(
-                   [cen_map("cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"])],
+                   [cen_map("cen1", ["c1"], bus)],
                    [cont_map("c1", ["cen1"], [0])],
                    []),
     assert_equal_levmaps(ExpectedLM, LM).
@@ -137,18 +133,17 @@ lm_add_container1() ->
     LM0 = leviathan_cen:lm_add_container("cen1", "c1", new_lm()),
     LM1 = leviathan_cen:lm_add_container("cen1", "c2", LM0),
     ExpectedLM = compose_lm(
-                   [cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
-                            ["10.10.0.10", "10.10.0.11"])],
+                   [cen_map("cen1", ["c1", "c2"], bus)],
                    [cont_map("c1", ["cen1"], [0]),
                     cont_map("c2", ["cen1"], [0])],
                    [
                     [
-                     endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+                     endpoint("c1", "c1.0i", in, "cen1"),
 
                      endpoint("cen1", "c1.0o", out)
                     ],
                     [
-                     endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+                     endpoint("c2", "c2.0i", in, "cen1"),
                      endpoint("cen1", "c2.0o", out)
                     ]
                    ]),
@@ -161,11 +156,7 @@ lm_add_container2() ->
         fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c3", Acc) end,
         fun decompose_lm/1
     ]),
-    ?assertEqual([
-                  cen_map("cen1", ["c1", "c2", "c3"], bus, 10, "10.10.0.1",
-                          [inet:ntoa({10, 10, 0, X}) || X <- lists:seq(10, 12)])
-                 ],
-                 Cens),
+    ?assertEqual([cen_map("cen1", ["c1", "c2", "c3"], bus)], Cens),
     ?assertEqualLists([cont_map("c1", ["cen1"], [0]),
                        cont_map("c2", ["cen1"], [0]),
                        cont_map("c3", ["cen1"], [0])],
@@ -189,12 +180,8 @@ lm_add_container3() ->
                               fun decompose_lm/1
                              ]),
     ?assertEqualLists([
-                       cen_map("cen1", ["c1", "c2", "c3"], bus, 10, "10.10.0.1",
-                               [inet:ntoa({10, 10, 0, X}) || X <- lists:seq(10, 12)]
-                              ),
-                       cen_map("cen2", ["c1", "c2", "c3", "c4"], bus, 11, "10.11.0.1",
-                               [inet:ntoa({10, 11, 0, X}) || X <- lists:seq(10, 13)]
-                              )
+                       cen_map("cen1", ["c1", "c2", "c3"], bus),
+                       cen_map("cen2", ["c1", "c2", "c3", "c4"], bus)
                       ],
                       Cens),
     ?assertEqualLists([
@@ -205,11 +192,11 @@ lm_add_container3() ->
                       ],
                       Conts),
     ?assertEqual(7, length(Wires)),
-    leviathan_test_utils:check_wires(Cens, Wires),
+    leviathan_test_utils:check_wires(Wires),
     assert_bus_wires(Wires).
 
 lm_add_container4() ->
-    {Cens, _, Wires} = decompose_lm(
+    {_, _, Wires} = decompose_lm(
         foldcalls(new_lm(), [
             fun(Acc) -> leviathan_cen:add_cen("cen1", Acc) end,
             fun(Acc) -> leviathan_cen:add_cen("cen2", Acc) end,
@@ -218,7 +205,7 @@ lm_add_container4() ->
             fun(Acc) -> leviathan_cen:lm_add_container("cen1", "cB", Acc) end,
             fun(Acc) -> leviathan_cen:lm_add_container("cen2", "cB", Acc) end
         ])),
-    leviathan_test_utils:check_wires(Cens, Wires).
+    leviathan_test_utils:check_wires(Wires).
 
 lm_remove_container0() ->
     LM = leviathan_cen:lm_remove_container("cen1", "c1", new_lm()),
@@ -227,7 +214,7 @@ lm_remove_container0() ->
 lm_remove_container1() ->
     LM0 = leviathan_cen:lm_add_container("cen1", "c1", new_lm()),
     LM1 = leviathan_cen:lm_remove_container("cen1", "c1", LM0),
-    Cens = [cen_map("cen1", [], bus, 10, "10.10.0.1", [])],
+    Cens = [cen_map("cen1", [], bus)],
     assert_equal_levmaps(compose_lm(Cens, [], []), LM1).
 
 lm_remove_container2() ->
@@ -237,7 +224,7 @@ lm_remove_container2() ->
                      fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c2", Acc) end
                     ]),
     LM1 = leviathan_cen:lm_remove_container("cen1", "c1", LM0),
-    ExpectedLM = compose_lm([cen_map("cen1", ["c2"], bus, 10, "10.10.0.1", ["10.10.0.11"])],
+    ExpectedLM = compose_lm([cen_map("cen1", ["c2"], bus)],
                             [cont_map("c2", ["cen1"], [0])],
                             []),
     assert_equal_levmaps(ExpectedLM, LM1).
@@ -249,7 +236,7 @@ lm_remove_container3() ->
                      fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c2", Acc) end
                     ]),
     LM1 = leviathan_cen:lm_remove_container("cen1", "c1", LM0),
-    ExpectedLM = compose_lm([cen_map("cen1", ["c2"], bus, 10, "10.10.0.1", ["10.10.0.11"])],
+    ExpectedLM = compose_lm([cen_map("cen1", ["c2"], bus)],
                             [cont_map("c2", ["cen1"], [0])],
                             []),
     assert_equal_levmaps(ExpectedLM, LM1).
@@ -264,19 +251,18 @@ lm_remove_container4() ->
                     ]),
     LM1 = leviathan_cen:lm_remove_container("cen1", "c1", LM0),
     ExpectedLM = compose_lm(
-                   [cen_map("cen2", ["c1","c3"], bus, 11, "10.11.0.1", ["10.11.0.10",
-                                                                        "10.11.0.11"]),
-                    cen_map("cen1", ["c2"], bus, 10, "10.10.0.1", ["10.10.0.11"])], 
+                   [cen_map("cen2", ["c1","c3"], bus),
+                    cen_map("cen1", ["c2"], bus)],
                    [cont_map("c3", ["cen2"], [0]),
                     cont_map("c2", ["cen1"], [0]),
                     cont_map("c1", ["cen2"], [1])], 
                    [
                     [
-                     endpoint("c3", "c3.0i", in, "cen2", "10.11.0.11"),
+                     endpoint("c3", "c3.0i", in, "cen2"),
                      endpoint("cen2", "c3.0o", out)
                     ],
                     [
-                     endpoint("c1", "c1.1i", in, "cen2", "10.11.0.10"),
+                     endpoint("c1", "c1.1i", in, "cen2"),
                      endpoint("cen2", "c1.1o", out)
                     ]
                    ]),
@@ -289,7 +275,7 @@ lm_compare_when_adding0() ->
 %% Add a new Cen with a new Container.
 lm_compare_when_adding1() ->
     LM0 = leviathan_cen:lm_add_container("cen1", "c1", new_lm()),
-    Cen = cen_map("cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"]),
+    Cen = cen_map("cen1", ["c1"], bus),
     Cont = cont_map("c1", ["cen1"], [0]),
     Instructions =
         [
@@ -310,16 +296,15 @@ lm_compare_when_adding2() ->
     Instructions =
         [
          {add, cont_in_cen, {cont_map("c2", ["cen1"], [0]),
-                             cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
-                                     ["10.10.0.10", "10.10.0.11"])
+                             cen_map("cen1", ["c1", "c2"], bus)
                             }},
          {add, cont, cont_map("c2", ["cen1"], [0])},
          {add, wire, [
-                      endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+                      endpoint("c1", "c1.0i", in, "cen1"),
                       endpoint("cen1", "c1.0o", out)
                      ]},
          {add, wire, [
-                      endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+                      endpoint("c2", "c2.0i", in, "cen1"),
                       endpoint("cen1", "c2.0o", out)
                      ]}
         ],
@@ -337,15 +322,14 @@ lm_compare_when_adding3() ->
     LM1 = leviathan_cen:lm_add_container("cen2", "cB", LM0),
     Instructions = [
                     {add, cont_in_cen, {cont_map("cB", ["cen1", "cen2"], [0, 1]),
-                                        cen_map("cen2", ["cA", "cB"], bus, 11, "10.11.0.1",
-                                                ["10.11.0.10", "10.11.0.11"]) 
+                                        cen_map("cen2", ["cA", "cB"], bus)
                                        }},
                     {add, wire, [
-                                 endpoint("cB", "cB.1i", in, "cen2", "10.11.0.11"),
+                                 endpoint("cB", "cB.1i", in, "cen2"),
                                  endpoint("cen2", "cB.1o", out)
                                 ]},
                     {add, wire, [
-                                 endpoint("cA", "cA.1i", in, "cen2", "10.11.0.10"),
+                                 endpoint("cA", "cA.1i", in, "cen2"),
                                  endpoint("cen2", "cA.1o", out)
                                 ]}],
     assert_equal_instructions(Instructions, leviathan_cen:lm_compare(LM0, LM1)).
@@ -368,20 +352,18 @@ lm_compare_when_adding4() ->
     Instructions = 
         [
          {add, cont_in_cen, {cont_map("c4", ["cen2"], [0]),
-                             cen_map("cen2", ["c3", "c4"], bus, 11, "10.11.0.1",
-                                     ["10.11.0.10", "10.11.0.11"]) 
+                             cen_map("cen2", ["c3", "c4"], bus)
                             }},
          {add, cont_in_cen, {cont_map("c3", ["cen1", "cen2"], [0, 1]),
-                             cen_map("cen2", ["c3", "c4"], bus, 11, "10.11.0.1",
-                                     ["10.11.0.10", "10.11.0.11"]) 
+                             cen_map("cen2", ["c3", "c4"], bus)
                             }},
          {add,cont, cont_map("c4", ["cen2"], [0])},
          {add, wire, [
-                      endpoint("c3", "c3.1i", in, "cen2", "10.11.0.10"),
+                      endpoint("c3", "c3.1i", in, "cen2"),
                       endpoint("cen2", "c3.1o", out)
                      ]},
          {add, wire, [
-                      endpoint("c4", "c4.0i", in, "cen2", "10.11.0.11"),
+                      endpoint("c4", "c4.0i", in, "cen2"),
                       endpoint("cen2", "c4.0o", out)
                      ]}],
     AInstructions = leviathan_cen:lm_compare(LM0, LM1),
@@ -395,7 +377,7 @@ lm_compare_when_adding5() ->
                      fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c1", Acc) end
                     ]),
     LM1 = leviathan_cen:lm_add_container("cen2", "c1", LM0),
-    Cen = cen_map("cen2", ["c1"], bus, 11, "10.11.0.1", ["10.11.0.10"]),
+    Cen = cen_map("cen2", ["c1"], bus),
     Instructions = 
         [
          {add, cont_in_cen, {cont_map("c1", ["cen1", "cen2"], [0, 1]),
@@ -430,9 +412,6 @@ lm_compare_when_adding6() ->
     NewLM = leviathan_cen:add_cen("cen1", OldLM),
     Instructions = [{add, cen, #{cenID => "cen1",
                                  contIDs => [],
-                                 ip_address => "10.10.0.1",
-                                 ipaddr_b => 10,
-                                 reservedIps => [],
                                  wire_type => bus}}],
     assert_equal_instructions(Instructions, leviathan_cen:lm_compare(OldLM, NewLM)).
 
@@ -440,13 +419,13 @@ lm_compare_when_adding6() ->
 lm_compare_when_destroying1() ->
     NewLM = new_lm(),
     OldLM = leviathan_cen:add_cen("cen1", NewLM),
-    Instructions = [{destroy, cen, cen_map("cen1", [], bus, 10, "10.10.0.1")}],
+    Instructions = [{destroy, cen, cen_map("cen1", [], bus)}],
     assert_equal_instructions(Instructions, leviathan_cen:lm_compare(OldLM, NewLM)).
 
 %% Remove a Cen with a Cont
 lm_compare_when_destroying2() ->
     LM0 = leviathan_cen:lm_add_container("cen1", "c1", new_lm()),
-    Cen = cen_map("cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"]),
+    Cen = cen_map("cen1", ["c1"], bus),
     Cont = cont_map("c1", ["cen1"], [0]),
     Instructions =
         [
@@ -467,16 +446,15 @@ lm_compare_when_destroying3() ->
     Instructions =
         [
          {destroy, cont_in_cen, {cont_map("c2", ["cen1"], [0]),
-                                 cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
-                                         ["10.10.0.10", "10.10.0.11"])
+                                 cen_map("cen1", ["c1", "c2"], bus)
                                 }},
          {destroy, cont, cont_map("c2", ["cen1"], [0])},
          {destroy, wire, [
-                          endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+                          endpoint("c1", "c1.0i", in, "cen1"),
                           endpoint("cen1", "c1.0o", out)
                          ]},
          {destroy, wire, [
-                          endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+                          endpoint("c2", "c2.0i", in, "cen1"),
                           endpoint("cen1", "c2.0o", out)
                          ]}
         ],
@@ -484,62 +462,60 @@ lm_compare_when_destroying3() ->
 
 get_levmap0() ->
     %% GIVEN
-    Cen = cen_map(CenIdToCheck = "cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"]),
+    Cen = cen_map(CenIdToCheck = "cen1", ["c1"], bus),
     Cont = cont_map("c1", ["cen1"], [0]),
     Wires = [],
     ExpectedLM = compose_lm([Cen], [Cont], Wires),
-    leviathan_store:import_cens(<<"host">>, ExpectedLM),
+    leviathan_cen_store:import_cens(<<"host">>, ExpectedLM),
 
     %% WHEN
-    ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
+    ActualLM = leviathan_cen_store:get_levmap([CenIdToCheck]),
 
     %% THEN
     assert_equal_levmaps(ExpectedLM, ActualLM).
 
 get_levmap1() ->
     %% GIVEN
-    Cen1 = cen_map(CenIdToCheck = "cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
-                   ["10.10.0.10", "10.10.0.11"]),
+    Cen1 = cen_map(CenIdToCheck = "cen1", ["c1", "c2"], bus),
     Cont1 = cont_map("c1", ["cen1"], [0]),
     Cont2 = cont_map("c2", ["cen1"], [0]),
     Wire1 = [
-             endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+             endpoint("c1", "c1.0i", in, "cen1"),
              endpoint("cen1", "c1.0o", out)
             ],
     Wire2 = [
-             endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+             endpoint("c2", "c2.0i", in, "cen1"),
              endpoint("cen1", "c2.0o", out)
             ],
     ExpectedLM = compose_lm([Cen1], [Cont1, Cont2], [Wire1, Wire2]),
-    leviathan_store:import_cens(<<"host">>, ExpectedLM),
+    leviathan_cen_store:import_cens(<<"host">>, ExpectedLM),
 
     %% WHEN
-    ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
+    ActualLM = leviathan_cen_store:get_levmap([CenIdToCheck]),
 
     %% THEN
     assert_equal_levmaps(ExpectedLM, ActualLM).
 
 get_levmap2() ->
     %% GIVEN
-    Cen1 = cen_map(CenIdToCheck = "cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
-                   ["10.10.0.10", "10.10.0.11"]),
-    Cen2 = cen_map("cen2", ["c2"], bus, 11, "10.11.0.1", ["10.11.0.10"]),
+    Cen1 = cen_map(CenIdToCheck = "cen1", ["c1", "c2"], bus),
+    Cen2 = cen_map("cen2", ["c2"], bus),
     Cont1 = cont_map("c1", ["cen1"], [0]),
     Cont2 = cont_map("c2", ["cen1", "cen2"], [0, 1]),
     Wire1 = [
-             endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+             endpoint("c1", "c1.0i", in, "cen1"),
              endpoint("cen1", "c1.0o", out)
             ],
     Wire2 = [
-             endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+             endpoint("c2", "c2.0i", in, "cen1"),
              endpoint("cen1", "c2.0o", out)
             ],
-    leviathan_store:import_cens(<<"host">>, compose_lm([Cen1, Cen2],
+    leviathan_cen_store:import_cens(<<"host">>, compose_lm([Cen1, Cen2],
                                                        [Cont1, Cont2],
                                                        [Wire1, Wire2])),
 
     %% WHEN
-    ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
+    ActualLM = leviathan_cen_store:get_levmap([CenIdToCheck]),
 
     %% THEN
     ExpectedLM = compose_lm([Cen1], [Cont1, Cont2], [Wire1, Wire2]),
@@ -547,37 +523,35 @@ get_levmap2() ->
 
 get_levmap3() ->
     %% GIVEN
-    Cen1 = cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
-                   ["10.10.0.10", "10.10.0.11"]),
-    Cen2 = cen_map(CenIdToCheck = "cen2", ["c3", "c4"], bus, 11, "10.11.0.1",
-                   ["10.11.0.10", "10.11.0.11"]),
+    Cen1 = cen_map("cen1", ["c1", "c2"], bus),
+    Cen2 = cen_map(CenIdToCheck = "cen2", ["c3", "c4"], bus),
     Cont1 = cont_map("c1", ["cen1"], [0]),
     Cont2 = cont_map("c2", ["cen1"], [0]),
     Cont3 = cont_map("c3", ["cen2"], [0]),
     Cont4 = cont_map("c4", ["cen2"], [0]),
     Wire1 = [
-             endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+             endpoint("c1", "c1.0i", in, "cen1"),
              endpoint("cen1", "c1.0o", out)
             ],
     Wire2 = [
-             endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+             endpoint("c2", "c2.0i", in, "cen1"),
              endpoint("cen1", "c2.0o", out)
             ],
     Wire3 = [
-             endpoint("c3", "c3.0i", in, "cen2", "10.11.0.10"),
+             endpoint("c3", "c3.0i", in, "cen2"),
              endpoint("cen2", "c3.0o", out)
             ],
     Wire4 = [
-             endpoint("c4", "c4.0i", in, "cen2", "10.11.0.11"),
+             endpoint("c4", "c4.0i", in, "cen2"),
              endpoint("cen2", "c4.0o", out)
             ],
-    leviathan_store:import_cens(<<"host">>,
+    leviathan_cen_store:import_cens(<<"host">>,
                                 compose_lm([Cen1, Cen2],
                                            [Cont1, Cont2, Cont3, Cont4],
                                            [Wire1, Wire2, Wire3, Wire4])),
     
     %% WHEN
-    ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
+    ActualLM = leviathan_cen_store:get_levmap([CenIdToCheck]),
 
     %% THEN
     ExpectedLM = compose_lm([Cen2], [Cont3, Cont4], [Wire3, Wire4]),
@@ -585,36 +559,34 @@ get_levmap3() ->
 
 get_levmap4() ->
     %% GIVEN
-    Cen1 = cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
-                   ["10.10.0.10", "10.10.0.11"]),
-    Cen2 = cen_map(CenIdToCheck = "cen2", ["c2", "c3"], bus, 11, "10.11.0.1",
-                   ["10.11.0.10", "10.11.0.11"]),
+    Cen1 = cen_map("cen1", ["c1", "c2"], bus),
+    Cen2 = cen_map(CenIdToCheck = "cen2", ["c2", "c3"], bus),
     Cont1 = cont_map("c1", ["cen1"], [0]),
     Cont2 = cont_map("c2", ["cen1", "cen2"], [0, 1]),
     Cont3 = cont_map("c3", ["cen2"], [0]),
     Wire1 = [
-             endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+             endpoint("c1", "c1.0i", in, "cen1"),
              endpoint("cen1", "c1.0o", out)
             ],
     Wire2 = [
-             endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+             endpoint("c2", "c2.0i", in, "cen1"),
              endpoint("cen1", "c2.0o", out)
             ],
     Wire3 = [
-             endpoint("c2", "c2.1i", in, "cen2", "10.11.0.10"),
+             endpoint("c2", "c2.1i", in, "cen2"),
              endpoint("cen2", "c2.1o", out)
             ],
     Wire4 = [
-             endpoint("c3", "c3.0i", in, "cen2", "10.11.0.11"),
+             endpoint("c3", "c3.0i", in, "cen2"),
              endpoint("cen2", "c3.0o", out)
             ],
-    leviathan_store:import_cens(<<"host">>,
+    leviathan_cen_store:import_cens(<<"host">>,
                                 compose_lm([Cen1, Cen2],
                                            [Cont1, Cont2, Cont3],
                                            [Wire1, Wire2, Wire3, Wire4])),
 
     %% WHEN
-    ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
+    ActualLM = leviathan_cen_store:get_levmap([CenIdToCheck]),
 
     %% THEN
     ExpectedLM = compose_lm([Cen2], [Cont2, Cont3], [Wire3, Wire4]),
@@ -622,40 +594,39 @@ get_levmap4() ->
 
 update_cens0() ->
     %% GIVEN
-    Cen = cen_map(CenIdToCheck = "cen1", ["c1"], bus, 10, "10.10.0.1", ["10.10.0.10"]),
+    Cen = cen_map(CenIdToCheck = "cen1", ["c1"], bus),
     Cont = cont_map("c1", ["cen1"], [0]),
     ExpectedLM = compose_lm([Cen], [Cont], _Wires = []),
     Delta = leviathan_cen:lm_compare(new_lm(), ExpectedLM),
         
     %% WHEN
-    ok = leviathan_store:update_cens(<<"host">>, Delta),
+    ok = leviathan_cen_store:update_cens(<<"host">>, Delta),
 
     %% THEN
-    ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
+    ActualLM = leviathan_cen_store:get_levmap([CenIdToCheck]),
     assert_equal_levmaps(ExpectedLM, ActualLM).
 
 update_cens1() ->
     %% GIVEN
-    Cen1 = cen_map(CenIdToCheck = "cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
-                   ["10.10.0.10", "10.10.0.11"]),
+    Cen1 = cen_map(CenIdToCheck = "cen1", ["c1", "c2"], bus),
     Cont1 = cont_map("c1", ["cen1"], [0]),
     Cont2 = cont_map("c2", ["cen1"], [0]),
     Wire1 = [
-             endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+             endpoint("c1", "c1.0i", in, "cen1"),
              endpoint("cen1", "c1.0o", out)
             ],
     Wire2 = [
-             endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+             endpoint("c2", "c2.0i", in, "cen1"),
              endpoint("cen1", "c2.0o", out)
             ],
     ExpectedLM = compose_lm([Cen1], [Cont1, Cont2], [Wire1, Wire2]),
     Delta = leviathan_cen:lm_compare(new_lm(), ExpectedLM),
     
     %% WHEN
-    ok = leviathan_store:update_cens(<<"host">>, Delta),
+    ok = leviathan_cen_store:update_cens(<<"host">>, Delta),
     
     %% THEN
-    ActualLM = leviathan_store:get_levmap([CenIdToCheck]),
+    ActualLM = leviathan_cen_store:get_levmap([CenIdToCheck]),
     assert_equal_levmaps(ExpectedLM, ActualLM).
 
 update_cens2() ->
@@ -666,29 +637,28 @@ update_cens2() ->
                      fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c2", Acc) end,
                      fun(Acc) -> leviathan_cen:add_cen("cen2", Acc) end
                     ]),
-    ok = leviathan_store:import_cens(<<"host">>, LM0),
+    ok = leviathan_cen_store:import_cens(<<"host">>, LM0),
     LM1 = leviathan_cen:lm_add_container("cen2", "c2", LM0),
-    Cen1 = cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
-                   ["10.10.0.10", "10.10.0.11"]),
-    Cen2 = cen_map("cen2", ["c2"], bus, 11, "10.11.0.1", ["10.11.0.10"]),
+    Cen1 = cen_map("cen1", ["c1", "c2"], bus),
+    Cen2 = cen_map("cen2", ["c2"], bus),
     Cont1 = cont_map("c1", ["cen1"], [0]),
     Cont2 = cont_map("c2", ["cen1", "cen2"], [0, 1]),
     Wire1 = [
-             endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+             endpoint("c1", "c1.0i", in, "cen1"),
              endpoint("cen1", "c1.0o", out)
             ],
     Wire2 = [
-             endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+             endpoint("c2", "c2.0i", in, "cen1"),
              endpoint("cen1", "c2.0o", out)
             ],
     ExpectedLM = compose_lm([Cen1, Cen2], [Cont1, Cont2], [Wire1, Wire2]),
     Delta = leviathan_cen:lm_compare(LM0, LM1),
 
     %% WHEN
-    ok = leviathan_store:update_cens(<<"host">>, Delta),
+    ok = leviathan_cen_store:update_cens(<<"host">>, Delta),
 
     %% THEN
-    ActualLM = leviathan_store:get_levmap(["cen1", "cen2"]),
+    ActualLM = leviathan_cen_store:get_levmap(["cen1", "cen2"]),
     assert_equal_levmaps(ExpectedLM, ActualLM).
 
 update_cens3() ->
@@ -699,42 +669,40 @@ update_cens3() ->
                      fun(Acc) -> leviathan_cen:lm_add_container("cen1", "c2", Acc) end,
                      fun(Acc) -> leviathan_cen:add_cen("cen2", Acc) end
                     ]),
-    ok = leviathan_store:import_cens(<<"host">>, LM0),
+    ok = leviathan_cen_store:import_cens(<<"host">>, LM0),
     LM1 = foldcalls(LM0,
                     [
                      fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c2", Acc) end,
                      fun(Acc) -> leviathan_cen:lm_add_container("cen2", "c3", Acc) end
                     ]),
-    Cen1 = cen_map("cen1", ["c1", "c2"], bus, 10, "10.10.0.1",
-                   ["10.10.0.10", "10.10.0.11"]),
-    Cen2 = cen_map("cen2", ["c3", "c2"], bus, 11, "10.11.0.1",
-                   ["10.11.0.11", "10.11.0.10"]),
+    Cen1 = cen_map("cen1", ["c1", "c2"], bus),
+    Cen2 = cen_map("cen2", ["c3", "c2"], bus),
     Cont1 = cont_map("c1", ["cen1"], [0]),
     Cont2 = cont_map("c2", ["cen1", "cen2"], [0, 1]),
     Cont3 = cont_map("c3", ["cen2"], [0]),
     Wire1 = [
-             endpoint("c1", "c1.0i", in, "cen1", "10.10.0.10"),
+             endpoint("c1", "c1.0i", in, "cen1"),
              endpoint("cen1", "c1.0o", out)
             ],
     Wire2 = [
-             endpoint("c2", "c2.0i", in, "cen1", "10.10.0.11"),
+             endpoint("c2", "c2.0i", in, "cen1"),
              endpoint("cen1", "c2.0o", out)
             ],
     Wire3 = [
-             endpoint("c2", "c2.1i", in, "cen2", "10.11.0.10"),
+             endpoint("c2", "c2.1i", in, "cen2"),
              endpoint("cen2", "c2.1o", out)
             ],
     Wire4 = [
-             endpoint("c3", "c3.0i", in, "cen2", "10.11.0.11"),
+             endpoint("c3", "c3.0i", in, "cen2"),
              endpoint("cen2", "c3.0o", out)
             ],
     Delta = leviathan_cen:lm_compare(LM0, LM1),
 
     %% WHEN
-    ok = leviathan_store:update_cens(<<"host">>, Delta),
+    ok = leviathan_cen_store:update_cens(<<"host">>, Delta),
 
     %% THEN
-    ActualLM = leviathan_store:get_levmap(["cen1", "cen2"]),
+    ActualLM = leviathan_cen_store:get_levmap(["cen1", "cen2"]),
     assert_equal_levmaps(compose_lm([Cen1, Cen2],
                                     [Cont1, Cont2, Cont3],
                                     [Wire1, Wire2, Wire3, Wire4]),
@@ -763,7 +731,7 @@ assert_equal_levmaps(ELM, ALM) ->
 
 assert_censmap_equal(ECens, ACens) ->
     lists:foreach(fun({ECen, ACen}) ->
-                          assert_maps_with_lists_equal([contIDs, reservedIps],
+                          assert_maps_with_lists_equal([contIDs],
                                                        ECen,
                                                        ACen)
                   end, lists:zip(lists:sort(ECens), lists:sort(ACens))).
@@ -805,37 +773,30 @@ compose_lm(Cens, Conts, Wires) ->
       contsmap => #{conts => Conts},
       wiremap => #{wires => Wires}}.
 
-json_cen(CenIdToCheck, ContIds) ->
-    #{<<"cenID">> => CenIdToCheck, <<"containerIDs">> => ContIds}.
+json_cen(CenId, ContIds) ->
+    #{<<"cenID">> => CenId, <<"containerIDs">> => ContIds}.
 
-cen_map(CenIdToCheck, ContIds, WireType, IpAddrB, IpAddr) ->
-    cen_map(CenIdToCheck, ContIds, WireType, IpAddrB, IpAddr, []).
-
-cen_map(CenIdToCheck, ContIds, WireType, IpAddrB, IpAddr, ReservedIp) ->
-    #{cenID => CenIdToCheck,
+cen_map(CenId, ContIds, WireType) ->
+    #{cenID => CenId,
       wire_type => WireType,
-      contIDs => ContIds,
-      ipaddr_b => IpAddrB,
-      ip_address => IpAddr,
-      reservedIps => ReservedIp}.
+      contIDs => ContIds}.
 
 cont_map(ContId, CenIds, ReservedIds) ->
     #{contID => ContId,
       cens => CenIds,
       reservedIdNums => ReservedIds}.
 
-endpoint(ContId, EndId, Side, Alias, IpAddr) ->
+endpoint(ContId, EndId, Side, Alias) ->
     #{endID => EndId,
       side => Side,
       dest => #{alias => Alias,
                 id => ContId,
-                ip_address => IpAddr,
                 type => cont}}.
 
-endpoint(CenIdToCheck, EndId, Side) ->
+endpoint(CenId, EndId, Side) ->
     #{endID => EndId,
       side => Side,
-      dest => #{id => CenIdToCheck,
+      dest => #{id => CenId,
                 type => cen}}.
 
 assert_bus_wires(Wires) ->
