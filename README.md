@@ -125,7 +125,7 @@ Function | Args | Description
 `leviathan_cen:add_container_to_cen/3` | Hostname, ContainerId, CenId | add a container to the CEN in Dobby and reconfigure the host
 `leviathan_cen:remove_container_from_cen/3` | Hostname, ContainerId, CenId | remove a container from a CEN in Dobby and reconfigure the host
 `leviathan_cen:prepare/1` | list of CEN identifiers | configures networking for the CENs by creating bridges and wires
-`leviathan_cen:destroy/1` | list of CIN identifiers | destroys the network configuration for the CINs
+`leviathan_cen:destroy/1` | list of CEN identifiers | destroys the network configuration for the CENs
 `leviathan_dby:import_cens/2` | Hostname, Filename | imports a Leviathan Map into Dobby
 `leviathan_dby:update_cens/2` | Hostname, Delta | applies deltas from `leviathan_cen:lm_compare/2` to Dobby
 `leviathan_dby:set_cen_status/2` | CEN identifier, `preparing | pending | delta` | sets a CEN status in Dobby
@@ -391,7 +391,7 @@ CIN addressing map:
 
 Key | Value | Description
 --- | ----- | -----------
-CenId (string) | #{interface => sring, ip => string &#124; null} | a map consisting of the bridge interface for a CEN and its IP address
+CenId (string) | #{interface => string, ip => string &#124; null} | a map consisting of the bridge interface for a CEN and its IP address
 
 Examples of CIN maps:
 ``` erlang
@@ -421,7 +421,7 @@ addressing | map | A map that describes IP addressing of the Container in this C
 
 Key | Value | Description
 --- | ----- | -----------
-CenId (string) | #{endID => string, interface => sring, ip => string &#124; null} | a map consisting of the Container inside endpoint id, its interface, and the IP address of the endpoint in this CEN
+CenId (string) | #{endID => string, interface => string, ip => string &#124; null} | a map consisting of the Container inside endpoint id, its interface, and the IP address of the endpoint in this CEN
 
 Examples of Container maps:
 ``` erlang
@@ -523,4 +523,4 @@ CIN, CEN | part_of | A CEN that this CIN covers
 ![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFABANbGV2aWF0aGFuX2NpbiBhcyBDSU4ABxpfc3RvcmUgYXMgU3RvcmUAMxdkYnkgYXMgRGJ5CgoAgQoGIC0-AIECBTogL2Npbi9pbXBvcnQKbm90ZSBvdmVyAIEvBywAgSYFLCBDSU46IHRoZQCBRgcgc2VuZHMgJ1siY2luMSI6WyJjZW4xIl0sICJjaW4yAAoHMiJdXScKAIFnBS0-AD0GYnVpbGRfY2lucyhDaW5JZFRvQ2VuSWRzTWFwKQBxDElOLACBSgY6IAAYECBkZWlmaW5lcyBDRU5zLCBhIACCZwZ1bGFyIENpbiB3aWxsIGNvbnRhaW47Cgpsb29wIGZvciBlYWNoIABqBSBpbgBGEQogICAgQ0lOIC0-IERieTogZ2V0X2NlbigAgRwFKQAaBURieSAtAIFDCENlbk1hcCBhcyBkZWZpbmVkIGJ5AIMwDGVuCmVuZACBPRgANwZpcyB1c2VkIHRvIGdldCBDb250SWRzIGFuZCBjcmVhdGUgQWRkcmVzc2luZwCBPwUAgn4FSU5zAIEZPndpcmVzAIFAGVdpcmVzAIEhNwA1B3JlAIFPCQCBLRsAgx0GZXJzAIMLBUlOcwoAgnsFAIUQCUNpbkxNAIQ3CQCECAcAhSMGAIQ6CUxNKQCEWQkAgzIFAAcZLT4AhwMHOg&s=roundgreen)
 
 #### Make CINs step
-![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFABANbGV2aWF0aGFuX2NpbiBhcyBDSU4ABxpfc3RvcmUgYXMgU3RvcmUAMxdkYnkgYXMgRGJ5CgoAgQoGIC0-AIECBTogL2Npbi9pbXBvcnQKbm90ZSBvdmVyAIEvBywAgSYFLCBDSU46IHRoZQCBRgcgc2VuZHMgJ3siY2luMSI6WyJjZW4xIl0sICJjaW4yAAoHMiJdfScKAIFnBS0-AD0GYnVpbGRfY2lucyhDaW5JZFRvQ2VuSWRzTWFwKQBxDElOLACBSgY6IAAYECBkZWlmaW5lcyBDRU5zLCBhIACCZwZ1bGFyIENpbiB3aWxsIGNvbnRhaW47Cgpsb29wIGZvciBlYWNoIABqBSBpbgBGEQogICAgQ0lOIC0-IERieTogZ2V0X2NlbigAgRwFKQAaBURieSAtAIFDCENlbk1hcCBhcyBkZWZpbmVkIGJ5AIMwDGVuCmVuZACBPRgANwZpcyB1c2VkIHRvIGdldCBDb250SWRzIGFuZCBjcmVhdGUgQWRkcmVzc2luZwCBPwUAgn4FSU5zAIEZPndpcmVzAIFAGVdpcmVzAIEhNwA1B3JlAIFPCQCBLRsAgx0GZXJzAIMLBUlOcwoAgnsFAIUQCUNpbkxNAIQ3CQCECAcAhSMGAIQ6CUxNKQCEWQkAgzIFAAcZLT4AhwMHOg&s=roundgreen).
+![sd](http://www.websequencediagrams.com/cgi-bin/cdraw?lz=cGFydGljaXBhbnQgQ2xpZW50CgAHDFJFU1QgQVBJIGFzAAcFABANbGV2aWF0aGFuX2NpbiBhcyBDSU4ABxpfc3RvcmUgYXMgU3RvcmUAMxdkYnkgYXMgRGJ5CgoAgQoGIC0-AIECBTogL2Npbi9tYWtlCm5vdGUgb3ZlcgCBLQcsAIEkBSwgQ0lOOiB0aGUAgUQHIHNlbmRzICdbImNpbjEiLCJjaW4yIl0nCgoAgVMFLT4AKwZwcmVwYXJlKENpbklkcykgW2FzeW5jXQAeBy0-AIISBzoKQ0lOIC0-AIE6BjogZ2V0X2xldm1hcAAyCAoAgVUFAC0GSU46IENpbkxNAC4IAIEXBWRvXwBjC0xNKQoATQhEYnk6IHNldCBzdGF0dXNlcyBvZgCBRQZJTnMgaW4ARwYgYXMAgSgHaW5nAE0NAIE-B19jaW5zAFQIAAsVb250ABEQAFIqcmVhZHkKAIJ0DElOLACCCQhub3cAgngFYnJpZGdlcyBhbmQAgwgFY29udGFpbmVycyBoYXZlIHRoZWlyIElQcw&s=roundgreen)
