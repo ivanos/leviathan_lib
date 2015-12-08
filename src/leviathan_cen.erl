@@ -17,6 +17,7 @@
 -define(MAX_INTERFACE_ID, 1000).
 
 -include("leviathan_logger.hrl").
+-include_lib("kernel/include/inet.hrl").
 
 
 %-------------------------------------------------------------------------------
@@ -277,7 +278,7 @@ add_cen(CenId, LM = ?LM_CENS(Cens)) ->
         true ->
             LM;
         false ->
-            LM?LM_SET_CENS([cen(CenId, bus, []) | Cens])
+            LM?LM_SET_CENS([cen(CenId, bus, [], #{}) | Cens])
     end.
 
 % returns filter function matching CenId
@@ -564,16 +565,42 @@ decode_jiffy(CensJson) ->
 
 % cens
 cens_from_jiffy(CensJson) ->
+    HostIdToNode = hostid_to_node([node() | nodes()]),
     lists:foldl(
       fun(#{<<"cenID">> := Cen, <<"containerIDs">> := Conts}, Acc) ->
-              [cen(binary_to_list(Cen), bus, Conts) | Acc]
+              [cen(binary_to_list(Cen), bus, Conts, HostIdToNode) | Acc]
       end, [], CensJson).
     
 
-cen(Cen, WireType, Conts) ->
+cen(Cen, WireType, Conts, HostIdToNode0) ->
+    Fn = fun(Cont, Acc) ->
+                 CenCont = {HostId, _} = cen_cont_id(Cont),
+                 maps:is_key(HostId, HostIdToNode0) orelse
+                     throw({unknown_host, HostId}),
+                 {CenCont, sets:add_element(HostId, Acc)}
+         end,
+    {CenConts, HostIds} = lists:mapfoldl(Fn, sets:new(), Conts),
+    HostIdToNode1 = maps:with(sets:to_list(HostIds), HostIdToNode0),
     #{cenID => Cen,
       wire_type => WireType,
-      contIDs => list_binary_to_list(Conts)}.
+      contIDs => CenConts,
+      hostid_to_node => HostIdToNode1,
+      tunnels => cen_tunnels(Cen, HostIdToNode1)}.
+
+cen_tunnels(Cen, HostIdToNode) ->
+    [{MasterHostId, MasterNode} | _] =  maps:to_list(HostIdToNode),
+    MasterTunnelEndpoint = tunnel_endpoint(Cen, MasterHostId, MasterNode),
+    maps:fold(fun(HostId, Node, Acc) ->
+                      [{MasterTunnelEndpoint,
+                        tunnel_endpoint(Cen, HostId, Node)}
+                       | Acc]
+              end, [], maps:without([MasterHostId], HostIdToNode)).
+
+tunnel_endpoint(Cen, HostId, Node) ->
+    #{hostid => HostId,
+      node => Node,
+      interface => Cen ++ "-tunnel-tap"}.
+
 
 conts_from_jiffy(CensJson) ->
     Pairs = cen_cont_pairs(CensJson),
@@ -587,9 +614,14 @@ conts_from_jiffy(CensJson) ->
         end, [], Index).
 
 cont(Cont, Cens) ->
-    #{contID => binary_to_list(Cont),
+    #{contID => cen_cont_id(Cont),
       cens => list_binary_to_list(Cens),
       reservedIdNums => cont_id_numbers(Cens)}.
+
+cen_cont_id(ContFromJson) ->
+    [HostId] = maps:values(ContFromJson),
+    [ContId] = maps:keys(ContFromJson),
+    {binary_to_list(HostId), binary_to_list(ContId)}.
 
 cont_id_numbers(Cens) ->
     lists:seq(0, length(Cens) - 1).
@@ -713,3 +745,12 @@ list_append_unique(Element, List) ->
         true ->
             List
     end.
+
+hostid_to_node(Nodes) ->
+    L = [begin
+             [_, HostName] = string:tokens(atom_to_list(N), "@"),
+             {ok, #hostent{h_addr_list = Ips}} =
+                 inet:gethostbyname(HostName),
+             [{inet:ntoa(Ip), N} || Ip <- Ips]
+         end || N <- Nodes],
+    maps:from_list(lists:flatten(L)).
