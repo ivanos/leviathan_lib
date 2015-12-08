@@ -726,10 +726,10 @@ list_delete2(ToRemove, [OtherKey | Keys], [Value | Values], NewKeys, NewValues) 
     list_delete2(ToRemove, Keys, Values, [OtherKey | NewKeys], [Value | NewValues]).
 
 % name formatters
-in_endpoint_name(ContId, N) ->
+in_endpoint_name({_HostId, ContId}, N) ->
     endpoint_name(ContId, "i", N).
 
-out_endpoint_name(ContId, N) ->
+out_endpoint_name({_HostId, ContId}, N) ->
     endpoint_name(ContId, "o", N).
 
 endpoint_name(ContId, Side, N) ->
