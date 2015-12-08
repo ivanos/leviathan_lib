@@ -277,8 +277,9 @@ dby_bridge(Host, BridgeId, Metadata) ->
 				     {<<"type">>, <<"bridge">>}] ++ Metadata}.
 
 dby_cont(Host, ContId, Metadata) ->
-    {dby_cont_id(Host, ContId), [{<<"contID">>, iolist_to_binary([ContId])},
-                                {<<"type">>, <<"container">>}] ++ Metadata}.
+    {dby_cont_id(Host, ContId), [host_id_md(Host),
+                                 {<<"contID">>, iolist_to_binary([ContId])},
+                                 {<<"type">>, <<"container">>}] ++ Metadata}.
 
 dby_endpoint(Host, EndID, Side, Metadata) ->
     {dby_endpoint_id(Host, EndID), [{<<"type">>, <<"endpoint">>},
@@ -347,8 +348,8 @@ container_from_lm(Host, #{contsmap := #{conts := Conts}}) ->
     lists:map(fun(Cont) -> pub_cont(Host, Cont) end, Conts).
 
 % prepare to publish one container
-pub_cont(Host, #{contID := ContId}) ->
-    [dby_cont(Host, list_to_binary(ContId), [status_md(pending)])].
+pub_cont(_Host, #{contID := {HostId, ContId}}) ->
+    [dby_cont(HostId, list_to_binary(ContId), [status_md(pending)])].
 
 % prepare to delete one container
 pub_destroy_cont(Host, #{contID := ContId}) ->
@@ -384,8 +385,8 @@ link_cen_to_containers(Host, CenId, ContIds, WireType) ->
     [
         dby_cen(list_to_binary(CenId), [wire_type_md(WireType), status_md(pending)]),
         lists:map(
-            fun(ContId) ->
-                dby_cen_to_container(Host, list_to_binary(CenId), list_to_binary(ContId))
+            fun({HostId, ContId}) ->
+                dby_cen_to_container(HostId, list_to_binary(CenId), list_to_binary(ContId))
             end, ContIds)
     ].
 
@@ -413,12 +414,18 @@ switch_tables(Host, #{<<"contID">> := ContID}, HowMany) ->
      || N <- lists:seq(0, HowMany - 1)].
 
 % prepare to publish one wire
-pub_wire(Host, [Endpoint1 = #{endID := EndId1},
-                Endpoint2 = #{endID := EndId2}]) ->
+pub_wire(Host, [Endpoint1 = #{endID := EndId1, dest := Dest1},
+                Endpoint2 = #{endID := EndId2, dest := Dest2}]) ->
+    {HostId, _} = case maps:get(type, Dest1) of
+                      cont ->
+                          maps:get(id, Dest1);
+                      _ ->
+                          maps:get(id, Dest2)
+                  end,
     [
-        endpoint(Host, Endpoint1),
-        endpoint(Host, Endpoint2),
-        dby_endpoint_to_endpoint(Host,
+        endpoint(HostId, Endpoint1),
+        endpoint(HostId, Endpoint2),
+        dby_endpoint_to_endpoint(HostId,
             list_to_binary(EndId1),
             list_to_binary(EndId2),
             endpoint_to_endpoint_type(Endpoint1, Endpoint2))
@@ -435,7 +442,7 @@ pub_destroy_wire(Host, [#{endID := EndId1}, #{endID := EndId2}]) ->
 endpoint(Host, #{endID := EndId,
                  side := Side,
                  dest := #{type := cont,
-                           id := ContId,
+                           id := {HostId, ContId},
                            alias := Eth}}) ->
     [
         dby_endpoint(Host, list_to_binary(EndId), Side, [alias_md(list_to_binary(Eth)), status_md(pending)]),
@@ -515,12 +522,16 @@ endpoint_side_md(in) ->
 endpoint_side_md(out) ->
     {<<"side">>, <<"out">>}.
 
+host_id_md(HostId) ->
+    {<<"host_id">>, list_to_binary(HostId)}.
+
 md_wire_type(null) ->
     null;
 md_wire_type(<<"wire">>) ->
     wire;
 md_wire_type(<<"bus">>) ->
     bus.
+
 
 % search
 
