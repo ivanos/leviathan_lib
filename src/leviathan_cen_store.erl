@@ -70,11 +70,15 @@ group_wires_by_cen(Wire = [
 
 cen_record(_Host, #{cenID := CenId,
                     wire_type := WireType,
-                    contIDs := ContIds},
+                    contIDs := ContIds,
+                    hostid_to_node := HostIdToNode,
+                    tunnels := Tunnels},
            Wires) ->
     #leviathan_cen{cen = CenId,
                    data = #{contIDs => ContIds,
-                            wire_type => WireType},
+                            wire_type => WireType,
+                            hostid_to_node => HostIdToNode,
+                            tunnels => Tunnels},
                    wires = maps:get(CenId, Wires, [])}.
 
 create_cont_records(Host, #{contsmap := #{conts := Conts}}) ->
@@ -108,9 +112,8 @@ get_cen(CenId) ->
     leviathan_db:transaction(Fn).
 
 %% convert a cen record to a cen map
-cen_map(#leviathan_cen{cen = CenId, data = #{contIDs := ContIds,
-                                             wire_type := WireType}}) ->
-    #{cenID => CenId, wire_type => WireType, contIDs => ContIds}.
+cen_map(#leviathan_cen{cen = CenId, data = CenData}) ->
+    maps:merge(#{cenID => CenId}, CenData).
 
 get_conts(Cens) ->
     ContIds = contids_from_cens(Cens),

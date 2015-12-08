@@ -15,7 +15,9 @@
 % map of cen to containers
 -record(leviathan_cen, {cen :: string(),
                         data :: #{contIDs => [string()],
-                                  wire_type => wire_type()},
+                                  wire_type => wire_type(),
+                                  hostid_to_node => maps:map(),
+                                  tunnels => list()},
                         wires :: [[in_endpoint() | out_endpoint()]]}).
 
 % connection between cen and container
