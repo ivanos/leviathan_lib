@@ -1,6 +1,7 @@
 -module(leviathan_cen_store).
 
 -export([import_cens/2,
+         import_cens_in_cluster/2,
          get_levmap/1,
          update_cens/2]).
 
@@ -20,6 +21,11 @@
 %% -------------------------------------------------------------------------------
 %% API
 %% -------------------------------------------------------------------------------
+
+import_cens_in_cluster(Host, LM) ->
+    [ok = rpc:call(Node, ?MODULE, import_cens, [Host, LM])
+     || Node <- nodes()],
+    ok = import_cens(Host, LM).
 
 import_cens(_, ?LM_EMPTY) ->
     ok;
