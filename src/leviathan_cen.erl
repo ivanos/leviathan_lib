@@ -581,15 +581,18 @@ cen(Cen, WireType, Conts, HostIdToNode0) ->
          end,
     {CenConts, HostIds} = lists:mapfoldl(Fn, sets:new(), Conts),
     HostIdToNode1 = maps:with(sets:to_list(HostIds), HostIdToNode0),
+    [{MasterHostId, _} | _] = maps:to_list(HostIdToNode1),
     #{cenID => Cen,
       wire_type => WireType,
       contIDs => CenConts,
+      master_hostid => MasterHostId,
       hostid_to_node => HostIdToNode1,
-      tunnels => cen_tunnels(Cen, HostIdToNode1)}.
+      tunnels => cen_tunnels(Cen, MasterHostId, HostIdToNode1)}.
 
-cen_tunnels(Cen, HostIdToNode) ->
-    [{MasterHostId, MasterNode} | _] =  maps:to_list(HostIdToNode),
-    MasterTunnelEndpoint = tunnel_endpoint(Cen, MasterHostId, MasterNode),
+cen_tunnels(Cen, MasterHostId, HostIdToNode) ->
+    MasterTunnelEndpoint = tunnel_endpoint(Cen, MasterHostId,
+                                           maps:get(MasterHostId,
+                                                    HostIdToNode)),
     maps:fold(fun(HostId, Node, Acc) ->
                       [{MasterTunnelEndpoint,
                         tunnel_endpoint(Cen, HostId, Node)}

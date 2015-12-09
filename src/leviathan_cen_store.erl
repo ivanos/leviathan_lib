@@ -77,12 +77,14 @@ group_wires_by_cen(Wire = [
 cen_record(_Host, #{cenID := CenId,
                     wire_type := WireType,
                     contIDs := ContIds,
+                    master_hostid := MasterHostId,
                     hostid_to_node := HostIdToNode,
                     tunnels := Tunnels},
            Wires) ->
     #leviathan_cen{cen = CenId,
                    data = #{contIDs => ContIds,
                             wire_type => WireType,
+                            master_hostid => MasterHostId,
                             hostid_to_node => HostIdToNode,
                             tunnels => Tunnels},
                    wires = maps:get(CenId, Wires, [])}.

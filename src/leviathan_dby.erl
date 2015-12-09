@@ -362,11 +362,12 @@ cens_from_lm(Host, #{censmap := #{cens := Cens}}) ->
 % prepare to publish one cen
 pub_cen(Host, #{cenID := CenId,
                 wire_type := bus,
+                master_hostid := MasterHostId,
                 contIDs := ContIds}) ->
     [
-        link_cen_to_containers(Host, CenId, ContIds, bus),
-        dby_bridge(Host, list_to_binary(CenId), [status_md(pending)]),
-        dby_bridge_to_cen(Host, list_to_binary(CenId), list_to_binary(CenId))
+     link_cen_to_containers(Host, CenId, ContIds, bus),
+     dby_bridge(MasterHostId, list_to_binary(CenId), [status_md(pending)]),
+     dby_bridge_to_cen(MasterHostId, list_to_binary(CenId), list_to_binary(CenId))
     ];
 pub_cen(Host, #{cenID := CenId,
           wire_type := WireType,
