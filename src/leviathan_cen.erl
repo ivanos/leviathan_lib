@@ -585,6 +585,7 @@ cen(Cen, WireType, Conts, HostIdToNode0) ->
     #{cenID => Cen,
       wire_type => WireType,
       contIDs => CenConts,
+      bridges => [{HostId, Cen} || HostId <- maps:keys(HostIdToNode1)],
       master_hostid => MasterHostId,
       hostid_to_node => HostIdToNode1,
       tunnels => cen_tunnels(Cen, MasterHostId, HostIdToNode1)}.

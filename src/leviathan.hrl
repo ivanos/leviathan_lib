@@ -16,6 +16,7 @@
 -record(leviathan_cen, {cen :: string(),
                         data :: #{contIDs => [string()],
                                   wire_type => wire_type(),
+                                  bridges => list(),
                                   master_hostid => string(),
                                   hostid_to_node => maps:map(),
                                   tunnels => list()},
