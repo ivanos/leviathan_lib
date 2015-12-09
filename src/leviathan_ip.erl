@@ -71,3 +71,6 @@ netns_exec_ip_route_add(CPid, NetIPAddress, DevName) ->
 
 netns_exec_ip_route_del(CPid, NetIPAddress, DevName) ->
     "ip netns exec " ++ CPid ++ " ip route del " ++ NetIPAddress ++ " dev " ++ DevName.
+
+tuntap_add_dev_mode_tap(DevName) ->
+    "ip tuntap add dev " ++ DevName ++ " mode tap".

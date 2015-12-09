@@ -118,3 +118,28 @@ eval(CmdBundle,output_raw)->
     Results = lists:foldl(fun({_Cmd,Output},Acc)->%io:format("   Cmd: ~p~nOutput: ~p~n",[Cmd,Output]),
 				  Acc++[Output] end,[],EvalBundle),
     Results.
+
+new_tap(InterfaceName) ->
+    [leviathan_ip:tuntap_add_dev_mode_tap(InterfaceName)].
+
+tap2bridge(InterfaceName, BridgeName) ->
+    [leviathan_brctl:addif(BridgeName, InterfaceName),
+     leviathan_ip:link_set_up(InterfaceName)].
+
+new_tunnel(User, SrcTapNo, DstTapNo, RemoteHost) ->
+    ["ssh -f -o Tunnel=Ethernet -w "
+     ++ SrcTapNo ++ ":" ++ DstTapNo ++ " "
+     ++ User ++ "@" ++ RemoteHost ++ " true"].
+    
+
+
+
+
+
+
+
+
+
+
+
+

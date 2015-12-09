@@ -79,6 +79,10 @@ test_cens() ->
 test_local_prepare_lev(CenIds)->
     prepare_lev(leviathan_cen_store:get_levmap(CenIds)).
 
+prepare_in_cluster(CenIds) ->
+    [rpc:call(N, leviathan_cen, prepare, [CenIds]) || N <- nodes()],
+    prepare(CenIds).
+
 % prepare cens from a list of cen ids
 prepare(CenIds) ->
     prepare_lev(leviathan_cen_store:get_levmap(CenIds)).
@@ -137,15 +141,69 @@ cens_status(#{cens := Cens}, Status) ->
 prepare_cens(#{cens := Cens}) ->
     %% make any necessary Ethernet buses
     %% if a Cen has more than 2 containers, we'll create a bus
-    Fn = fun(#{cenID := CenId, wire_type := CenType}) ->
-                 case CenType of
+    Fn = fun(#{wire_type := CenType} = CenMap) ->
+                 case  CenType of
                      bus ->
-                         prepare_bus(CenId);
+                         prepare_cen(CenMap);
                      _ ->
                          ok %% don't create a bus
                  end
          end,
     lists:foreach(Fn, Cens).
+
+prepare_cen(#{bridges := Bridges, hostid_to_node := HostIdToNode} = CenMap) ->
+    Fn = fun({HostId, BrId}) ->
+                 case maps:get(HostId, HostIdToNode) of
+                     Node when Node =:= node() ->
+                         prepare_bus(BrId),
+                         prepare_tunnel_interfaces(HostId, CenMap),
+                         prepare_tunnels(HostId, CenMap);
+                     _ ->
+                         ok
+                 end
+         end,
+    lists:foreach(Fn, Bridges).
+
+prepare_tunnel_interfaces(ThisHostId, #{tunnels := Tunnels,
+                                        bridges := Bridges}) ->
+    Bridge = proplists:get_value(ThisHostId, Bridges),
+    Fn = fun({#{hostid := HostId, tap_no := TapNo}, _})
+               when HostId =:= ThisHostId ->
+                 prepare_tunnel_interface(TapNo, Bridge);
+            ({_, #{hostid := HostId, tap_no := TapNo}})
+               when HostId =:= ThisHostId ->
+                 prepare_tunnel_interface(TapNo, Bridge);
+            (_) ->
+                 ok
+         end,
+    lists:foreach(Fn, Tunnels).
+
+prepare_tunnel_interface(TapNo, Bridge) ->
+    Intf = "tap" ++ integer_to_list(TapNo),
+    CmdBundle = leviathan_linux:new_tap(Intf)
+        ++ leviathan_linux:tap2bridge(Intf, Bridge),
+    leviathan_linux:eval(CmdBundle),
+    ok.
+
+
+prepare_tunnels(HostId, #{master_hostid := MasterHostId,
+                          tunnels := Tunnels})
+  when HostId =:= MasterHostId ->
+    Fn = fun({#{tap_no := TapNoA},
+              #{hostid := HostB, tap_no := TapNoB}}) ->
+                 TunnelUser = application:get_env(leviathan_lib, tunnel_user, undefined),
+                 CmdBundle = leviathan_linux:new_tunnel(atom_to_list(TunnelUser),
+                                                        integer_to_list(TapNoA),
+                                                        integer_to_list(TapNoB),
+                                                        HostB),
+                 leviathan_linux:eval(CmdBundle),
+                 ok
+         end,
+    lists:foreach(Fn, Tunnels);
+prepare_tunnels(_, _) ->
+    ok.
+        
+
 
 prepare_bus(CenId) ->
     CmdBundle = leviathan_linux:new_bus(CenId),
@@ -153,10 +211,17 @@ prepare_bus(CenId) ->
     ok.
 
 prepare_conts(#{conts := Conts}) ->
+    HostIdToNode = hostid_to_node([node()|nodes()]),
     lists:foreach(
-        fun(#{contID := ContId}) ->
-            prepare_cont(ContId)
-        end, Conts).
+      fun(#{contID := {HostId, ContId}}) ->
+              case maps:get(HostId, HostIdToNode) of
+                  Node when Node =:= node() ->
+                      prepare_cont(ContId);
+                  _ ->
+                      %% the other host container
+                      ok
+              end
+      end, Conts).
 
 prepare_cont(ContId) ->
     CmdBundle = leviathan_linux:set_netns(ContId),
@@ -167,7 +232,24 @@ prepare_wires(WireMap)->
     #{wires := Wires} = WireMap,
     lists:foreach(fun(Wire)->prepare_wire(Wire) end, Wires).
 
-prepare_wire(Wire = [#{endID := EndId1}, #{endID := EndId2}]) ->
+prepare_wire([#{dest := #{type := cont, id := {HostId, _ContId}}}, _] = Wire) ->
+    HostIdToNode = hostid_to_node([node()]),
+    case maps:get(HostId, HostIdToNode, undefined) of
+        undefined ->
+            ok;
+        _ ->
+            prepare_wire2(Wire)
+    end;
+prepare_wire([_, #{dest := #{type := cont, id := {HostId, _ContId}}}] = Wire) ->
+    HostIdToNode = hostid_to_node([node()]),
+    case maps:get(HostId, HostIdToNode, undefined) of
+        undefined ->
+            ok;
+        _ ->
+            prepare_wire2(Wire)
+    end.
+    
+prepare_wire2(Wire = [#{endID := EndId1}, #{endID := EndId2}]) ->
     CmdBundle = leviathan_linux:new_peer(EndId1, EndId2),
     leviathan_linux:eval(CmdBundle),				      
     lists:foreach(fun(WireEnd) -> prepare_wire_end(WireEnd) end, Wire).
@@ -176,7 +258,7 @@ prepare_wire_end(#{endID := EndId, dest := #{type := cen, id := CenId}}) ->
     CmdBundle = leviathan_linux:peer2cen(CenId,EndId),
     leviathan_linux:eval(CmdBundle);				      
 prepare_wire_end(#{endID := EndId,
-                dest := #{type := cont, id := ContId, alias := Alias}}) ->
+                dest := #{type := cont, id := {_HostId, ContId}, alias := Alias}}) ->
     CmdBundle = leviathan_linux:peer2cont(ContId, EndId, Alias),
     leviathan_linux:eval(CmdBundle).
 
@@ -582,28 +664,39 @@ cen(Cen, WireType, Conts, HostIdToNode0) ->
     {CenConts, HostIds} = lists:mapfoldl(Fn, sets:new(), Conts),
     HostIdToNode1 = maps:with(sets:to_list(HostIds), HostIdToNode0),
     [{MasterHostId, _} | _] = maps:to_list(HostIdToNode1),
+    TapsCntBase =
+        leviathan_common_store:next_count(taps_cnt_base, 100, 100),
     #{cenID => Cen,
       wire_type => WireType,
       contIDs => CenConts,
       bridges => [{HostId, Cen} || HostId <- maps:keys(HostIdToNode1)],
       master_hostid => MasterHostId,
       hostid_to_node => HostIdToNode1,
-      tunnels => cen_tunnels(Cen, MasterHostId, HostIdToNode1)}.
+      taps_cnt_base => TapsCntBase,
+      tunnels => cen_tunnels(MasterHostId, TapsCntBase, HostIdToNode1)}.
 
-cen_tunnels(Cen, MasterHostId, HostIdToNode) ->
-    MasterTunnelEndpoint = tunnel_endpoint(Cen, MasterHostId,
-                                           maps:get(MasterHostId,
-                                                    HostIdToNode)),
-    maps:fold(fun(HostId, Node, Acc) ->
-                      [{MasterTunnelEndpoint,
-                        tunnel_endpoint(Cen, HostId, Node)}
-                       | Acc]
-              end, [], maps:without([MasterHostId], HostIdToNode)).
+cen_tunnels(MasterHostId, TapsCntBase, HostIdToNode) ->
+    MasterTunnelEndpointFn =
+        fun(Cnt) ->
+                tunnel_endpoint(Cnt,
+                                MasterHostId,
+                                maps:get(MasterHostId, HostIdToNode))
+        end,
+    Fn = fun(HostId, Node, {Cnt, Acc}) ->
+                 {Cnt + 1,
+                  [{MasterTunnelEndpointFn(Cnt),
+                    tunnel_endpoint(Cnt, HostId, Node)}
+                   | Acc]}
+         end, 
+    {_, Tunnels} = maps:fold(Fn,
+                             {TapsCntBase + 1, []},
+                             maps:without([MasterHostId], HostIdToNode)),
+    Tunnels.
 
-tunnel_endpoint(Cen, HostId, Node) ->
+tunnel_endpoint(Cnt, HostId, Node) ->
     #{hostid => HostId,
       node => Node,
-      interface => Cen ++ "-tunnel-tap"}.
+      tap_no => Cnt}.
 
 
 conts_from_jiffy(CensJson) ->

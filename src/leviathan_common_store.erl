@@ -1,6 +1,7 @@
 -module(leviathan_common_store).
 
--export([next_count/2]).
+-export([next_count/2,
+         next_count/3]).
 
 -include("leviathan.hrl").
 
@@ -16,6 +17,19 @@ next_count(Key, InitialValue) ->
                          InitialValue;
                      [#counter{count = Count}] ->
                          update_count(Key, Count + 1),
+                         Count
+                 end
+         end,
+    leviathan_db:transaction(Fn).
+
+next_count(Key, InitialValue, Interval) ->
+    Fn = fun() ->
+                 case leviathan_db:read({counter, Key}) of
+                     [] ->
+                         update_count(Key, InitialValue + Interval),
+                         InitialValue;
+                     [#counter{count = Count}] ->
+                         update_count(Key, Count + Interval),
                          Count
                  end
          end,
