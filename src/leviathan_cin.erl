@@ -2,6 +2,7 @@
 
 -export([build_cins/1,
          prepare/1,
+         prepare_in_cluster/1,
          destroy/1]).
 
 -define(LM_EMPTY, ?LM([], [])).
@@ -51,6 +52,10 @@ build_cins(CinToCensMap) ->
 prepare(CinIds) ->
     do_prepare(leviathan_cin_store:get_levmap(CinIds)).
 
+prepare_in_cluster(CinIds) ->
+    [rpc:call(N, leviathan_cin, prepare, [CinIds]) || N <- nodes()],
+    prepare(CinIds).
+
 
 -spec destroy(CinIds :: [string()]) -> ok.
 
@@ -75,6 +80,7 @@ make_cin_map(CinId, Cens) ->
     #{cinID => CinId,
       contIDs => get_cen_containers(Cens),
       ip_b => IpB,
+      master_cin_node => node(),
       addressing => make_cin_addressing(IpB, Cens)}.
 
 get_cens(CenIds) ->
@@ -112,8 +118,8 @@ make_cont_maps(#{cinID := CinId, contIDs := ContIds, ip_b := IpB},
     element(1, lists:mapfoldl(Fn, 1, ContIds)).
 
 mkfn_make_cont_map(CinId, IpB, ContToWires) ->
-    fun(ContId, ContCount) ->
-            ContWires = maps:get(ContId, ContToWires),
+    fun({_HostId, BareContId} = ContId, ContCount) ->
+            ContWires = maps:get(BareContId, ContToWires),
             {#{contID => ContId,
                cinID => CinId,
                addressing => make_cont_addressing(IpB, ContCount,
@@ -178,8 +184,12 @@ do_prepare(?MATCH_LM(CinMaps, ContMaps)) ->
     set_cin_status(CinMaps, ready).
 
 prepare_cins(CinMaps) ->
-    lists:foreach(fun(#{addressing := Addressing}) ->
-                          prepare_cin(Addressing)
+    lists:foreach(fun(#{master_cin_node := MasterCinNode,
+                        addressing := Addressing})
+                        when MasterCinNode =:= node() ->
+                          prepare_cin(Addressing);
+                     (_) ->
+                          ok
                   end, CinMaps).
 
 prepare_cin(CinAddressing) ->
@@ -194,9 +204,15 @@ prepare_cin(CinAddressing) ->
     end.
 
 prepare_conts(ContMaps) ->
-    Fn = fun(#{contID := {_HostId, BareContId},
+    HostIdToNode = leviathan_cen:hostid_to_node([node()]),
+    Fn = fun(#{contID := {HostId, BareContId},
                addressing := Addressing}) ->
-                 prepare_cont(BareContId, Addressing);
+                 case maps:get(HostId, HostIdToNode) of
+                     N when N =:= node() ->
+                         prepare_cont(BareContId, Addressing);
+                     _ ->
+                         ok
+                 end;
             %% The below clause should be removed when the CEN layer is
             %% adjusted to the new ContId format that is {HostId, ContId}
             (#{contID := BareContId,

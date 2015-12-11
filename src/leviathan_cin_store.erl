@@ -1,6 +1,7 @@
 -module(leviathan_cin_store).
 
 -export([import_cins/2,
+         import_cins_in_cluster/2,
          get_levmap/1,
          update_cins/2]).
 
@@ -15,6 +16,10 @@
 %% -------------------------------------------------------------------------------
 %% API
 %% -------------------------------------------------------------------------------
+
+import_cins_in_cluster(HostId, CinLM) ->
+    [rpc:call(N, leviathan_cin, import_cins, [HostId, CinLM]) || N <- node()],
+    import_cins(HostId, CinLM).
 
 -spec import_cins(HostId :: string(), leviathan_cin:cin_lm()) -> ok.
 

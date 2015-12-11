@@ -549,6 +549,9 @@ bridge(_, _, _, Acc) ->
 linked_containers(_, ?MATCH_CEN(CenId, WireType), [], Acc) ->
     {continue, Acc#{cenID := binary_to_list(CenId),
                     wire_type := md_wire_type(WireType)}};
+linked_containers(_, ?MATCH_CONTAINER(ContId, HostId), _, Acc) ->
+    {continue, map_prepend(Acc, contIDs, {binary_to_list(HostId),
+                                          binary_to_list(ContId)})};
 linked_containers(_, ?MATCH_CONTAINER(ContId), _, Acc) ->
     {continue, map_prepend(Acc, contIDs, binary_to_list(ContId))};
 linked_containers(_, _, _, Acc) ->
