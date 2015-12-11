@@ -367,10 +367,12 @@ pub_cen(Host, #{cenID := CenId,
                 contIDs := ContIds}) ->
     [
      link_cen_to_containers(Host, CenId, ContIds, bus),
-     [begin
-          dby_bridge(HostId, list_to_binary(BrId), [status_md(pending)]),
-          dby_bridge_to_cen(HostId, list_to_binary(BrId), list_to_binary(CenId))
-      end || {HostId, BrId} <- Bridges]
+     [
+      [
+       dby_bridge(HostId, list_to_binary(BrId), [status_md(pending)]),
+       dby_bridge_to_cen(HostId, list_to_binary(BrId), list_to_binary(CenId))
+      ] || {HostId, BrId} <- Bridges
+     ]
     ];
 pub_cen(Host, #{cenID := CenId,
           wire_type := WireType,
@@ -449,16 +451,16 @@ endpoint(Host, #{endID := EndId,
                            id := {HostId, ContId},
                            alias := Eth}}) ->
     [
-        dby_endpoint(Host, list_to_binary(EndId), Side, [alias_md(list_to_binary(Eth)), status_md(pending)]),
-        dby_endpoint_to_container(Host, list_to_binary(EndId), list_to_binary(ContId))
+     dby_endpoint(Host, list_to_binary(EndId), Side, [alias_md(list_to_binary(Eth)), status_md(pending)]),
+     dby_endpoint_to_container(Host, list_to_binary(EndId), list_to_binary(ContId))
     ];
 endpoint(Host, #{endID := EndId,
                  side := Side,
                  dest := #{type := cen,
                            id := CenId}}) ->
     [
-        dby_endpoint(Host, list_to_binary(EndId), Side, [status_md(pending)]),
-        dby_endpoint_to_bridge(Host, list_to_binary(EndId), list_to_binary(CenId))
+     dby_endpoint(Host, list_to_binary(EndId), Side, [status_md(pending)]),
+     dby_endpoint_to_bridge(Host, list_to_binary(EndId), list_to_binary(CenId))
     ].
 
 endpoint_to_endpoint_type(#{dest := #{type := cont, id := ContId1}},
@@ -549,7 +551,7 @@ bridge(_, _, _, Acc) ->
 linked_containers(_, ?MATCH_CEN(CenId, WireType), [], Acc) ->
     {continue, Acc#{cenID := binary_to_list(CenId),
                     wire_type := md_wire_type(WireType)}};
-linked_containers(_, ?MATCH_CONTAINER(ContId, HostId), _, Acc) ->
+linked_containers(_, ?MATCH_CONTAINER(HostId, ContId), _, Acc) ->
     {continue, map_prepend(Acc, contIDs, {binary_to_list(HostId),
                                           binary_to_list(ContId)})};
 linked_containers(_, ?MATCH_CONTAINER(ContId), _, Acc) ->

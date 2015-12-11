@@ -10,9 +10,9 @@
 -define(MATCH_CONTAINER(ContId), #{?MDTYPE(<<"container">>),
                                    ?MDVALUE(<<"contID">>, ContId)}).
 
--define(MATCH_CONTAINER(ContId, HostId), #{?MDTYPE(<<"container">>),
-                                           ?MDVALUE(<<"contID">>, ContId),
-                                           ?MDVALUE(<<"host_id">>, HostId)}).
+-define(MATCH_CONTAINER(HostId, ContId), #{?MDTYPE(<<"container">>),
+                                          ?MDVALUE(<<"contID">>, ContId),
+                                          ?MDVALUE(<<"host_id">>, HostId)}).
 
 % mattern match for a bridge, the bridge id, and the ip address
 -define(MATCH_BRIDGE(BridgeId), #{?MDTYPE(<<"bridge">>),
