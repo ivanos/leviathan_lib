@@ -207,7 +207,7 @@ prepare_conts(ContMaps) ->
     HostIdToNode = leviathan_cen:hostid_to_node([node()]),
     Fn = fun(#{contID := {HostId, BareContId},
                addressing := Addressing}) ->
-                 case maps:get(HostId, HostIdToNode) of
+                 case maps:get(HostId, HostIdToNode, undefined) of
                      N when N =:= node() ->
                          prepare_cont(BareContId, Addressing);
                      _ ->

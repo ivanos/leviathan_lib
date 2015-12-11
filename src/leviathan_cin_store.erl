@@ -18,8 +18,8 @@
 %% -------------------------------------------------------------------------------
 
 import_cins_in_cluster(HostId, CinLM) ->
-    [rpc:call(N, leviathan_cin, import_cins, [HostId, CinLM]) || N <- nodes()],
-    import_cins(HostId, CinLM).
+    [ok = rpc:call(N, leviathan_cin_store, import_cins, [HostId, CinLM]) || N <- nodes()],
+    ok = import_cins(HostId, CinLM).
 
 -spec import_cins(HostId :: string(), leviathan_cin:cin_lm()) -> ok.
 
