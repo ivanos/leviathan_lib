@@ -18,6 +18,10 @@
 -define(MATCH_BRIDGE(BridgeId), #{?MDTYPE(<<"bridge">>),
                                   ?MDVALUE(<<"bridgeID">>, BridgeId)}).
 
+-define(MATCH_BRIDGE(HostId, BridgeId), #{?MDTYPE(<<"bridge">>),
+                                          ?MDVALUE(<<"host_id">>, HostId),
+                                          ?MDVALUE(<<"bridgeID">>, BridgeId)}).
+
 % pattern match for a CEN, the CEN id, and the wire type
 -define(MATCH_CEN(CenId, WireType), #{?MDTYPE(<<"cen">>),
                                        ?MDVALUE(<<"cenID">>, CenId),

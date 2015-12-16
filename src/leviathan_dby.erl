@@ -60,13 +60,13 @@ get_bridge(BridgeId) ->
 	       dby_bridge_id("host1",BridgeId), [{max_depth, 0}]).
 
 -spec get_cen(string()) -> #{}.
+
 get_cen(CenId) ->
-    #{ip_address := IPAddress} = get_bridge(CenId),
     dby:search(fun linked_containers/4,
         #{cenID => null,
-         wire_type => null,
-	 ip_address => IPAddress,
-         contIDs => []},
+          wire_type => null,
+          contIDs => [],
+          bridges => []},
         dby_cen_id(CenId), [{max_depth, 1}]).
 
 -spec get_cont(string(), string()) -> #{}.
@@ -275,7 +275,8 @@ dby_cin(CinId, Metadata) ->
                          {<<"type">>, <<"cin">>}] ++ Metadata}.
 
 dby_bridge(Host, BridgeId, Metadata) ->
-    {dby_bridge_id(Host, BridgeId), [{<<"bridgeID">>, iolist_to_binary([BridgeId])},
+    {dby_bridge_id(Host, BridgeId), [{<<"host_id">>, iolist_to_binary(Host)},
+                                     {<<"bridgeID">>, iolist_to_binary([BridgeId])},
 				     {<<"type">>, <<"bridge">>}] ++ Metadata}.
 
 dby_cont(Host, ContId, Metadata) ->
@@ -558,6 +559,9 @@ linked_containers(_, ?MATCH_CONTAINER(HostId, ContId), _, Acc) ->
                                           binary_to_list(ContId)})};
 linked_containers(_, ?MATCH_CONTAINER(ContId), _, Acc) ->
     {continue, map_prepend(Acc, contIDs, binary_to_list(ContId))};
+linked_containers(_, ?MATCH_BRIDGE(HostId, BridgeId), _, Acc) ->
+    {continue, map_prepend(Acc, bridges, {binary_to_list(HostId),
+                                          binary_to_list(BridgeId)})};
 linked_containers(_, _, _, Acc) ->
     {continue, Acc}.
 
