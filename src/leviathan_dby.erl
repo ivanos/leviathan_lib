@@ -342,6 +342,11 @@ dby_cen_to_cin(CenId, CinId) ->
 dby_ipaddr_to_cin(Ip, CinId) ->
     dby_link(dby_ipaddr_id(Ip), dby_cin_id(CinId), <<"part_of">>).
 
+dby_bridge_to_bridge_tunnel(CenId, {#{hostid := A}, #{hostid := B}}) ->
+    dby_link(dby_bridge_id(A, CenId),
+             dby_bridge_id(B, CenId),
+             <<"tunnel">>).
+
 % helper
 dby_link(E1, E2, Type) ->
     {E1, E2, [{<<"type">>, Type}]}.
@@ -367,7 +372,8 @@ pub_cen(Host, #{cenID := CenId,
                 wire_type := bus,
                 bridges := Bridges,
                 master_hostid := MasterHostId,
-                contIDs := ContIds}) ->
+                contIDs := ContIds,
+                tunnels := Tunnels}) ->
     [
      link_cen_to_containers(Host, CenId, ContIds, bus),
      [
@@ -375,11 +381,12 @@ pub_cen(Host, #{cenID := CenId,
        dby_bridge(HostId, list_to_binary(BrId), [status_md(pending)]),
        dby_bridge_to_cen(HostId, list_to_binary(BrId), list_to_binary(CenId))
       ] || {HostId, BrId} <- Bridges
-     ]
+     ],
+     link_bridges_connected_with_tunnels(CenId, Tunnels)
     ];
 pub_cen(Host, #{cenID := CenId,
-          wire_type := WireType,
-          contIDs := ContIds}) ->
+                wire_type := WireType,
+                contIDs := ContIds}) ->
     link_cen_to_containers(Host, CenId, ContIds, WireType).
 
 % prepare to delete one cen
@@ -398,6 +405,12 @@ link_cen_to_containers(Host, CenId, ContIds, WireType) ->
                 dby_cen_to_container(HostId, list_to_binary(CenId), list_to_binary(ContId))
             end, ContIds)
     ].
+
+
+link_bridges_connected_with_tunnels(CenId, Tunnels) ->
+    lists:map(fun(Tunnel) ->
+                      dby_bridge_to_bridge_tunnel(CenId, Tunnel)
+              end, Tunnels).
 
 % prepare to publish wires
 wires_from_lm(Host, #{wiremap := #{wires := Wires}}) ->
