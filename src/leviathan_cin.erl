@@ -3,7 +3,8 @@
 -export([build_cins/1,
          prepare/1,
          prepare_in_cluster/1,
-         destroy/1]).
+         destroy/1,
+         destroy_in_cluster/1]).
 
 -define(LM_EMPTY, ?LM([], [])).
 -define(LM(Cins, Conts), #{cins => Cins, conts => Conts}).
@@ -61,6 +62,11 @@ prepare_in_cluster(CinIds) ->
 
 destroy(CinIds) ->
     do_destroy(leviathan_cin_store:get_levmap(CinIds)).
+
+destroy_in_cluster(CinIds) ->
+    destroy(CinIds),
+    [rpc:call(N, leviathan_cin, destroy, [CinIds]) || N <- nodes()].
+    
 
 %% -----------------------------------------------------------------------------
 %% Local Functions: building CIN LM
@@ -245,8 +251,12 @@ do_destroy(?MATCH_LM(CinMaps, ContMaps)) ->
     set_cin_status(CinMaps, pending).
 
 destroy_cins(CinMaps) ->
-    lists:foreach(fun(#{addressing := Addressing}) ->
-                          destroy_cin(Addressing)
+    lists:foreach(fun(#{master_cin_node := MasterCinNode,
+                        addressing := Addressing})
+                        when MasterCinNode =:= node() ->
+                          destroy_cin(Addressing);
+                     (_) ->
+                          ok
                   end, CinMaps).
 
 destroy_cin(CinAddressing) ->
@@ -261,9 +271,15 @@ destroy_cin(CinAddressing) ->
     end.
 
 destroy_conts(ContMaps) ->
-    Fn = fun(#{contID := {_HostId, BareContId},
+    HostIdToNode = leviathan_cen:hostid_to_node([node()]),
+    Fn = fun(#{contID := {HostId, BareContId},
                addressing := Addressing}) ->
-                 destroy_cont(BareContId, Addressing);
+                 case maps:get(HostId, HostIdToNode, undefined) of
+                     N when N =:= node() ->
+                         destroy_cont(BareContId, Addressing);
+                     _ ->
+                         ok
+                 end;
             %% The below clause should be removed when the CEN layer is
             %% adjusted to the new ContId format that is {HostId, ContId}
             (#{contID := BareContId,

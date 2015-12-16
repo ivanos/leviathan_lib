@@ -268,6 +268,11 @@ prepare_wire_end(#{endID := EndId,
 destroy(CenIds) ->
     destroy_lev(leviathan_cen_store:get_levmap(CenIds)).
 
+destroy_in_cluster(CenIds) ->
+    destroy(CenIds),
+    [rpc:call(N, leviathan_cen, destroy, [CenIds]) || N <- nodes()].
+    
+
 %
 % Top Level Processor
 %
@@ -281,17 +286,61 @@ destroy_cens(#{cens := Cens}) ->
     %%     make any necessary Ethernet buses
     %%     if a Cen has more than 2 containers, we'll create a bus
     %%
-    lists:foreach(
-        fun(CenMap)->
-            #{wire_type := CenType} = CenMap,
-                case CenType of
-                    bus ->
-                        #{cenID := CenId} = CenMap,
-                        destroy_bus(CenId);
-                    _ ->
-                        ok %% don't create a bus
-                end
-            end, Cens).
+    Fn = fun(#{wire_type := bus} = CenMap) ->
+                 destroy_cen2(CenMap);
+            (_) ->
+                 ok
+         end,
+    lists:foreach(Fn, Cens).
+
+destroy_cen2(#{bridges := Bridges, hostid_to_node := HostIdToNode} = CenMap) ->
+    Fn = fun({HostId, BrId}) ->
+                 case maps:get(HostId, HostIdToNode) of
+                     Node when Node =:= node() ->
+                         destroy_tunnels(HostId, CenMap),
+                         destroy_tunnel_interfaces(HostId, CenMap),
+                         destroy_bus(BrId);
+                     _ ->
+                         ok
+                 end
+         end,
+    lists:foreach(Fn, Bridges).
+
+destroy_tunnels(HostId, #{master_hostid := MasterHostId,
+                          tunnels := Tunnels})
+  when HostId =:= MasterHostId ->
+    Fn = fun({
+               #{tap_no := TapNoA},
+               #{hostid := HostB, tap_no := TapNoB}
+             }) ->
+                 TunnelUser = application:get_env(leviathan_lib, tunnel_user, undefined),
+                 CmdBundle = leviathan_linux:delete_tunnel(atom_to_list(TunnelUser),
+                                                           integer_to_list(TapNoA),
+                                                           integer_to_list(TapNoB),
+                                                           HostB),
+                 leviathan_linux:eval(CmdBundle),
+                 ok
+         end,
+    lists:foreach(Fn, Tunnels);
+destroy_tunnels(_, _) ->
+    ok.
+
+destroy_tunnel_interfaces(ThisHostId, #{tunnels := Tunnels}) ->
+    Fn = fun({#{hostid := HostId, tap_no := TapNo}, _}) when HostId == ThisHostId ->
+                 destroy_tunnel_interface(TapNo);
+            ({_, #{hostid := HostId, tap_no := TapNo}}) when HostId == ThisHostId ->
+                 destroy_tunnel_interface(TapNo);
+            (_) ->
+                 ok
+         end,
+    lists:foreach(Fn, Tunnels).
+
+destroy_tunnel_interface(TapNo) ->
+    Intf = "tap" ++ integer_to_list(TapNo),
+    CmdBundle = leviathan_linux:delete_tap(Intf),
+    leviathan_linux:eval(CmdBundle),
+    ok.
+
 
 destroy_bus(CenId) ->
     CmdBundle = leviathan_linux:delete_bus(CenId),
@@ -302,13 +351,30 @@ destroy_wires(WireMap)->
     #{wires := Wires} = WireMap,
     lists:foreach(fun(Wire)->destroy_wire(Wire) end, Wires).
 
-destroy_wire(Wire) ->
+destroy_wire([#{dest := #{type := cont, id := {HostId, _ContId}}}, _] = Wire) ->
+    HostIdToNode = hostid_to_node([node()]),
+    case maps:get(HostId, HostIdToNode, undefined) of
+        undefined ->
+            ok;
+        _ ->
+            destroy_wire2(Wire)
+    end;
+destroy_wire([_, #{dest := #{type := cont, id := {HostId, _ContId}}}] = Wire) ->
+    HostIdToNode = hostid_to_node([node()]),
+    case maps:get(HostId, HostIdToNode, undefined) of
+        undefined ->
+            ok;
+        _ ->
+            destroy_wire2(Wire)
+    end.
+
+destroy_wire2(Wire) ->
     lists:foreach(fun(WireEnd) -> destroy_wire_end(WireEnd) end, Wire).
 
 destroy_wire_end(#{endID := EndId, dest := #{type := cen}}) ->
     CmdBundle = leviathan_linux:delete_peer(EndId),
     leviathan_linux:eval(CmdBundle);				      
-destroy_wire_end(#{dest := #{type := cont, id := ContId, alias := Alias}}) ->
+destroy_wire_end(#{dest := #{type := cont, id := {_HostId, ContId}, alias := Alias}}) ->
     CmdBundle = leviathan_linux:delete_cont_interface(ContId,Alias),
     leviathan_linux:eval(CmdBundle).
 

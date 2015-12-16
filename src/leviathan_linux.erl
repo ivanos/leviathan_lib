@@ -122,6 +122,9 @@ eval(CmdBundle,output_raw)->
 new_tap(InterfaceName) ->
     [leviathan_ip:tuntap_add_dev_mode_tap(InterfaceName)].
 
+delete_tap(InterfaceName) ->
+    [leviathan_ip:tuntap_del_dev_mode_tap(InterfaceName)].
+
 tap2bridge(InterfaceName, BridgeName) ->
     [leviathan_brctl:addif(BridgeName, InterfaceName),
      leviathan_ip:link_set_up(InterfaceName)].
@@ -130,6 +133,12 @@ new_tunnel(User, SrcTapNo, DstTapNo, RemoteHost) ->
     ["ssh -f -o Tunnel=Ethernet -w "
      ++ SrcTapNo ++ ":" ++ DstTapNo ++ " "
      ++ User ++ "@" ++ RemoteHost ++ " true"].
+
+delete_tunnel(User, SrcTapNo, DstTapNo, RemoteHost) ->
+    ["pkill -f \"ssh -f -o Tunnel=Ethernet -w "
+     ++ SrcTapNo ++ ":" ++ DstTapNo ++ " "
+     ++ User ++ "@" ++ RemoteHost ++ " true\""].
+
     
 
 
