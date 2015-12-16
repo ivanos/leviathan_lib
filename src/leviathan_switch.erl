@@ -53,7 +53,8 @@ import_binary(Binary) ->
   when Switch :: map().
 import_json(Switches) when is_list(Switches) ->
     lists:append(lists:map(fun import_json/1, Switches));
-import_json(#{<<"type">> := CTypeBin,
+import_json(#{<<"host_id">> := HostId,
+               <<"type">> := CTypeBin,
               <<"interfaces">> := InterfacesBin} = Switch) ->
     CType = binary_to_list(CTypeBin),
     Interfaces = lists:map(fun binary_to_list/1, InterfacesBin),
@@ -66,7 +67,7 @@ import_json(#{<<"type">> := CTypeBin,
     {ok, ContainerId} = run_switch(CType, DatapathId, Interfaces),
     NewSwitch = Switch#{<<"contID">> => ContainerId,
                         <<"datapath_id">> => DatapathIdBin},
-    leviathan_dby:import_switch(<<"host1">>, NewSwitch),
+    leviathan_dby:import_switch(HostId, NewSwitch),
     [DatapathIdBin].
 
 %% @doc Start a switch, without publishing anything to Dobby.
