@@ -98,20 +98,20 @@ get_cen_containers(Cens) ->
                 end, [], Cens).
 
 make_cin_addressing(IpB, Cens) ->
-    Fn = fun(#{cenID := CenId, wire_type := WireType}, CinCount) ->
-                 Interface = get_cen_gateway_interface(CenId),
+    Fn = fun(#{cenID := CenId, wire_type := WireType, bridges := Bridges}, CinCount) ->
+                 Gateway = get_cen_gateway_interface(Bridges),
                  Ip = cin_ip_address(IpB, WireType, CinCount),
-                 {make_cin_addressing_item(CenId, Interface, Ip),
+                 {make_cin_addressing_item(CenId, Gateway, Ip),
                   CinCount + 1}
          end,
     {CinAddressing, _} = lists:mapfoldl(Fn, 1, Cens),
     maps:from_list(CinAddressing).
 
-make_cin_addressing_item(CenId, BridgeInterface, Ip) ->
-    {CenId, #{interface => BridgeInterface, ip => Ip}}.
+make_cin_addressing_item(CenId, {HostId, BridgeInterface}, Ip) ->
+    {CenId, #{hostid => HostId, interface => BridgeInterface, ip => Ip}}.
 
-get_cen_gateway_interface(CenId) ->
-    CenId.
+get_cen_gateway_interface([First | _Rest]) ->
+    First.
 
 %% -----------------------------------------------------------------------------
 %% Local Functions: building Container maps

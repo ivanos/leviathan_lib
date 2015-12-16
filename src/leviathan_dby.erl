@@ -165,12 +165,12 @@ cins_from_lm(Host, #{cins := CinMaps}) ->
     lists:map(fun(Cin) -> pub_cin(Host, Cin) end, CinMaps).
 
 pub_cin(Host, #{cinID := CinId, addressing := Addressing}) ->
-    Fn = fun(CenId, #{interface := BridgeId, ip := Ip}, Acc) ->
+    Fn = fun(CenId, #{hostid := HostId, interface := BridgeId, ip := Ip}, Acc) ->
                  [
                   dby_ipaddr(Ip),
                   dby_cen_to_cin(CenId, CinId),
                   dby_ipaddr_to_cin(Ip, CinId),
-                  dby_ipaddr_to_bridge(Host, Ip, BridgeId)
+                  dby_ipaddr_to_bridge(HostId, Ip, BridgeId)
                   | Acc
                  ]
          end,
@@ -183,12 +183,14 @@ pub_cin(Host, #{cinID := CinId, addressing := Addressing}) ->
 cins_conts_from_lm(Host, #{conts := ContMaps}) ->
     lists:map(fun(Cont) -> pub_cin_conts(Host, Cont) end, ContMaps).
 
-pub_cin_conts(Host, #{cinID := CinId, addressing := Addressing}) ->
+pub_cin_conts(Host, #{cinID := CinId,
+                      contID := {HostId, _BareContId},
+                      addressing := Addressing}) ->
     Fn = fun(_CenId, #{endID := EndpointId, ip := Ip}, Acc) ->
                  [
                   dby_ipaddr(Ip),
                   dby_ipaddr_to_cin(Ip, CinId),
-                  dby_endpoint_to_ipaddr(Host, EndpointId, Ip)
+                  dby_endpoint_to_ipaddr(HostId, EndpointId, Ip)
                   | Acc
                  ]
          end,
