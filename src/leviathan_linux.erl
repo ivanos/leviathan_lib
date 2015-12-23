@@ -130,12 +130,12 @@ tap2bridge(InterfaceName, BridgeName) ->
      leviathan_ip:link_set_up(InterfaceName)].
 
 new_tunnel(User, SrcTapNo, DstTapNo, RemoteHost) ->
-    ["ssh -f -o Tunnel=Ethernet -w "
+    ["ssh -f -o StrictHostKeyChecking=no -o Tunnel=Ethernet -w "
      ++ SrcTapNo ++ ":" ++ DstTapNo ++ " "
      ++ User ++ "@" ++ RemoteHost ++ " true"].
 
 delete_tunnel(User, SrcTapNo, DstTapNo, RemoteHost) ->
-    ["pkill -f \"ssh -f -o Tunnel=Ethernet -w "
+    ["pkill -f \"ssh -f -o StrictHostKeyChecking=no -o Tunnel=Ethernet -w "
      ++ SrcTapNo ++ ":" ++ DstTapNo ++ " "
      ++ User ++ "@" ++ RemoteHost ++ " true\""].
 
