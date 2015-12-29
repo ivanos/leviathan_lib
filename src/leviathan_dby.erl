@@ -6,13 +6,21 @@
 
 -export([import_cens/2,
          update_cens/2,
-         import_switch/2]).
+         import_switch/2,
+         unsubscribe/1,
+         subscribe_for_cen_message/2,
+         subscribe_for_cin_message/2,
+         subscribe_for_cen_status_change/2,
+         subscribe_for_cin_status_change/2,
+         send_cen_message/2,
+         send_cin_message/2]).
 
 -export([import_cins/2,
          set_cin_status/2,
          update_cins/2]).
 
 -export([dby_cen_id/1,
+         dby_cin_id/1,
          get_cen/1,
          get_cont/2,
          get_wires/1,
@@ -24,6 +32,7 @@
 -define(REGISTRY, <<"lev_registry">>).
 -define(CIN_COUNT, <<"cin_count">>).
 
+-include_lib("dobby_clib/include/dobby.hrl").
 -include("leviathan_logger.hrl").
 -include("leviathan_lib.hrl").
 
@@ -133,7 +142,92 @@ dby_cen_id(CenId) ->
 dby_cin_id(CinId) ->
     dby_id([<<"lev_cin">>, CinId]).
 
-% -----------------------------------------------------------------------------
+-spec subscribe_for_cen_status_change(CenID :: string() | binary(),
+                                      DeliveryFn :: delivery_fun())
+                                     -> {CurrentStatus :: binary(),
+                                         subscription_id()}.
+subscribe_for_cen_status_change(CenId, DeliveryFn) ->
+    SearchFn = fun(_, #{<<"type">> := #{value := <<"cen">>},
+                        <<"status">> := #{value := Status}},
+                   [], _) ->
+                       {continue, Status}
+               end,
+    Opts =
+        [breadth, {max_depth, 0}, persistent, {delivery, DeliveryFn}],
+    {ok, CurrentStatus, SubId} = dby:subscribe(SearchFn,
+                                                 [],
+                                                 dby_cen_id(CenId),
+                                                 Opts),
+    {CurrentStatus, SubId}.
+
+-spec subscribe_for_cin_status_change(CinID :: string() | binary(),
+                                      DeliveryFn :: delivery_fun())
+                                     -> {CurrentStatus :: binary(),
+                                         subscription_id()}.
+subscribe_for_cin_status_change(CinId, DeliveryFn) ->
+    SearchFn = fun(_, #{<<"type">> := #{value := <<"cin">>},
+                        <<"status">> := #{value := Status}},
+                   [], _) ->
+                       {continue, Status}
+               end,
+    Opts =
+        [breadth, {max_depth, 0}, persistent, {delivery, DeliveryFn}],
+    {ok, CurrentStatus, SubId} = dby:subscribe(SearchFn,
+                                               [],
+                                               dby_cin_id(CinId),
+                                               Opts),
+    {CurrentStatus, SubId}.
+
+    
+
+-spec subscribe_for_cen_message(CenId :: string() | binary(),
+                                DeliveryFn :: delivery_fun()) ->
+                                       subscription_id().
+subscribe_for_cen_message(CenId, DeliveryFn) ->
+    SearchFn = fun(_, #{<<"type">> := #{value := <<"cen">>},
+                        <<"lev_msg">> := #{value := Message}},
+                   [], _) ->
+                       {continue, Message};
+                  (_, _, [], Acc) ->
+                       {continue, Acc}
+               end,
+    Opts = [breadth, {max_depth, 0}, message, {delivery, DeliveryFn}],
+    {ok, [], SubId} = dby:subscribe(
+                        SearchFn, [], dby_cen_id(CenId), Opts),
+    SubId.
+
+-spec subscribe_for_cin_message(CinId :: string() | binary(),
+                                DeliveryFn :: delivery_fun()) ->
+                                       subscription_id().
+subscribe_for_cin_message(CinId, DeliveryFn) ->
+    SearchFn = fun(_, #{<<"type">> := #{value := <<"cin">>},
+                        <<"lev_msg">> := #{value := Message}},
+                   [], _) ->
+                       {continue, Message};
+                  (_, _, [], Acc) ->
+                       {continue, Acc}
+               end,
+    Opts = [breadth, {max_depth, 0}, message, {delivery, DeliveryFn}],
+    {ok, [], SubId} = dby:subscribe(
+                        SearchFn, [], dby_cin_id(CinId), Opts),
+    SubId.
+
+-spec unsubscribe(SubscriptionId :: subscription_id()) -> ok.
+unsubscribe(SubscriptionId) ->
+    dby:unsubscribe(SubscriptionId).
+
+-spec send_cen_message(CenId :: string() | binary(),
+                       Message :: metadata_value()) -> ok.
+send_cen_message(CenId, Message) ->
+    dby:publish(
+      <<"PUB">>, {dby_cen_id(CenId), [{<<"lev_msg">>, Message}]}, []).
+
+send_cin_message(CinId, Message) ->
+    dby:publish(
+      <<"PUB">>, {dby_cin_id(CinId), [{<<"lev_msg">>, Message}]}, []).
+
+
+%% -----------------------------------------------------------------------------
 %
 % CIN API
 %
@@ -175,7 +269,7 @@ pub_cin(Host, #{cinID := CinId, addressing := Addressing}) ->
                  ]
          end,
     [
-     dby_cin(CinId, [status_md(pending)]),
+     dby_cin(CinId, [status_md(importing)]),
      maps:fold(Fn, [], Addressing)
     ].
 
@@ -399,7 +493,7 @@ pub_destroy_cen(_Host, #{cenID := CenId}) ->
 % link CEN to containers
 link_cen_to_containers(Host, CenId, ContIds, WireType) ->
     [
-        dby_cen(list_to_binary(CenId), [wire_type_md(WireType), status_md(pending)]),
+        dby_cen(list_to_binary(CenId), [wire_type_md(WireType), status_md(importing)]),
         lists:map(
             fun({HostId, ContId}) ->
                 dby_cen_to_container(HostId, list_to_binary(CenId), list_to_binary(ContId))
@@ -516,15 +610,16 @@ pub_destroy_bridge(Host, BridgeId) ->
         {dby_bridge_id(Host, BridgeId), delete}
     ].
 
-
+status_md(importing) ->
+    {<<"status">>, <<"importing">>};
 status_md(pending) ->
     {<<"status">>, <<"pending">>};
 status_md(preparing) ->
     {<<"status">>, <<"preparing">>};
 status_md(ready) ->
     {<<"status">>, <<"ready">>};
-status_md(destroy) ->
-    {<<"status">>, <<"destroy">>}.
+status_md(destroying) ->
+    {<<"status">>, <<"destroying">>}.
 
 cen_ip_addr_md(IPAddress) ->
     {<<"ipaddr">>, IPAddress}.

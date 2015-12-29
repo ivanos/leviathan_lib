@@ -124,19 +124,9 @@ prepare_instruction({set, wire_type, _}) ->
 %
 
 prepare_lev(#{censmap := CensMap, contsmap := ContsMap, wiremap := WireMap}) ->
-    % mark cens as preparing
-    cens_status(CensMap, preparing),
     prepare_cens(CensMap),
     prepare_conts(ContsMap),
-    prepare_wires(WireMap),
-    % mark cens as ready
-    cens_status(CensMap, ready).
-
-cens_status(#{cens := Cens}, Status) ->
-    lists:foreach(
-        fun(#{cenID := CenId}) ->
-            leviathan_dby:set_cen_status(CenId, Status)
-        end, Cens).
+    prepare_wires(WireMap).
 
 prepare_cens(#{cens := Cens}) ->
     %% make any necessary Ethernet buses
@@ -277,10 +267,8 @@ destroy_in_cluster(CenIds) ->
 % Top Level Processor
 %
 destroy_lev(#{censmap := CensMap, wiremap := WireMap}) ->
-    cens_status(CensMap, destroy),
     destroy_cens(CensMap),
-    destroy_wires(WireMap),
-    cens_status(CensMap, pending).
+    destroy_wires(WireMap).
 
 destroy_cens(#{cens := Cens}) ->
     %%     make any necessary Ethernet buses
@@ -336,10 +324,21 @@ destroy_tunnel_interfaces(ThisHostId, #{tunnels := Tunnels}) ->
     lists:foreach(Fn, Tunnels).
 
 destroy_tunnel_interface(TapNo) ->
+    destroy_tunnel_interface(TapNo, 4).
+
+destroy_tunnel_interface(_, 0) ->
+    ok;
+destroy_tunnel_interface(TapNo, Retries) ->
     Intf = "tap" ++ integer_to_list(TapNo),
     CmdBundle = leviathan_linux:delete_tap(Intf),
-    leviathan_linux:eval(CmdBundle),
-    ok.
+    case leviathan_linux:eval(CmdBundle, output) of
+        [] ->
+            ok;
+        _ ->
+            timer:sleep(500),
+            destroy_tunnel_interface(TapNo, Retries - 1)
+    end.
+
 
 
 destroy_bus(CenId) ->
@@ -665,6 +664,23 @@ compare_lists(OldList, NewList) ->
 
 instructions(Operation, Item, List) ->
     lists:map(fun(Element) -> {Operation, Item, Element} end, List).
+
+node_cen_ids(Node, ?LM_CENS(Cens)) ->
+    Fn = fun(#{cenID := CenId, hostid_to_node := HostIdToNode}, Acc) ->
+                 case lists:member(Node, maps:values(HostIdToNode)) of
+                     true ->
+                         [CenId | Acc];
+                     _ ->
+                         Acc
+                 end
+         end,
+    lists:foldl(Fn, [], Cens).
+
+map_cen_id_to_host(?LM_CENS(Cens)) ->
+    Fn = fun(#{cenID := CenId, hostid_to_node := HostIdToNode}, Acc) ->
+                 maps:put(CenId, maps:keys(HostIdToNode), Acc)
+         end,
+    lists:foldl(Fn, #{}, Cens).
 
 % helpers
 
