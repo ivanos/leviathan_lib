@@ -1,10 +1,13 @@
 -module(leviathan_cin).
 
--export([build_cins/1,
+-export([decode_binary/1,
+         build_cins/1,
          prepare/1,
          prepare_in_cluster/1,
          destroy/1,
-         destroy_in_cluster/1]).
+         destroy_in_cluster/1,
+         map_cin_id_to_host/1,
+         map_cin_id_to_cen/1]).
 
 -define(LM_EMPTY, ?LM([], [])).
 -define(LM(Cins, Conts), #{cins => Cins, conts => Conts}).
@@ -66,7 +69,35 @@ destroy(CinIds) ->
 destroy_in_cluster(CinIds) ->
     destroy(CinIds),
     [rpc:call(N, leviathan_cin, destroy, [CinIds]) || N <- nodes()].
-    
+
+
+-spec decode_binary(Binary :: binary()) -> cin_lm().
+
+decode_binary(JsonBin) ->
+    CinsToCensBin = jiffy:decode(JsonBin, [return_maps]),
+    build_cins(json_bin_to_list(CinsToCensBin)).
+
+
+-spec map_cin_id_to_host(CinLM :: cin_lm()) -> #{}.
+
+map_cin_id_to_host(?MATCH_LM(CinMaps, _)) ->
+    lists:foldl(
+      fun(#{cinID := CinId, addressing := Addressing}, CinToHost) ->
+              CenIds = maps:keys(Addressing),
+              CenLM = leviathan_cen_store:get_levmap(CenIds),
+              CenToHost = leviathan_cen:map_cen_id_to_host(CenLM),
+              CinHosts = lists:foldl(fun(Hs, Acc) ->
+                                             lists:usort(Hs ++ Acc)
+                                     end, [], maps:values(CenToHost)),
+              maps:put(CinId, CinHosts, CinToHost)
+      end, #{}, CinMaps).
+
+map_cin_id_to_cen(?MATCH_LM(CinMaps, _)) ->
+    lists:foldl(
+      fun(#{cinID := CinId, addressing := Addressing}, CinToCen) ->
+              maps:put(CinId, maps:keys(Addressing), CinToCen)
+      end, #{}, CinMaps).
+
 
 %% -----------------------------------------------------------------------------
 %% Local Functions: building CIN LM
@@ -80,6 +111,14 @@ build_cin(CinId, CenIds, ?MATCH_LM(CinMaps, ContMaps)) ->
 %% -----------------------------------------------------------------------------
 %% Local Functions: building CIN maps
 %% -----------------------------------------------------------------------------
+
+json_bin_to_list(BinMap) ->
+    Fn = fun(K, V, Acc) ->
+                 maps:put(binary_to_list(K),
+                          lists:map(fun binary_to_list/1, V),
+                          Acc)
+         end,
+    maps:fold(Fn, #{}, BinMap).
 
 make_cin_map(CinId, Cens) ->
     IpB = next_cin_ip_b(),
@@ -245,11 +284,9 @@ prepare_cont(ContId, ContAddressing) ->
 %% -----------------------------------------------------------------------------
 
 do_destroy(?MATCH_LM(CinMaps, ContMaps)) ->
-    set_cin_status(CinMaps, destroy),
     destroy_cins(CinMaps),
-    destroy_conts(ContMaps),
-    set_cin_status(CinMaps, pending).
-
+    destroy_conts(ContMaps).
+    
 destroy_cins(CinMaps) ->
     lists:foreach(fun(#{master_cin_node := MasterCinNode,
                         addressing := Addressing})
